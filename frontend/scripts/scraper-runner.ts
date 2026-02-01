@@ -390,16 +390,86 @@ interface AttachmentInfo {
   downloadUrl: string;
 }
 
+/**
+ * onclick 속성에서 URL 추출
+ */
+function tryExtractUrlFromOnclick(onclick: string): string | null {
+  if (!onclick) return null;
+  // 1) quoted URL-ish string
+  const m1 = onclick.match(/['"]([^'"]*(?:https?:\/\/|\/)[^'"]*)['"]/i);
+  if (m1?.[1]) return m1[1];
+  // 2) javascript:location.href='...'
+  const m2 = onclick.match(/location\.href\s*=\s*['"]([^'"]+)['"]/i);
+  if (m2?.[1]) return m2[1];
+  // 3) window.open('...')
+  const m3 = onclick.match(/window\.open\(\s*['"]([^'"]+)['"]/i);
+  if (m3?.[1]) return m3[1];
+  return null;
+}
+
+/**
+ * 텍스트가 첨부파일명처럼 보이는지 확인
+ */
+function looksLikeAttachmentName(text: string): boolean {
+  const t = (text || "").toLowerCase();
+  const exts = [
+    ".hwp", ".hwpx", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv",
+    ".ppt", ".pptx", ".zip", ".rar", ".7z"
+  ];
+  if (exts.some((e) => t.includes(e))) return true;
+  return /\(\s*[\d.]+\s*[kmg]b\s*\)\s*$/i.test(text || "");
+}
+
+/**
+ * 첨부파일 추출 (scraper-engine.ts와 동일한 4가지 전략 사용)
+ */
 function extractAttachmentsFromHtml(
   html: string,
   baseUrl: string,
-  selector?: string
+  config: WebConfig
 ): AttachmentInfo[] {
   const $ = cheerio.load(html);
   const attachments: AttachmentInfo[] = [];
   const seenUrls = new Set<string>();
   
-  // 파일 확장자 기반 선택자
+  // 첨부파일 추가 헬퍼 함수
+  const pushAttachment = (fileNameRaw: string, urlRaw: string) => {
+    if (!urlRaw) return;
+    const downloadUrl = resolveUrl(baseUrl, urlRaw);
+    if (!downloadUrl) return;
+    if (seenUrls.has(downloadUrl)) return;
+    seenUrls.add(downloadUrl);
+    
+    let fileName = cleanText(fileNameRaw);
+    if (!fileName || fileName.length < 3) {
+      try {
+        const u = new URL(downloadUrl);
+        const last = u.pathname.split("/").pop() || "";
+        fileName = decodeURIComponent(last);
+        if (!fileName || fileName.length < 3) {
+          const qp =
+            u.searchParams.get("fileName") ||
+            u.searchParams.get("file_name") ||
+            u.searchParams.get("filename") ||
+            u.searchParams.get("name");
+          if (qp) fileName = decodeURIComponent(qp);
+        }
+      } catch {
+        fileName = urlRaw.split("/").pop()?.split("?")[0] || "unknown";
+      }
+    }
+    
+    // 크기 정보 제거 (예: "(858.3 KB)", "[123.2 KB]")
+    fileName = fileName
+      .replace(/\s*\([^)]*[KMG]B\)\s*$/i, "")  // (123.2 KB) 형태
+      .replace(/\s*\[[^\]]*[KMG]B\]\s*$/i, "") // [123.2 KB] 형태
+      .trim();
+    if (!fileName) fileName = "unknown";
+    
+    attachments.push({ fileName, downloadUrl });
+  };
+  
+  // ── 전략 1: 파일 확장자 기반 선택자 ──
   const extSelectors = [
     "a[href*='.hwp']", "a[href*='.hwpx']", "a[href*='.pdf']",
     "a[href*='.doc']", "a[href*='.docx']", "a[href*='.xls']",
@@ -407,15 +477,22 @@ function extractAttachmentsFromHtml(
     "a[href*='.ppt']", "a[href*='.pptx']",
   ];
   
-  // 다운로드 관련 선택자
+  // ── 전략 2: 다운로드 관련 선택자 ──
   const downloadSelectors = [
-    "a[href*='download']", "a[href*='fileDown']",
-    ".file_list a", ".attach a", ".file a",
-    ".attachment a", ".atch_file a",
+    "a[href*='download']", "a[href*='fileDown']", "a[href*='file_down']",
+    "a[href*='atchFileDown']", "a[href*='AttachDown']",
+    "a[onclick*='download']", "a[onclick*='fileDown']",
+    ".file_list a", ".attach a", ".file a", ".file_area a",
+    ".attachment a", ".attachFile a", ".atch_file a",
+    "ul.file li a", "div.file a", "table.file a",
   ];
   
-  if (selector) {
-    downloadSelectors.push(selector);
+  // 커스텀 선택자
+  if (config.attachments?.selector) {
+    downloadSelectors.push(config.attachments.selector);
+  }
+  if (config.detail?.attachments_selector) {
+    downloadSelectors.push(config.detail.attachments_selector);
   }
   
   const allSelectors = [...extSelectors, ...downloadSelectors].join(", ");
@@ -423,41 +500,80 @@ function extractAttachmentsFromHtml(
   $(allSelectors).each((_, el) => {
     const $a = $(el);
     let href = $a.attr("href") || "";
+    const onclick = $a.attr("onclick") || "";
+    
+    // onclick에서 URL 추출 시도
+    if (!href && onclick) {
+      const extracted = tryExtractUrlFromOnclick(onclick);
+      if (extracted) href = extracted;
+    }
     
     if (!href) return;
     
     const downloadUrl = resolveUrl(baseUrl, href);
     if (seenUrls.has(downloadUrl)) return;
-    seenUrls.add(downloadUrl);
     
-    let fileName = $a.text().replace(/\s+/g, " ").trim();
+    // 파일명 추출
+    const fileName = $a.text().replace(/\s+/g, " ").trim();
     
-    // 크기 정보 제거
-    fileName = fileName
-      .replace(/\s*\([^)]*[KMG]B\)\s*$/i, "")
-      .replace(/\s*\[[^\]]*[KMG]B\]\s*$/i, "")
-      .trim();
+    // 파일 유형 체크
+    const validExts = config.attachments?.file_types || 
+      ["hwp", "hwpx", "pdf", "doc", "docx", "xls", "xlsx", "csv", "ppt", "pptx", "zip", "rar", "7z"];
     
-    if (!fileName || fileName.length < 3) {
-      try {
-        const u = new URL(downloadUrl);
-        fileName = decodeURIComponent(u.pathname.split("/").pop() || "unknown");
-      } catch {
-        fileName = "unknown";
-      }
-    }
-    
-    const validExts = ["hwp", "hwpx", "pdf", "doc", "docx", "xls", "xlsx", "csv", "ppt", "pptx", "zip"];
     const hasValidExt = validExts.some(ext => 
-      fileName.toLowerCase().includes(`.${ext}`) || 
-      downloadUrl.toLowerCase().includes(`.${ext}`)
+      fileName.toLowerCase().includes(`.${ext}`) || downloadUrl.toLowerCase().includes(`.${ext}`)
     );
     const isDownloadUrl = /download|filedown|attach/i.test(downloadUrl);
     
-    if (hasValidExt || isDownloadUrl) {
-      attachments.push({ fileName, downloadUrl });
+    if (config.attachments?.collect_all || hasValidExt || isDownloadUrl) {
+      pushAttachment(fileName, href);
     }
   });
+  
+  // ── 전략 3: '첨부파일' 라벨 주변에서 링크 수집 ──
+  if (attachments.length === 0) {
+    const labelEls = $("th, dt, strong, span, p")
+      .toArray()
+      .filter((el) => $(el).text().replace(/\s+/g, "").includes("첨부파일"));
+    
+    for (const el of labelEls.slice(0, 5)) {
+      const $lab = $(el);
+      const $cand = $lab.closest("tr").find("td")
+        .add($lab.closest("dl").find("dd"))
+        .add($lab.parent());
+      
+      $cand.find("a").each((_, a) => {
+        const $a = $(a);
+        const txt = $a.text().replace(/\s+/g, " ").trim();
+        const href = $a.attr("href") || "";
+        const onclick = $a.attr("onclick") || "";
+        const urlFromOnclick = onclick ? tryExtractUrlFromOnclick(onclick) : null;
+        const urlRaw = href || urlFromOnclick || "";
+        
+        if (!urlRaw) return;
+        if (!looksLikeAttachmentName(txt) && !looksLikeAttachmentName(urlRaw)) return;
+        
+        pushAttachment(txt, urlRaw);
+      });
+    }
+  }
+  
+  // ── 전략 4: 최후 fallback - 전체 a 중 파일패턴 검색 ──
+  if (attachments.length === 0) {
+    $("a").each((_, a) => {
+      const $a = $(a);
+      const txt = $a.text().replace(/\s+/g, " ").trim();
+      const href = $a.attr("href") || "";
+      const onclick = $a.attr("onclick") || "";
+      const urlFromOnclick = onclick ? tryExtractUrlFromOnclick(onclick) : null;
+      const urlRaw = href || urlFromOnclick || "";
+      
+      if (!urlRaw) return;
+      if (!looksLikeAttachmentName(txt) && !looksLikeAttachmentName(urlRaw)) return;
+      
+      pushAttachment(txt, urlRaw);
+    });
+  }
   
   return attachments;
 }
@@ -508,12 +624,8 @@ async function parseDetailPage(
     }
   }
   
-  // 첨부파일 추출
-  const attachments = extractAttachmentsFromHtml(
-    html, 
-    url, 
-    config.attachments?.selector || config.detail?.attachments_selector
-  );
+  // 첨부파일 추출 (개선된 4가지 전략 사용)
+  const attachments = extractAttachmentsFromHtml(html, url, config);
   
   return { content, attachments };
 }
@@ -614,33 +726,40 @@ export async function runScraper(options: ScraperOptions): Promise<ScrapingResul
     let currentPage = 0;
     let shouldStop = false;
     const seenUrls = new Set<string>();
+    let nextPageUrl: string | null = listUrl;  // next_button용 URL 추적
     
     // 출력 디렉토리 생성
     const boardOutputDir = path.join(outputDir, board.board_id);
     const attachmentsDir = path.join(boardOutputDir, "attachments");
     fs.mkdirSync(attachmentsDir, { recursive: true });
     
-    while (!shouldStop && currentPage < maxPages) {
+    while (!shouldStop && currentPage < maxPages && nextPageUrl) {
       currentPage++;
       console.log(`\n--- 페이지 ${currentPage} 처리 중 ---`);
       
       // 페이지 URL 구성
-      let pageUrl = listUrl;
+      let pageUrl = nextPageUrl;
       const pagination = webConfig.list?.pagination;
-      if (pagination && currentPage > 1) {
+      
+      // page_param과 offset_param은 URL 파라미터로 계산
+      if (pagination && currentPage > 1 && pagination.type !== "next_button") {
         if (pagination.type === "page_param") {
           const param = pagination.param || "page";
+          const start = pagination.start ?? 1;
           const urlObj = new URL(listUrl);
-          urlObj.searchParams.set(param, String(currentPage));
+          urlObj.searchParams.set(param, String(start + currentPage - 1));
           pageUrl = urlObj.toString();
         } else if (pagination.type === "offset_param") {
           const param = pagination.param || "offset";
           const step = pagination.step || 10;
+          const start = pagination.start ?? 0;
           const urlObj = new URL(listUrl);
-          urlObj.searchParams.set(param, String((currentPage - 1) * step));
+          urlObj.searchParams.set(param, String(start + (currentPage - 1) * step));
           pageUrl = urlObj.toString();
         }
       }
+      
+      console.log(`[URL] ${pageUrl}`);
       
       // 목록 페이지 가져오기
       let html: string;
@@ -655,8 +774,27 @@ export async function runScraper(options: ScraperOptions): Promise<ScrapingResul
         break;
       }
       
-      // 목록 파싱
-      const { items } = parseListPage(html, pageUrl, webConfig);
+      // 목록 파싱 ($ 객체도 함께 받아서 next_button 처리에 사용)
+      const { items, $ } = parseListPage(html, pageUrl, webConfig);
+      
+      // next_button 타입: 다음 페이지 URL 추출
+      if (pagination?.type === "next_button" && pagination.selector) {
+        const $next = $(pagination.selector);
+        const nextHref = $next.attr("href");
+        if (nextHref && nextHref !== "#" && !nextHref.startsWith("javascript:")) {
+          nextPageUrl = resolveUrl(pageUrl, nextHref);
+          console.log(`[NEXT] 다음 페이지 URL 발견: ${nextPageUrl}`);
+        } else {
+          nextPageUrl = null;
+          console.log(`[NEXT] 다음 페이지 없음`);
+        }
+      } else if (pagination?.type === "page_param" || pagination?.type === "offset_param") {
+        // page_param/offset_param은 항목이 있으면 계속 진행
+        nextPageUrl = items.length > 0 ? listUrl : null;
+      } else {
+        // pagination 없거나 none이면 첫 페이지만
+        nextPageUrl = null;
+      }
       
       if (items.length === 0) {
         console.log("항목 없음, 종료");
@@ -748,10 +886,19 @@ export async function runScraper(options: ScraperOptions): Promise<ScrapingResul
         result.articlesCount++;
       }
       
-      // 페이지네이션 체크
+      // 페이지네이션 체크 (next_button이 아닌 경우 항목 없으면 종료)
       if (!pagination || pagination.type === "none") {
         break;
       }
+      
+      // 다음 페이지가 없으면 종료 (next_button에서 URL이 없을 때)
+      if (!nextPageUrl) {
+        console.log("다음 페이지 없음, 종료");
+        break;
+      }
+      
+      // 다음 페이지 요청 전 딜레이
+      await delay(500);
     }
     
     result.success = true;
