@@ -252,6 +252,60 @@ async function extractZip(zipPath: string, outputDir: string): Promise<void> {
 }
 
 // ============================================================
+// 타겟 데이터 로드 (기관명/보드명 매핑용)
+// ============================================================
+
+interface BoardInfo {
+  board_id: string;
+  org_id: string;
+  board_name: string;
+}
+
+interface OrgInfo {
+  org_id: string;
+  org_name: string;
+}
+
+interface TargetsData {
+  orgs: OrgInfo[];
+  boards: BoardInfo[];
+}
+
+function loadTargetsData(): TargetsData | null {
+  const possiblePaths = [
+    path.join(process.cwd(), "data", "scraper-targets.json"),
+    path.join(process.cwd(), "..", "data", "scraper-targets.json"),
+    path.join(process.cwd(), "frontend", "data", "scraper-targets.json"),
+  ];
+  
+  for (const targetsPath of possiblePaths) {
+    if (fs.existsSync(targetsPath)) {
+      try {
+        const content = fs.readFileSync(targetsPath, "utf8");
+        return JSON.parse(content) as TargetsData;
+      } catch {
+        continue;
+      }
+    }
+  }
+  
+  return null;
+}
+
+function getBoardMapping(targets: TargetsData, boardId: string): { orgName: string; boardName: string } | null {
+  const board = targets.boards.find(b => b.board_id === boardId);
+  if (!board) return null;
+  
+  const org = targets.orgs.find(o => o.org_id === board.org_id);
+  if (!org) return null;
+  
+  return {
+    orgName: org.org_name,
+    boardName: board.board_name,
+  };
+}
+
+// ============================================================
 // 메인 로직
 // ============================================================
 
@@ -329,6 +383,14 @@ async function main(): Promise<void> {
     return;
   }
 
+  // 타겟 데이터 로드 (기관명/보드명 매핑용)
+  const targets = loadTargetsData();
+  if (!targets) {
+    console.warn("⚠️ scraper-targets.json을 찾을 수 없습니다. board_id로 폴더가 생성됩니다.");
+  } else {
+    console.log(`✓ 타겟 데이터 로드: ${targets.orgs.length}개 기관, ${targets.boards.length}개 보드\n`);
+  }
+
   // 다운로드 및 추출
   const tempDir = path.join(process.cwd(), ".temp-artifacts");
   mkdirSync(tempDir, { recursive: true });
@@ -358,42 +420,72 @@ async function main(): Promise<void> {
 
       for (const boardId of boardDirs) {
         const sourcePath = path.join(extractDir, boardId);
-        const destPath = path.join(config.outputDir, boardId);
         
-        // 날짜별 폴더 생성
+        // 기관명/보드명 매핑 (기존 폴더 구조에 맞춤)
+        let destPath: string;
+        let boardName: string;
+        
+        if (targets) {
+          const mapping = getBoardMapping(targets, boardId);
+          if (mapping) {
+            // 기존 구조: {기관명}/{보드명}/{연도-월}/
+            destPath = path.join(config.outputDir, mapping.orgName, mapping.boardName);
+            boardName = mapping.boardName;
+            console.log(`  📁 매핑: ${boardId} → ${mapping.orgName}/${mapping.boardName}`);
+          } else {
+            // 매핑 실패 시 board_id 사용
+            destPath = path.join(config.outputDir, boardId);
+            boardName = boardId;
+            console.log(`  ⚠️ 매핑 없음: ${boardId}`);
+          }
+        } else {
+          destPath = path.join(config.outputDir, boardId);
+          boardName = boardId;
+        }
+        
+        // 날짜별 폴더 생성 (연도-월)
         const now = new Date();
         const dateFolder = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
         const finalDestPath = path.join(destPath, dateFolder);
         
         mkdirSync(finalDestPath, { recursive: true });
 
-        // documents.json 복사
+        // documents.json → 제목&본문.json 형식으로 저장
         const docsSource = path.join(sourcePath, "documents.json");
         if (fs.existsSync(docsSource)) {
           const docsContent = fs.readFileSync(docsSource, "utf8");
-          const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-          const docsDest = path.join(finalDestPath, `documents_${timestamp}.json`);
+          
+          // 파일명: YYYYMMDD_{보드명}_제목&본문.json
+          const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+          const docsDest = path.join(finalDestPath, `${dateStr}_${boardName}_제목&본문.json`);
+          
+          // 기존 파일이 있으면 덮어쓰기 (같은 날짜는 최신 데이터로)
           fs.writeFileSync(docsDest, docsContent);
           console.log(`  📄 문서 저장: ${docsDest}`);
         }
 
-        // 첨부파일 복사
+        // 첨부파일 복사 (폴더 없이 직접 저장)
         const attachSource = path.join(sourcePath, "attachments");
         if (fs.existsSync(attachSource)) {
-          const attachDest = path.join(finalDestPath, "attachments");
-          mkdirSync(attachDest, { recursive: true });
-
           const files = fs.readdirSync(attachSource);
+          let copiedCount = 0;
+          
           for (const file of files) {
             const src = path.join(attachSource, file);
-            const dest = path.join(attachDest, file);
+            const dest = path.join(finalDestPath, file);  // attachments 폴더 없이 직접 저장
             
-            // 파일 중복 체크
+            // 파일 중복 체크 (같은 이름이면 스킵)
             if (!fs.existsSync(dest)) {
               fs.copyFileSync(src, dest);
+              copiedCount++;
             }
           }
-          console.log(`  📎 첨부파일 ${files.length}개 저장`);
+          
+          if (copiedCount > 0) {
+            console.log(`  📎 첨부파일 ${copiedCount}개 저장 (${files.length - copiedCount}개 중복 스킵)`);
+          } else if (files.length > 0) {
+            console.log(`  📎 첨부파일 ${files.length}개 모두 이미 존재`);
+          }
         }
       }
 
