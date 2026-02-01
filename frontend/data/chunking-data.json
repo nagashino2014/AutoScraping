@@ -1,0 +1,21 @@
+{
+  "settings": {
+    "strategy": "recursive",
+    "chunkSize": 800,
+    "chunkOverlap": 150,
+    "separators": [
+      "\n\n",
+      "\n",
+      ". ",
+      " "
+    ],
+    "minChunkSize": 100,
+    "maxChunkSize": 2000,
+    "tableChunking": {
+      "enabled": true,
+      "maxRowsPerChunk": 10
+    }
+  },
+  "documents": [],
+  "chunks": []
+}

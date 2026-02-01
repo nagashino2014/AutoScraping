@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoMonitor AI - Report Generation Concept</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #16A34A;
+            --background: #F2F4F7;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background);
+            color: #171717;
+        }
+
+        /* Glass Panel from globals.css */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+        }
+
+        .glass-button {
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            transition: all 0.2s ease;
+        }
+
+        .glass-button:hover {
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 0.625rem 1rem;
+            font-size: 0.875rem;
+            border-radius: 0.75rem;
+            background: white;
+            border: 1px solid #e7e5e4;
+            color: #292524;
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+            border-color: var(--primary);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        
+        .active-tab {
+            background-color: white;
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            font-weight: 600;
+        }
+
+        .paper-shadow {
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="h-screen flex p-4 gap-4 overflow-hidden">
+
+    <!-- Sidebar (Mockup) -->
+    <aside class="w-64 glass-panel rounded-3xl p-6 flex flex-col justify-between hidden md:flex">
+        <div>
+            <div class="flex items-center gap-2 mb-8 px-2">
+                <div class="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center text-white">
+                    <i data-lucide="leaf" class="w-5 h-5"></i>
+                </div>
+                <span class="font-bold text-lg text-stone-800">EcoMonitor</span>
+            </div>
+            
+            <nav class="space-y-1">
+                <a href="#" class="flex items-center gap-3 px-4 py-3 text-stone-500 rounded-xl hover:bg-white/50 transition-colors">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                    <span class="font-medium">대시보드</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 text-stone-500 rounded-xl hover:bg-white/50 transition-colors">
+                    <i data-lucide="search" class="w-5 h-5"></i>
+                    <span class="font-medium">검색</span>
+                </a>
+                <div class="pt-4 pb-2">
+                    <span class="px-4 text-xs font-semibold text-stone-400">RAG 분석</span>
+                </div>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 text-stone-500 rounded-xl hover:bg-white/50 transition-colors">
+                    <i data-lucide="filter" class="w-5 h-5"></i>
+                    <span class="font-medium">필터링/발굴</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 text-stone-500 rounded-xl hover:bg-white/50 transition-colors">
+                    <i data-lucide="message-square" class="w-5 h-5"></i>
+                    <span class="font-medium">사용자 인터렉션</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 text-stone-500 rounded-xl hover:bg-white/50 transition-colors">
+                    <i data-lucide="microscope" class="w-5 h-5"></i>
+                    <span class="font-medium">심층 분석</span>
+                </a>
+                <a href="#" class="flex items-center gap-3 px-4 py-3 bg-green-50 text-green-700 rounded-xl font-medium">
+                    <i data-lucide="file-text" class="w-5 h-5"></i>
+                    <span>보고서 생성</span>
+                </a>
+            </nav>
+        </div>
+        
+        <div class="glass-button p-4 rounded-xl flex items-center gap-3 cursor-pointer">
+            <div class="w-8 h-8 rounded-full bg-stone-200 flex items-center justify-center">
+                <i data-lucide="user" class="w-4 h-4 text-stone-500"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-semibold truncate">User Name</div>
+                <div class="text-xs text-stone-500 truncate">user@example.com</div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-w-0 gap-4">
+        
+        <!-- Top Bar -->
+        <header class="h-16 glass-panel rounded-3xl px-6 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-4">
+                <h1 class="text-lg font-bold text-stone-800">보고서 생성</h1>
+                <span class="text-stone-300">|</span>
+                <span class="text-sm text-stone-500">규제 모니터링 주간 보고서 (2026-01-W4)</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="glass-button p-2.5 rounded-xl text-stone-500">
+                    <i data-lucide="bell" class="w-5 h-5"></i>
+                </button>
+                <button class="glass-button p-2.5 rounded-xl text-stone-500">
+                    <i data-lucide="help-circle" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <div class="flex-1 glass-panel rounded-3xl p-6 overflow-hidden flex flex-col relative">
+            
+            <!-- Progress Steps -->
+            <div class="flex items-center justify-center mb-8 shrink-0">
+                <div class="flex items-center gap-4">
+                    <div class="flex flex-col items-center">
+                        <div id="step-btn-1" onclick="switchStep(1)" class="w-10 h-10 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-lg shadow-green-200 cursor-pointer transition-all">1</div>
+                        <span class="text-xs font-semibold mt-2 text-green-700">템플릿 선택</span>
+                    </div>
+                    <div class="w-20 h-0.5 bg-stone-200"></div>
+                    <div class="flex flex-col items-center">
+                        <div id="step-btn-2" onclick="switchStep(2)" class="w-10 h-10 rounded-full bg-white border-2 border-stone-200 text-stone-400 flex items-center justify-center font-bold cursor-pointer hover:border-green-400 transition-all">2</div>
+                        <span class="text-xs font-medium mt-2 text-stone-400">구조 설정</span>
+                    </div>
+                    <div class="w-20 h-0.5 bg-stone-200"></div>
+                    <div class="flex flex-col items-center">
+                        <div id="step-btn-3" onclick="switchStep(3)" class="w-10 h-10 rounded-full bg-white border-2 border-stone-200 text-stone-400 flex items-center justify-center font-bold cursor-pointer hover:border-green-400 transition-all">3</div>
+                        <span class="text-xs font-medium mt-2 text-stone-400">편집 & 내보내기</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 1: Template Selection -->
+            <div id="view-1" class="flex-1 overflow-y-auto px-4 custom-scrollbar">
+                <div class="text-center mb-10">
+                    <h2 class="text-2xl font-bold text-stone-800 mb-2">어떤 형식의 보고서를 작성하시겠습니까?</h2>
+                    <p class="text-stone-500">목적에 맞는 템플릿을 선택하면 AI가 최적화된 초안을 생성합니다.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 max-w-7xl mx-auto">
+                    <!-- Template Card 1 (Selected) -->
+                    <div class="group relative bg-white rounded-2xl border-2 border-green-500 shadow-md cursor-pointer hover:shadow-xl transition-all overflow-hidden" onclick="switchStep(2)">
+                        <div class="absolute top-3 right-3 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded-full z-10">
+                            추천
+                        </div>
+                        <div class="aspect-[1/1.4] bg-stone-100 relative overflow-hidden flex items-center justify-center p-6">
+                            <!-- Paper Mockup -->
+                            <div class="w-full h-full bg-white shadow-sm flex flex-col p-3 gap-2 opacity-80 group-hover:opacity-100 transition-opacity transform group-hover:scale-105 duration-300">
+                                <div class="w-3/4 h-2 bg-stone-800 mb-2"></div>
+                                <div class="w-full h-1.5 bg-stone-200"></div>
+                                <div class="w-full h-1.5 bg-stone-200"></div>
+                                <div class="w-2/3 h-1.5 bg-stone-200"></div>
+                                <div class="w-full h-24 bg-stone-50 mt-2 rounded"></div>
+                            </div>
+                        </div>
+                        <div class="p-5">
+                            <h3 class="font-bold text-stone-800 mb-1">경영진 브리핑 (Executive Briefing)</h3>
+                            <p class="text-xs text-stone-500 mb-3">핵심 이슈 위주의 요약과 대응 방안 중심의 짧고 명료한 보고서입니다.</p>
+                            <div class="flex gap-2">
+                                <span class="px-2 py-1 bg-green-50 text-green-700 rounded text-[10px] font-bold">1-2 페이지</span>
+                                <span class="px-2 py-1 bg-stone-100 text-stone-600 rounded text-[10px] font-bold">요약 중심</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Template Card 2 -->
+                    <div class="group bg-white rounded-2xl border border-stone-200 cursor-pointer hover:border-green-400 hover:shadow-lg transition-all overflow-hidden" onclick="switchStep(2)">
+                        <div class="aspect-[1/1.4] bg-stone-100 relative overflow-hidden flex items-center justify-center p-6">
+                            <div class="w-full h-full bg-white shadow-sm flex flex-col p-3 gap-2 opacity-60 group-hover:opacity-100 transition-opacity transform group-hover:scale-105 duration-300">
+                                <div class="w-1/2 h-2 bg-stone-800 mb-4 mx-auto"></div>
+                                <div class="flex gap-2">
+                                    <div class="w-1/2 h-32 bg-stone-50 rounded"></div>
+                                    <div class="w-1/2 h-32 bg-stone-50 rounded"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-5">
+                            <h3 class="font-bold text-stone-800 mb-1">상세 분석 보고서 (Research Paper)</h3>
+                            <p class="text-xs text-stone-500 mb-3">법적 근거, 상세 데이터, 차트가 포함된 논문 형식의 심층 보고서입니다.</p>
+                            <div class="flex gap-2">
+                                <span class="px-2 py-1 bg-stone-100 text-stone-600 rounded text-[10px] font-bold">10+ 페이지</span>
+                                <span class="px-2 py-1 bg-stone-100 text-stone-600 rounded text-[10px] font-bold">학술적</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Template Card 3 -->
+                    <div class="group bg-white rounded-2xl border border-stone-200 cursor-pointer hover:border-green-400 hover:shadow-lg transition-all overflow-hidden" onclick="switchStep(2)">
+                        <div class="aspect-[1/1.4] bg-stone-100 relative overflow-hidden flex items-center justify-center p-6">
+                            <div class="w-full h-full bg-white shadow-sm flex flex-col p-3 gap-2 opacity-60 group-hover:opacity-100 transition-opacity transform group-hover:scale-105 duration-300">
+                                <div class="w-full h-2 bg-indigo-600 mb-1"></div>
+                                <div class="w-1/2 h-4 bg-stone-200 mb-4"></div>
+                                <div class="w-full h-1.5 bg-stone-200"></div>
+                                <div class="w-full h-1.5 bg-stone-200"></div>
+                                <div class="w-full h-1.5 bg-stone-200"></div>
+                            </div>
+                        </div>
+                        <div class="p-5">
+                            <h3 class="font-bold text-stone-800 mb-1">규제 대응 계획서</h3>
+                            <p class="text-xs text-stone-500 mb-3">개정된 법령에 따른 구체적인 사내 이행 계획 및 체크리스트가 포함됩니다.</p>
+                            <div class="flex gap-2">
+                                <span class="px-2 py-1 bg-stone-100 text-stone-600 rounded text-[10px] font-bold">실무자용</span>
+                                <span class="px-2 py-1 bg-stone-100 text-stone-600 rounded text-[10px] font-bold">체크리스트</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Template Card 4 -->
+                    <div class="group bg-white rounded-2xl border border-stone-200 cursor-pointer hover:border-green-400 hover:shadow-lg transition-all overflow-hidden" onclick="switchStep(2)">
+                         <div class="aspect-[1/1.4] bg-stone-100 relative overflow-hidden flex items-center justify-center p-6">
+                             <div class="flex flex-col items-center gap-2 text-stone-300 group-hover:text-green-500 transition-colors">
+                                <i data-lucide="plus-circle" class="w-10 h-10"></i>
+                                <span class="text-xs font-semibold">새 템플릿 만들기</span>
+                             </div>
+                        </div>
+                        <div class="p-5 opacity-60 group-hover:opacity-100">
+                            <h3 class="font-bold text-stone-800 mb-1">커스텀 템플릿</h3>
+                            <p class="text-xs text-stone-500 mb-3">회사 양식에 맞게 섹션을 자유롭게 구성하여 저장합니다.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 2: Structure Configuration (Initially Hidden) -->
+            <div id="view-2" class="hidden flex-1 flex gap-6 overflow-hidden">
+                <!-- Left: Source Blocks -->
+                <div class="w-1/3 flex flex-col gap-4">
+                    <div class="glass-panel p-4 rounded-2xl flex-1 flex flex-col min-h-0 bg-white/40">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-stone-700 flex items-center gap-2">
+                                <i data-lucide="box" class="w-4 h-4"></i> 사용 가능 블록
+                            </h3>
+                            <span class="text-xs text-stone-500">드래그하여 추가</span>
+                        </div>
+                        <div class="relative mb-4">
+                            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-stone-400"></i>
+                            <input type="text" placeholder="블록 검색..." class="input-field pl-9">
+                        </div>
+                        
+                        <div class="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                            <div class="p-3 bg-white border border-stone-200 rounded-xl shadow-sm cursor-grab hover:border-green-400 hover:shadow-md transition-all flex items-center justify-between group">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                                        <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-bold text-stone-700">이슈 통계 차트</div>
+                                        <div class="text-[10px] text-stone-500">최근 3개월 이슈 발생 추이</div>
+                                    </div>
+                                </div>
+                                <i data-lucide="grip-vertical" class="w-4 h-4 text-stone-300"></i>
+                            </div>
+
+                            <div class="p-3 bg-white border border-stone-200 rounded-xl shadow-sm cursor-grab hover:border-green-400 hover:shadow-md transition-all flex items-center justify-between group">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+                                        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-bold text-stone-700">핵심 리스크 분석</div>
+                                        <div class="text-[10px] text-stone-500">법적 강제성 상위 3건</div>
+                                    </div>
+                                </div>
+                                <i data-lucide="grip-vertical" class="w-4 h-4 text-stone-300"></i>
+                            </div>
+
+                            <div class="p-3 bg-white border border-stone-200 rounded-xl shadow-sm cursor-grab hover:border-green-400 hover:shadow-md transition-all flex items-center justify-between group">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                                        <i data-lucide="gavel" class="w-4 h-4"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-bold text-stone-700">관련 법령 원문</div>
+                                        <div class="text-[10px] text-stone-500">분석된 청크 원문 첨부</div>
+                                    </div>
+                                </div>
+                                <i data-lucide="grip-vertical" class="w-4 h-4 text-stone-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Center arrow -->
+                <div class="flex flex-col justify-center items-center text-stone-300">
+                    <i data-lucide="arrow-right-circle" class="w-8 h-8"></i>
+                </div>
+
+                <!-- Right: Report Outline -->
+                <div class="flex-1 flex flex-col gap-4">
+                    <div class="glass-panel p-6 rounded-2xl flex-1 flex flex-col min-h-0 bg-white">
+                        <div class="flex items-center justify-between mb-6 pb-4 border-b border-stone-100">
+                            <div>
+                                <h3 class="font-bold text-lg text-stone-800">보고서 목차 구성</h3>
+                                <p class="text-xs text-stone-500">선택된 템플릿: 경영진 브리핑</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-100 text-stone-600 hover:bg-stone-200">초기화</button>
+                                <button class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-green-50 text-green-700 border border-green-200">자동 구성</button>
+                            </div>
+                        </div>
+
+                        <div class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar pl-4 border-l-2 border-stone-100 ml-4">
+                            <!-- Outline Item 1 -->
+                            <div class="relative">
+                                <div class="absolute -left-[25px] top-3 w-3 h-3 rounded-full bg-stone-300 border-2 border-white box-content"></div>
+                                <div class="p-4 bg-stone-50 rounded-xl border border-stone-200 flex items-start gap-4 hover:border-green-400 group transition-all">
+                                    <div class="mt-1 text-stone-400 cursor-move"><i data-lucide="grip-vertical" class="w-4 h-4"></i></div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="font-bold text-stone-800">1. Executive Summary (요약)</span>
+                                            <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button class="p-1 hover:bg-stone-200 rounded"><i data-lucide="edit-2" class="w-3 h-3 text-stone-500"></i></button>
+                                                <button class="p-1 hover:bg-red-100 rounded"><i data-lucide="trash-2" class="w-3 h-3 text-red-500"></i></button>
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-stone-500">전체 분석 내용의 3줄 요약 및 핵심 제언 포함</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Outline Item 2 -->
+                            <div class="relative">
+                                <div class="absolute -left-[25px] top-3 w-3 h-3 rounded-full bg-green-500 border-2 border-white box-content shadow-sm"></div>
+                                <div class="p-4 bg-white rounded-xl border-2 border-green-500 shadow-md flex items-start gap-4">
+                                    <div class="mt-1 text-green-600 cursor-move"><i data-lucide="grip-vertical" class="w-4 h-4"></i></div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="font-bold text-green-800">2. Key Issues (핵심 이슈)</span>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700">RAG 추출</span>
+                                        </div>
+                                        
+                                        <!-- Nested Items -->
+                                        <div class="mt-3 space-y-2">
+                                            <div class="flex items-center gap-2 p-2 bg-stone-50 rounded text-xs text-stone-600 border border-stone-100">
+                                                <i data-lucide="check-circle-2" class="w-3 h-3 text-green-500"></i>
+                                                <span>탄소배출권 거래제 개편안 (중요도 0.85)</span>
+                                            </div>
+                                            <div class="flex items-center gap-2 p-2 bg-stone-50 rounded text-xs text-stone-600 border border-stone-100">
+                                                <i data-lucide="check-circle-2" class="w-3 h-3 text-green-500"></i>
+                                                <span>재생에너지 의무공급비율 상향 (중요도 0.78)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Outline Item 3 -->
+                            <div class="relative">
+                                <div class="absolute -left-[25px] top-3 w-3 h-3 rounded-full bg-stone-300 border-2 border-white box-content"></div>
+                                <div class="p-4 bg-stone-50 rounded-xl border border-stone-200 flex items-start gap-4 hover:border-green-400 group transition-all">
+                                    <div class="mt-1 text-stone-400 cursor-move"><i data-lucide="grip-vertical" class="w-4 h-4"></i></div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <span class="font-bold text-stone-800">3. Impact Analysis (영향 분석)</span>
+                                            <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button class="p-1 hover:bg-stone-200 rounded"><i data-lucide="edit-2" class="w-3 h-3 text-stone-500"></i></button>
+                                                <button class="p-1 hover:bg-red-100 rounded"><i data-lucide="trash-2" class="w-3 h-3 text-red-500"></i></button>
+                                            </div>
+                                        </div>
+                                        <p class="text-xs text-stone-500">비용/운영 영향도 매트릭스 차트 포함</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 pt-4 border-t border-stone-100 flex justify-end">
+                             <button onclick="switchStep(3)" class="bg-primary hover:bg-green-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-green-200 transition-all flex items-center gap-2">
+                                <span>초안 생성하기</span>
+                                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                             </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 3: Report Editor (Initially Hidden) -->
+            <div id="view-3" class="hidden flex-1 flex gap-6 overflow-hidden">
+                <!-- Main Editor Area -->
+                <div class="flex-1 flex flex-col gap-4">
+                    <!-- Toolbar -->
+                    <div class="glass-panel p-2 rounded-xl flex items-center gap-2 shrink-0">
+                        <div class="flex items-center gap-1 border-r border-stone-200 pr-2">
+                             <button class="p-2 hover:bg-white rounded-lg text-stone-600 transition-colors"><i data-lucide="undo" class="w-4 h-4"></i></button>
+                             <button class="p-2 hover:bg-white rounded-lg text-stone-600 transition-colors"><i data-lucide="redo" class="w-4 h-4"></i></button>
+                        </div>
+                        <div class="flex items-center gap-1 border-r border-stone-200 pr-2">
+                             <select class="bg-transparent text-sm font-medium text-stone-700 p-1 border-none focus:outline-none cursor-pointer">
+                                 <option>본문 (Normal)</option>
+                                 <option>제목 1 (H1)</option>
+                                 <option>제목 2 (H2)</option>
+                             </select>
+                        </div>
+                        <div class="flex items-center gap-1 border-r border-stone-200 pr-2">
+                             <button class="p-2 hover:bg-white rounded-lg font-bold text-stone-700"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                             <button class="p-2 hover:bg-white rounded-lg italic text-stone-700"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                             <button class="p-2 hover:bg-white rounded-lg underline text-stone-700"><i data-lucide="underline" class="w-4 h-4"></i></button>
+                        </div>
+                        <div class="flex-1"></div>
+                        <div class="flex items-center gap-2">
+                             <span class="text-xs text-stone-400">저장됨 (14:30)</span>
+                             <button class="px-4 py-1.5 bg-stone-800 text-white text-xs font-bold rounded-lg hover:bg-black">PDF 내보내기</button>
+                        </div>
+                    </div>
+
+                    <!-- Page View -->
+                    <div class="flex-1 bg-stone-200/50 rounded-2xl overflow-y-auto flex justify-center p-8 custom-scrollbar">
+                        <div class="w-[210mm] min-h-[297mm] bg-white paper-shadow p-[25mm] rounded-sm">
+                            <!-- Report Content Mockup -->
+                            <div class="flex justify-between items-end border-b-2 border-black pb-4 mb-10">
+                                <div>
+                                    <h1 class="text-3xl font-extrabold text-black mb-2">경영진 브리핑</h1>
+                                    <p class="text-stone-500 font-medium">2026년 1월 환경/에너지 규제 동향</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-xs text-stone-400">EcoMonitor AI Generated</div>
+                                    <div class="text-xs font-bold">2026.01.30</div>
+                                </div>
+                            </div>
+                            
+                            <h2 class="text-xl font-bold text-stone-800 mb-4 flex items-center gap-2">
+                                1. Executive Summary
+                            </h2>
+                            <p class="text-sm leading-relaxed text-stone-700 mb-6 text-justify">
+                                2026년 1월, 환경부와 산업통상자원부는 총 45건의 주요 문서를 발표했습니다. 
+                                그 중 <span class="bg-yellow-100 px-1 border-b-2 border-yellow-300 cursor-pointer hover:bg-yellow-200 transition-colors" title="AI가 강조함">탄소배출권 거래제 4차 계획 초안</span>과 <span class="bg-green-100 px-1 border-b-2 border-green-300">재생에너지 사용 의무화(RPS) 비율 상향</span>은 귀사의 2026년 운영 비용에 직접적인 영향을 미칠 것으로 예상됩니다.
+                                특히 비용 상승 리스크는 전년 대비 약 15% 증가할 것으로 추정되므로, 선제적인 배출권 확보 전략이 요구됩니다.
+                            </p>
+
+                            <div class="my-8 p-6 bg-stone-50 rounded-xl border border-stone-200">
+                                <h3 class="font-bold text-center mb-4 text-stone-700">월별 규제 리스크 강도 (Projection)</h3>
+                                <div class="flex items-end justify-center gap-4 h-32 px-10">
+                                    <div class="w-12 bg-green-200 rounded-t h-1/3 relative group cursor-pointer">
+                                        <div class="absolute -top-6 left-0 w-full text-center text-xs font-bold opacity-0 group-hover:opacity-100">Low</div>
+                                    </div>
+                                    <div class="w-12 bg-green-300 rounded-t h-1/2 relative group cursor-pointer">
+                                        <div class="absolute -top-6 left-0 w-full text-center text-xs font-bold opacity-0 group-hover:opacity-100">Med</div>
+                                    </div>
+                                    <div class="w-12 bg-yellow-400 rounded-t h-2/3 relative group cursor-pointer">
+                                        <div class="absolute -top-6 left-0 w-full text-center text-xs font-bold opacity-0 group-hover:opacity-100">High</div>
+                                    </div>
+                                    <div class="w-12 bg-red-500 rounded-t h-full relative group cursor-pointer">
+                                        <div class="absolute -top-6 left-0 w-full text-center text-xs font-bold opacity-0 group-hover:opacity-100">Critical</div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-center gap-4 mt-2 text-xs text-stone-500">
+                                    <span class="w-12 text-center">1Q</span>
+                                    <span class="w-12 text-center">2Q</span>
+                                    <span class="w-12 text-center">3Q</span>
+                                    <span class="w-12 text-center">4Q</span>
+                                </div>
+                            </div>
+
+                            <h2 class="text-xl font-bold text-stone-800 mb-4 mt-10">
+                                2. Key Issues (상세 분석)
+                            </h2>
+                            <div class="pl-4 border-l-4 border-green-500 mb-6">
+                                <h3 class="font-bold text-lg mb-2">이슈 #1: 탄소배출권 유상할당 비율 확대</h3>
+                                <p class="text-sm text-stone-600 mb-2">
+                                    <strong>출처:</strong> 환경부 보도자료 (2026.01.15)
+                                </p>
+                                <p class="text-sm leading-relaxed text-stone-700 text-justify">
+                                    환경부는 2026년부터 적용될 제4차 배출권거래제 기본계획에서 유상할당 비율을 기존 10%에서 20%로 상향 조정한다고 발표했습니다. 이는 전력 및 철강 산업에 가장 큰 영향을 미칠 것으로 보이며...
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar: AI Assistant -->
+                <div class="w-80 glass-panel rounded-2xl p-0 flex flex-col overflow-hidden bg-white/80">
+                    <div class="p-4 border-b border-stone-100 flex items-center gap-2 bg-gradient-to-r from-green-50 to-white">
+                        <i data-lucide="sparkles" class="w-5 h-5 text-primary"></i>
+                        <span class="font-bold text-stone-800">AI Copilot</span>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                        <!-- Suggestion Card -->
+                        <div class="bg-white border border-green-100 rounded-xl p-3 shadow-sm">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">제안</span>
+                                <span class="text-xs text-stone-400">지금</span>
+                            </div>
+                            <p class="text-xs text-stone-600 mb-3 leading-relaxed">
+                                "이슈 #1" 섹션의 내용이 다소 전문적입니다. 경영진 보고용으로 <strong>핵심 재무 영향</strong> 위주로 요약할까요?
+                            </p>
+                            <button class="w-full py-1.5 bg-green-50 text-green-700 text-xs font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200">
+                                네, 요약해서 적용해줘
+                            </button>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="grid grid-cols-2 gap-2">
+                            <button class="p-3 bg-stone-50 border border-stone-200 rounded-xl hover:border-green-400 hover:bg-white transition-all group flex flex-col items-center gap-1">
+                                <i data-lucide="pen-tool" class="w-5 h-5 text-stone-400 group-hover:text-green-500"></i>
+                                <span class="text-[10px] font-medium text-stone-600">문체 교정</span>
+                            </button>
+                            <button class="p-3 bg-stone-50 border border-stone-200 rounded-xl hover:border-green-400 hover:bg-white transition-all group flex flex-col items-center gap-1">
+                                <i data-lucide="languages" class="w-5 h-5 text-stone-400 group-hover:text-green-500"></i>
+                                <span class="text-[10px] font-medium text-stone-600">번역</span>
+                            </button>
+                            <button class="p-3 bg-stone-50 border border-stone-200 rounded-xl hover:border-green-400 hover:bg-white transition-all group flex flex-col items-center gap-1">
+                                <i data-lucide="bar-chart" class="w-5 h-5 text-stone-400 group-hover:text-green-500"></i>
+                                <span class="text-[10px] font-medium text-stone-600">차트 추천</span>
+                            </button>
+                            <button class="p-3 bg-stone-50 border border-stone-200 rounded-xl hover:border-green-400 hover:bg-white transition-all group flex flex-col items-center gap-1">
+                                <i data-lucide="check-square" class="w-5 h-5 text-stone-400 group-hover:text-green-500"></i>
+                                <span class="text-[10px] font-medium text-stone-600">팩트 체크</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-4 border-t border-stone-100">
+                        <div class="relative">
+                            <input type="text" placeholder="AI에게 요청하기..." class="input-field pr-10 text-sm">
+                            <button class="absolute right-2 top-1.5 p-1 text-primary hover:bg-green-50 rounded">
+                                <i data-lucide="send" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Simple Tab Switching Logic
+        function switchStep(step) {
+            // Reset all buttons
+            document.querySelectorAll('[id^="step-btn-"]').forEach(btn => {
+                btn.className = "w-10 h-10 rounded-full bg-white border-2 border-stone-200 text-stone-400 flex items-center justify-center font-bold cursor-pointer hover:border-green-400 transition-all";
+                btn.nextElementSibling.className = "text-xs font-medium mt-2 text-stone-400";
+            });
+
+            // Activate current button
+            const activeBtn = document.getElementById(`step-btn-${step}`);
+            activeBtn.className = "w-10 h-10 rounded-full bg-green-600 text-white flex items-center justify-center font-bold shadow-lg shadow-green-200 cursor-pointer transition-all border-none";
+            activeBtn.nextElementSibling.className = "text-xs font-semibold mt-2 text-green-700";
+
+            // Hide all views
+            document.getElementById('view-1').classList.add('hidden');
+            document.getElementById('view-2').classList.add('hidden');
+            document.getElementById('view-3').classList.add('hidden');
+
+            // Show selected view
+            document.getElementById(`view-${step}`).classList.remove('hidden', 'flex'); 
+            // Add flex for view-2 and view-3 as they need flex layout
+            if(step > 1) {
+                document.getElementById(`view-${step}`).classList.add('flex');
+            } else {
+                 document.getElementById(`view-${step}`).classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>

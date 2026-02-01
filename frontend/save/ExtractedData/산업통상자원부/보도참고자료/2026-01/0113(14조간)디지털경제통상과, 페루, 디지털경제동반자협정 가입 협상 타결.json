@@ -1,0 +1,143 @@
+{
+  "metadata": {
+    "source_file": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData\\산업통상자원부\\보도참고자료\\2026-01\\0113(14조간)디지털경제통상과, 페루, 디지털경제동반자협정 가입 협상 타결.hwpx",
+    "file_format": "hwp",
+    "status": "completed",
+    "page_count": 1,
+    "char_count": 10875,
+    "token_count": 5437,
+    "quality_score": 1.0,
+    "extraction_method": "text_layer",
+    "processing_time_ms": 927,
+    "extracted_at": "2026-01-29T10:06:04.423637",
+    "corrections": [
+      {
+        "type": "utf16le_garbage_cleanup",
+        "description": "UTF-16 LE 오인식 한자 문자 제거",
+        "removed_chars": 12
+      },
+      {
+        "type": "hwp_space_garbage_cleanup",
+        "description": "HWP 공백 인코딩 오류 문자 제거",
+        "removed_chars": 18,
+        "patterns": [
+          "시퀀스 '漠杳' x2",
+          "시퀀스 '氠瑢' x7"
+        ]
+      }
+    ],
+    "tables_extracted": 2,
+    "tables_normalized": 2,
+    "normalization_applied": true,
+    "quality_details": {
+      "korean_ratio": 0.3550462858433055,
+      "broken_char_ratio": 0.0,
+      "sentence_structure": 1.0,
+      "repetition_anomaly": 0.0,
+      "overall_score": 1.0
+    }
+  },
+  "content": {
+    "text": "보도자료\n\n보도시점\n2026. 1. 13.(화) 11:00\n< 1.14.(수) 조간 >\n배포\n2026. 1. 13.(화)\n\n페루, 디지털경제동반자협정 가입 협상 타결\n- 우리 기업의 중남미 전자상거래 및 디지털 기반 수출 기회 확대 전망 -\n산업통상부(장관:김정관)는 페루의 디지털경제동반자협정(Digital Economy Partnership Agreement, 이하 DEPA*) 가입 협상이 실질 타결됐다고 밝히며, 이번 페루의 가입이 글로벌 디지털 통상 네트워크 확대에 기여할 것으로 전망했다.\n* DEPA는 CPTPP 회원국인 싱가포르, 뉴질랜드, 칠레 간 디지털 통상규범 정립 및 협력을 강화하기 위해 체결한 최초의 복수국 간 디지털 통상협정(‘21.1월 발효)으로 우리나라는 ‘24년 5월 가입\nDEPA는 개방형 협정으로, 우리나라 가입 이후 코스타리카와 페루의 가입 협상이 실질 타결되는 등 협정의 외연이 확대되며 글로벌 디지털 통상 프레임워크로 발전해 나가고 있다. 현재 페루 외에도 중국, 아랍에미리트(UAE) 등이 가입 협상을 진행 중이다.\n페루의 DEPA 가입은 우리 기업의 전자상거래 및 디지털 기반 수출 기회를 확대*하고, 데이터 비즈니스 및 디지털 콘텐츠 등의 분야에서 보다 안정적이고 예측 가능한 디지털 교역 환경을 조성하는 데 기여할 것으로 기대된다.\n* 양국 간 전자상거래 무역 규모는 지난 10년간(’15~‘24) 7배 이상 증가, 성장 가능성 多大\n여한구 통상교섭본부장은“페루의 DEPA 가입 협상 실질 타결을 환영한다”며, “페루는 개방적이고 포용적인 디지털 통상 질서를 지향하는 DEPA의 비전을 공유하는 중요한 파트너로, 이번 페루의 가입은 DEPA가 글로벌 디지털 통상 협력 플랫폼으로 발전해 나가는 데 있어 의미있는 진전”이라고 평가했다. 이어, 여본부장은“앞으로도 DEPA 회원국들과 함께 신뢰할 수 있는 디지털 통상 규범 형성에 기여해 나가겠다”고 밝혔다.\n향후 페루의 국내 절차가 마무리된 후, DEPA 회원국의 내부 절차를 거쳐 페루의 가입이 발효될 예정이다.\n\n\n(044-203-4882)\n참고 1\n공동 보도자료 원문\n\nJoint Press Release on the Substantive Conclusion of Discussions\nfor the Republic of Peru’s Accession to the Digital Economy Partnership Agreement\nThe Parties to the Digital Economy Partnership Agreement (DEPA) are pleased to announce the substantive conclusion of discussions for the Republic of Peru’s accession to this world-leading digital trade agreement.\nDigitally signed in 2020 by Chile, New Zealand and Singapore, the DEPA is the world’s first standalone digital economy agreement and represents a forward-looking model for economic engagement and trade in the digital era. The Agreement reinforces commercially meaningful digital trade rules, fosters new approaches and collaborations in digital trade, promotes interoperability across different regulatory frameworks, and addresses emerging challenges arising from digitalisation. Designed as an open and inclusive framework, the DEPA is open to economies that are able to meet its high standards. The Republic of Korea joined the DEPA on 3 May 2024 as the first new member economy.\nPeru formally requested accession to the DEPA on 23 May 2023, and an Accession Working Group was established on 7 November 2024 to assess the request. Following a comprehensive assessment, the Accession Working Group, chaired by the Republic of Korea, agreed that, based on Peru’s existing legal framework, policies and practices, Peru has demonstrated its capacity to comply with the DEPA’s provisions. Peru has also shown a strong commitment to engaging constructively with DEPA Parties on areas of shared interest, including digital trade facilitation, consumer protection and cross-border data flows.\nThe DEPA Parties will now continue to work with Peru to advance the remaining steps of the accession process in a timely manner, consistent with each Party’s domestic procedures and the DEPA Accession Process.\nChile’s Vice Minister of International Economic Relations Claudia Sanhueza said, “Chile and Peru share a long history of economic integration and forward-looking trade cooperation. In this context, Chile warmly welcomes the substantive conclusion of discussions for Peru’s accession to the DEPA, a step that strengthens our joint commitment to building a high-quality regulatory framework that promotes digital trade. This milestone deepens our shared vision for a modern and inclusive digital economy and opens new opportunities for regional cooperation and innovation.”\nNew Zealand’s Minister for Trade and Investment Todd McClay said, “New Zealand is pleased to join Parties in inviting Peru to accede to the DEPA. Throughout the process, Peru has demonstrated that it shares our commitment to progressive, high-quality digital trade rules and the DEPA’s vision. Peru’s accession will strengthen DEPA as a leading high standards digital economy agreement and we look forward to working closely with them to advance its objectives.”\nSingapore’s Minister-in-charge of Trade Relations and Minister for Sustainability and the Environment Grace Fu said, “Singapore warmly welcomes the substantive conclusion of Peru’s accession negotiations to the DEPA. This marks another important milestone for the DEPA. The expansion of the DEPA’s membership will unlock more opportunities and add further weight to the DEPA’s ambition to foster more open digital markets. We look forward to partnerships with Peru through the DEPA to expand and enhance collaborations in digital trade. We are hopeful that the DEPA will continue to attract like-minded partners who share our vision in digital economy cooperation.”\nThe Republic of Korea’s Minister for Trade Yeo Han-Koo said, “We welcome the substantial conclusion of Peru’s accession negotiations to Digital Economy Partnership Agreement. Peru is an important partner that shares DEPA’s vision of an open and inclusive digital trade order. Peru’s accession represents a meaningful step forward in advancing the DEPA as a global platform for digital trade cooperation. Korea will continue to contribute to the development of reliable global digital trade norms.”\nPeru’s Minister of Foreign Trade and Tourism, Teresa Mera Gómez said, “Peru is committed to start working with Chile, Korea, New Zealand and Singapore as part of the DEPA. This agreement opens up concrete opportunities for Peruvian consumers and businesses by strengthening the legal framework for digital trade in Peru, facilitating cross-border interoperability, and accelerating technological innovation and economic inclusion in our country –thereby directly improving opportunities for our business sector, including our micro, small, and medium-sized enterprises (MSMEs).\nRecognizing DEPA’s importance as a platform for cooperation on digital transformation, Peru seeks to support the consolidation of a high-standard, modern agreement that supports sustainable development. In this regard, Peru looks forward to engaging in the exchange of experiences and best practices with DEPA Parties, including in areas such as the implementation of Single Window systems for foreign trade and the use of regulatory sandbox schemes for digital financial services, among other initiatives.”\nAccession Working Groups are currently established to assess the accession requests of Canada, China and the United Arab Emirates. El Salvador, Ukraine, Uruguay and Thailand have also formally submitted requests to accede to the DEPA.\nJointly issued by the Vice Ministry of International Economic Relations, Ministry of Foreign Affairs, Chile; Ministry of Foreign Affairs and Trade, New Zealand; Ministry of Trade and Industry, Singapore; Ministry of Trade, Industry and Resources, Republic of Korea; and Ministry of Foreign Trade and Tourism, Republic of Peru.\n\n참고 2\n공동 보도자료 [비공식 번역본]\n\n디지털경제동반자협정(DEPA) 페루 가입 논의 실질적 타결에 관한 공동 보도자료\n디지털경제동반자협정(Digital Economy Partnership Agreement, DEPA) 회원국은 세계적인 디지털 통상 협정인 DEPA에 대한 페루 공화국의 가입 논의가 실질적으로 타결되었음을 기쁘게 발표합니다.\n2020년 칠레, 뉴질랜드 및 싱가포르가 전자적으로 서명한 DEPA는 세계 최초의 독립적인 디지털 경제 협정으로, 디지털 시대의 경제 협력과 교역을 위한 선도적인 모델을 제시하고 있습니다. DEPA는 상업적으로 의미 있는 디지털 통상 규범을 강화하고, 디지털 통상 분야에서 새로운 접근과 협력을 촉진하며, 상이한 규제 체계 간 상호 운용성을 제고하고, 디지털화로 인해 등장하는 새로운 과제들을 다루고 있습니다. DEPA는 개방적이고 포용적인 프레임워크로 설계되어 있으며, 협정의 높은 기준을 충족할 수 있는 경제체의 참여를 허용하고 있습니다. 대한민국은 2024년 5월 3일 최초의 신규 회원국으로 DEPA에 가입하였습니다.\n페루는 2023년 5월 23일 DEPA 가입을 공식 신청하였으며, 해당 가입 신청을 평가하기 위한 가입작업반(Accession Working Group)이 2024년 11월 7일에 출범했습니다. 대한민국이 의장국을 맡은 동 가입작업반은, 종합적인 평가를 거쳐, 페루가 자국의 현행 법·제도 및 정책을 바탕으로 DEPA 규범을 이행할 수 있는 역량을 입증하였으며, 디지털 통상 원활화, 소비자 보호, 국경 간 데이터 이전 등 상호 관심 분야에서 DEPA 회원국과 건설적으로 협력하겠다는 의지를 보여주었다는 데에 의견을 같이했습니다.\nDEPA 회원국은 향후 각 회원국의 국내 절차 및 DEPA 가입 절차에 부합하도록, 페루와 함께 가입 절차의 잔여 단계들을 적시에 진전시켜 나갈 예정입니다.\n칠레의 클라우디아 산후에사(Claudia Sanhueza) 국제경제관계 차관은 다음과 같이 밝혔습니다. “칠레와 페루는 오랜 경제 통합의 역사와 미래지향적인 통상 협력 관계를 공유하고 있습니다. 이러한 맥락에서, 칠레는 페루의 DEPA 가입 협의 실질적 타결을 진심으로 환영하며, 이는 디지털 통상을 촉진하는 높은 품질의 규제 프레임워크를 구축하려는 공동의 의지를 강화하는 중요한 진전입니다. 이번 성과는 현대적이고 포용적인 디지털 경제에 대한 우리의 공동 비전을 심화시키고, 지역 차원의 협력과 혁신을 위한 새로운 기회를 열어줄 것입니다.”\n뉴질랜드의 토드 맥클레이(Todd McClay) 통상 및 투자 장관은 “뉴질랜드는 DEPA 회원국들과 함께 페루를 DEPA에 초청하게 된 것을 기쁘게 생각합니다. 가입 협의 전반에 걸쳐 페루는 진보적이고 높은 수준의 디지털 통상 규범과 DEPA의 비전에 대한 공감대를 명확히 보여주었습니다. 페루의 가입은 높은 수준의 디지털 경제 협정으로서 DEPA의 위상을 더욱 강화할 것이며, 우리는 DEPA의 목표를 진전시키기 위해 페루와 긴밀히 협력해 나가기를 기대합니다.”라고 언급했습니다.\n싱가포르의 그레이스 푸(Grace Fu) 통상관계 장관 겸 지속가능성 및 환경 장관은 다음과 같이 말했습니다. “싱가포르는 페루의 DEPA 가입 협의가 실질적으로 타결된 것을 진심으로 환영합니다. 이는 DEPA에 있어 또 하나의 중요한 이정표입니다. 회원국 확대는 더 많은 기회를 창출하고, 보다 개방적인 디지털 시장을 조성하려는 DEPA의 비전에 한층 더 힘을 실어줄 것입니다. 싱가포르는 DEPA를 통해 페루와 디지털 통상 분야의 협력을 확대 및 심화해 나가기를 기대하며, 디지털 경제 협력에 대한 비전을 공유하는 뜻을 같이하는 파트너들이 앞으로도 DEPA에 지속적으로 참여하기를 희망합니다.”\n대한민국의 여한구(Yeo Han-koo) 통상교섭본부장은 “페루의 DEPA 가입 협상 실질 타결을 환영합니다. 페루는 개방적이고 포용적인 디지털 통상 질서를 지향하는 DEPA의 비전을 공유하는 중요한 파트너입니다. 이번 페루의 가입은 DEPA가 글로벌 디지털 통상 협력 플랫폼으로 발전해 나가는 데 있어 의미 있는 진전이라고 평가합니다. 한국은 앞으로도 DEPA 회원국들과 함께 신뢰할 수 있는 글로벌 디지털 통상 규범 형성에 기여해 나가겠습니다.”라고 언급했습니다.\n페루의 테레사 메라 고메스(Teresa Mera Gómez) 대외무역관광 장관은 “페루는 DEPA의 일원으로서 칠레, 대한민국, 뉴질랜드, 싱가포르와 함께 협력을 시작할 것을 약속합니다. 동 협정은 페루 내 디지털 통상을 위한 법적 기반을 강화하고, 국경간 상호운용성을 제고하며, 기술 혁신과 경제적 포용성을 가속화함으로써, 페루 소비자와 기업들에게 실질적인 기회를 제공할 것입니다. 이는 특히 소상공인과 중소기업(MSMEs)을 포함한 페루 기업에 직접적인 혜택을 가져올 것입니다. 디지털 전환을 위한 협력 플랫폼으로서 DEPA의 중요성을 인식하고 있는 페루는, 지속가능한 발전을 지원하는 높은 수준의 현대적인 협정으로서 DEPA의 정착을 적극 지지합니다. 이러한 맥락에서 페루는 대외무역 단일 창구 시스템의 이행, 디지털 금융서비스 분야의 규제 샌드박스 활용 등 다양한 분야에서 DEPA 회원국들과 경험과 모범사례를 공유하기를 기대합니다.”라고 밝혔습니다.\n현재 중국과 아랍에미리트(UAE)의 DEPA 가입 요청을 평가하기 위한 가입작업반이 구성되어 있으며, 엘살바도르, 우크라이나, 우루과이 및 태국도 DEPA 가입을 공식 요청한 바 있습니다.\n동 공동 보도자료는 칠레 외교부 국제경제관계 차관실, 뉴질랜드 외교통상부, 싱가포르 통상산업부, 대한민국 산업통상부, 페루 대외무역관광부가 공동으로 발표했습니다.\n\n참고 3\n디지털경제동반자협정(DEPA) 개요\n□ (의의) CPTPP 회원국인 싱가포르, 뉴질랜드, 칠레간 디지털 통상규범 정립과 협력 강화를 위해 체결한 디지털통상협정(’21.1월 발효)\nㅇ 우리나라는 DEPA가 글로벌 디지털 협력 프레임워크로 발전해나갈 가능성을 고려, 최초 가입국으로서 가입절차* 추진(’24.5월 발효)\n* 가입의사 통보(’21.9월) → 가입 협상(’22.1월~’23.6월) → 실질타결(’23.6월) → 발효(’24.5월)\n□ (주요 내용) 原협정문은 서문·본문(16개 모듈) 및 부속서(분쟁해결절차 관련)로 구성되며, 개정의정서(protocol)가 일부 조항을 대체\nㅇ ▲전자상거래 원활화, ▲신뢰 가능한 디지털 환경, ▲디지털 비즈니스 활성화 측면에서 통상 규범과 협력 체계 규정\n< DEPA 주요 내용 >\n\n분야\n규범\n협력\n전자상거래\n원활화\n▴ 종이없는 무역\n▴ 전자인증 및 전자서명\n▴ 전자적 전송물 무관세 영구화\n▴ 물류, 특송화물\n▴ 전자송장, 전자결제\n신뢰가능한 디지털환경\n▴ 개인정보 보호\n▴ 온라인 소비자 보호 강화\n▴ 스팸메시지 규제\n▴ 사이버 보안 협력\n▴ 온라인 안전\n▴ 인터넷 접근 및 이용원칙 등\n데이터\n비즈니스\n활성화\n▴ 국가간 정보이전 원활화\n▴ 컴퓨팅 시설 현지화 금지\n▴ 디지털 제품에 대한 비차별대우\n▴ 암호화 ICT 제품에 특정 암호기술 요구 금지\n▴ AI 기술 및 윤리거버넌스 협력\n▴ 경쟁 정책 협력\n▴ 중소기업 협력, 디지털 SME 대화\n▴ 데이터 혁신, 핀테크 협력\n\n<!-- 표 1 -->[표 데이터]\n\n[담당부서]\n- 부서: 산업통상부\n- 이름: 책임자\n- 이름: 과 장\n- 이름: 고장원\n- 전화번호: (044-203-4880)\n\n항목 2:\n- 부서: 디지털경제통상과\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 황희정\n- 전화번호: (044-203-4882)\n\n<!-- 표 2 -->[표 데이터]\n\n항목 1:\n- 분야: 전자상거래 원활화\n- 규범: ▴ 종이없는 무역 ▴ 전자인증 및 전자서명 ▴ 전자적 전송물 무관세 영구화\n- 협력: ▴ 물류, 특송화물 ▴ 전자송장, 전자결제\n\n항목 2:\n- 분야: 신뢰가능한 디지털환경\n- 규범: ▴ 개인정보 보호 ▴ 온라인 소비자 보호 강화 ▴ 스팸메시지 규제\n- 협력: ▴ 사이버 보안 협력 ▴ 온라인 안전 ▴ 인터넷 접근 및 이용원칙 등\n\n항목 3:\n- 분야: 데이터 비즈니스 활성화\n- 규범: ▴ 국가간 정보이전 원활화 ▴ 컴퓨팅 시설 현지화 금지 ▴ 디지털 제품에 대한 비차별대우 ▴ 암호화 ICT 제품에 특정 암호기술 요구 금지\n- 협력: ▴ AI 기술 및 윤리거버넌스 협력 ▴ 경쟁 정책 협력 ▴ 중소기업 협력, 디지털 SME 대화 ▴ 데이터 혁신, 핀테크 협력",
+    "text_length": 10871
+  },
+  "tables": [
+    {
+      "page_num": 1,
+      "table_index": 0,
+      "row_count": 2,
+      "col_count": 6,
+      "confidence": 0.7,
+      "extraction_method": "hwp_olefile",
+      "semantic_text": "[표 데이터]\n\n[담당부서]\n- 부서: 산업통상부\n- 이름: 책임자\n- 이름: 과  장\n- 이름: 고장원\n- 전화번호: (044-203-4880)\n\n항목 2:\n- 부서: 디지털경제통상과\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 황희정\n- 전화번호: (044-203-4882)",
+      "structured_data": {
+        "title": null,
+        "structure_type": "row_header",
+        "has_header": false,
+        "headers": [
+          "이름",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "column_semantics": [
+          "이름",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "rows": [
+          {
+            "이름": "고장원",
+            "부서": "산업통상부",
+            "전화번호": "(044-203-4880)"
+          },
+          {
+            "이름": "황희정",
+            "부서": "디지털경제통상과",
+            "전화번호": "(044-203-4882)"
+          }
+        ],
+        "metadata": {
+          "row_count": 2,
+          "col_count": 6,
+          "data_row_count": 2,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    },
+    {
+      "page_num": 1,
+      "table_index": 1,
+      "row_count": 4,
+      "col_count": 3,
+      "confidence": 0.7,
+      "extraction_method": "hwp_olefile",
+      "semantic_text": "[표 데이터]\n\n항목 1:\n- 분야: 전자상거래 원활화\n- 규범: ▴ 종이없는 무역 ▴ 전자인증 및 전자서명 ▴ 전자적 전송물 무관세 영구화\n- 협력: ▴ 물류, 특송화물 ▴ 전자송장, 전자결제\n\n항목 2:\n- 분야: 신뢰가능한 디지털환경\n- 규범: ▴ 개인정보 보호 ▴ 온라인 소비자 보호 강화 ▴ 스팸메시지 규제\n- 협력: ▴ 사이버 보안 협력 ▴ 온라인 안전 ▴ 인터넷 접근 및 이용원칙 등\n\n항목 3:\n- 분야: 데이터 비즈니스 활성화\n- 규범: ▴ 국가간 정보이전 원활화 ▴ 컴퓨팅 시설 현지화 금지 ▴ 디지털 제품에 대한 비차별대우 ▴ 암호화 ICT 제품에 특정 암호기술 요구 금지\n- 협력: ▴ AI 기술 및 윤리거버넌스 협력 ▴ 경쟁 정책 협력 ▴ 중소기업 협력, 디지털 SME 대화 ▴ 데이터 혁신, 핀테크 협력",
+      "structured_data": {
+        "title": null,
+        "structure_type": "standard",
+        "has_header": true,
+        "headers": [
+          "분야",
+          "규범",
+          "협력"
+        ],
+        "column_semantics": [
+          "열1",
+          "열2",
+          "열3"
+        ],
+        "rows": [
+          {
+            "분야": "전자상거래 원활화",
+            "규범": "▴ 종이없는 무역 ▴ 전자인증 및 전자서명 ▴ 전자적 전송물 무관세 영구화",
+            "협력": "▴ 물류, 특송화물 ▴ 전자송장, 전자결제"
+          },
+          {
+            "분야": "신뢰가능한 디지털환경",
+            "규범": "▴ 개인정보 보호 ▴ 온라인 소비자 보호 강화 ▴ 스팸메시지 규제",
+            "협력": "▴ 사이버 보안 협력 ▴ 온라인 안전 ▴ 인터넷 접근 및 이용원칙 등"
+          },
+          {
+            "분야": "데이터 비즈니스 활성화",
+            "규범": "▴ 국가간 정보이전 원활화 ▴ 컴퓨팅 시설 현지화 금지 ▴ 디지털 제품에 대한 비차별대우 ▴ 암호화 ICT 제품에 특정 암호기술 요구 금지",
+            "협력": "▴ AI 기술 및 윤리거버넌스 협력 ▴ 경쟁 정책 협력 ▴ 중소기업 협력, 디지털 SME 대화 ▴ 데이터 혁신, 핀테크 협력"
+          }
+        ],
+        "metadata": {
+          "row_count": 4,
+          "col_count": 3,
+          "data_row_count": 3,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    }
+  ]
+}

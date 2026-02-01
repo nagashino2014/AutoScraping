@@ -1,0 +1,36 @@
+{
+  "metadata": {
+    "source_file": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData\\기후에너지환경부\\보도·설명\\2026-01\\기후부장관이 용인반도체 산단의 지방이전을 고민하고 있다는 보도는 발언의 취지가 잘못 전달된 측면이 있음(기후부 보도설명자료).hwpx",
+    "file_format": "hwp",
+    "status": "completed",
+    "page_count": 1,
+    "char_count": 584,
+    "token_count": 292,
+    "quality_score": 1.0,
+    "extraction_method": "text_layer",
+    "processing_time_ms": 774,
+    "extracted_at": "2026-01-28T14:29:29.422516",
+    "corrections": [
+      {
+        "type": "utf16le_garbage_cleanup",
+        "description": "UTF-16 LE 오인식 한자 문자 제거",
+        "removed_chars": 10
+      }
+    ],
+    "tables_extracted": 0,
+    "tables_normalized": 0,
+    "normalization_applied": false,
+    "quality_details": {
+      "korean_ratio": 0.8098434004474273,
+      "broken_char_ratio": 0.0,
+      "sentence_structure": 1.0,
+      "repetition_anomaly": 0.0,
+      "overall_score": 1.0
+    }
+  },
+  "content": {
+    "text": "氠瑢\n漠杳환\n보도설명자료\n氠瑢\n보도시점\n배포 즉시\n배포\n2025. 12. 29(월)\n氠瑢\n기후부장관이 용인반도체 산단의 지방이전을 고민하고 있다는 보도는 발언의 취지가 잘못 전달된 측면이 있음\n氠瑢\n’25년 12월 29일자 매일경제 < 용인산단 건물 짓고있는데 공장 이전? ··· K반도체 무너진다 > 등 다수 언론 보도에 대해 다음과 같이 설명 드림\n□ 보도 내용\n○ 25.12.26일 CBS 기후로운 경제생활 기후부 장관 인터뷰 중 용인 반도체 산단 입지에 대해 고민하고 있다는 내용이 언급됨에 따라, 업계에서는 용인 반도체 산단 지방이전 가능성을 우려\n□ 설명 내용\n○ 기후부장관이 용인반도체 산단의 지방이전을 고민하고 있다는 보도는 발언의 취지가 잘못 전달된 측면이 있음\n○ 기후부장관의 관련 발언의 취지는 지역별 전력수급 여건 차이로 인한 대규모 송전망 건설의 어려움을 토로하고 지산지소형 전력망 구축의 필요성을 설명하는 과정에서 전력과 용수를 담당하는 주무장관으로서의 고민을 설명한 것이었음\n氠瑢\n담당 부서\n전력망정책국\n책임자\n과 장\n강경택\n(044-203-5120)\n전력망정책과\n담당자\n사무관\n박성열\n(044-203-5123)\n漠杳",
+    "text_length": 584
+  },
+  "tables": []
+}

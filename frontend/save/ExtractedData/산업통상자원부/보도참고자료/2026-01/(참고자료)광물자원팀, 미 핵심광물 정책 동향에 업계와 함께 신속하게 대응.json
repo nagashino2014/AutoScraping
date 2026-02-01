@@ -1,0 +1,97 @@
+{
+  "metadata": {
+    "source_file": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData\\산업통상자원부\\보도참고자료\\2026-01\\(참고자료)광물자원팀, 미 핵심광물 정책 동향에 업계와 함께 신속하게 대응.hwpx",
+    "file_format": "hwp",
+    "status": "completed",
+    "page_count": 1,
+    "char_count": 1063,
+    "token_count": 531,
+    "quality_score": 1.0,
+    "extraction_method": "text_layer",
+    "processing_time_ms": 759,
+    "extracted_at": "2026-01-29T10:05:52.783547",
+    "corrections": [
+      {
+        "type": "utf16le_garbage_cleanup",
+        "description": "UTF-16 LE 오인식 한자 문자 제거",
+        "removed_chars": 8
+      },
+      {
+        "type": "hwp_space_garbage_cleanup",
+        "description": "HWP 공백 인코딩 오류 문자 제거",
+        "removed_chars": 14,
+        "patterns": [
+          "시퀀스 '漠杳' x4",
+          "시퀀스 '氠瑢' x3"
+        ]
+      }
+    ],
+    "tables_extracted": 1,
+    "tables_normalized": 1,
+    "normalization_applied": true,
+    "quality_details": {
+      "korean_ratio": 0.6844014510278114,
+      "broken_char_ratio": 0.0,
+      "sentence_structure": 1.0,
+      "repetition_anomaly": 0.0,
+      "overall_score": 1.0
+    }
+  },
+  "content": {
+    "text": "보도참고자료\n\n\n보도시점\n배포 즉시\n배포\n2026.1.15.(목)\n\n미 핵심광물 정책 동향에 업계와 함께 신속하게 대응\n美 무역확장법 232조 관련 핵심광물 포고문 발표(1.15), 긴급 대책회의 개최 -\n산업통상부(장관: 김정관, 이하 ‘산업부’)는 미국 백악관이 1월 15일(목) 새벽(미국 현지시간 1월 14일) 발표한 핵심광물 관련 포고문(proclamation)*에 대해 윤창현 자원산업정책관 주재 긴급 점검회의를 개최하여 우리 업계 영향을 점검하고 대응 방향을 논의하였다.\n* Adjusting Imports of Processed Critical Minerals and Their Derivative Products into the United States\n미국 정부는 무역확장법 232조에 근거하여 지난해 4월 발령된 대통령의 행정명령에 따라 미 상무부 장관이 약 6개월간 ‘미국 핵심광물 및 파생상품 공급망 취약성’을 조사하여 미 대통령에게 보고한 바 있다. 금번 포고문은 상무부의 핵심광물 공급망 조사 결과를 기초로, 상무부 장관 및 무역대표부(USTR) 대표에게 180일 이내에 다른 국가들과 협정 체결을 위한 협상을 추진토록 하고, 협상 과정에서 핵심광물 교역에 관한 가격하한제(price floor) 및 무역 제한조치를 고려해야 한다는 내용 등을 담고 있다.\n금일 회의 참석자들은 앞으로 금번 미측 포고문에 대해 보다 구체적인 내용에 대해 파악이 필요함을 전제로, 업계 영향을 1차적으로 점검하였고, 향후 정부와 업계가 함께 긴밀하게 협의하여 대응해 나가기로 하였다.\n윤창현 자원산업정책관은 “우리 업계와 긴밀히 소통하면서 금번 미측의 포고문 발표 관련 후속조치에 대응해 나가고, 미측과도 지속적으로 협의할 예정이다”고 밝혔다.\n\n책임자\n팀장\n(044-203-5258)\n\n\n\n<!-- 표 1 -->[표 데이터]\n\n[담당 부서]\n- 부서: 자원산업정책관\n- 이름: 책임자\n- 이름: 팀장\n- 이름: 정민규\n- 전화번호: (044-203-5259)\n\n항목 2:\n- 부서: 광물자원팀\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 김지훈\n- 전화번호: (044-203-5258)",
+    "text_length": 1061
+  },
+  "tables": [
+    {
+      "page_num": 1,
+      "table_index": 0,
+      "row_count": 2,
+      "col_count": 6,
+      "confidence": 0.7,
+      "extraction_method": "hwp_olefile",
+      "semantic_text": "[표 데이터]\n\n[담당 부서]\n- 부서: 자원산업정책관\n- 이름: 책임자\n- 이름: 팀장\n- 이름: 정민규\n- 전화번호: (044-203-5259)\n\n항목 2:\n- 부서: 광물자원팀\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 김지훈\n- 전화번호: (044-203-5258) 漠杳",
+      "structured_data": {
+        "title": null,
+        "structure_type": "row_header",
+        "has_header": false,
+        "headers": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "column_semantics": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "rows": [
+          {
+            "직함": "담당 부서",
+            "부서": "자원산업정책관",
+            "이름": "정민규",
+            "전화번호": "(044-203-5259)"
+          },
+          {
+            "직함": "",
+            "부서": "광물자원팀",
+            "이름": "김지훈",
+            "전화번호": "(044-203-5258) 漠杳"
+          }
+        ],
+        "metadata": {
+          "row_count": 2,
+          "col_count": 6,
+          "data_row_count": 2,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "metadata": {
+    "source_file": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData\\산업통상자원부\\보도참고자료\\2026-01\\(참고자료)통상법무기획과, 미(美) 상무부, 베트남산 제약용 하드 캡슐 상계관세 최종 판정.hwpx",
+    "file_format": "hwp",
+    "status": "completed",
+    "page_count": 1,
+    "char_count": 1002,
+    "token_count": 501,
+    "quality_score": 1.0,
+    "extraction_method": "text_layer",
+    "processing_time_ms": 598,
+    "extracted_at": "2026-01-29T10:05:57.303517",
+    "corrections": [
+      {
+        "type": "utf16le_garbage_cleanup",
+        "description": "UTF-16 LE 오인식 한자 문자 제거",
+        "removed_chars": 6
+      },
+      {
+        "type": "hwp_space_garbage_cleanup",
+        "description": "HWP 공백 인코딩 오류 문자 제거",
+        "removed_chars": 18,
+        "patterns": [
+          "시퀀스 '漠杳' x5",
+          "시퀀스 '氠瑢' x3",
+          "시퀀스 '湰灧' x1"
+        ]
+      }
+    ],
+    "tables_extracted": 1,
+    "tables_normalized": 1,
+    "normalization_applied": true,
+    "quality_details": {
+      "korean_ratio": 0.6935687263556116,
+      "broken_char_ratio": 0.0,
+      "sentence_structure": 1.0,
+      "repetition_anomaly": 0.0,
+      "overall_score": 1.0
+    }
+  },
+  "content": {
+    "text": "보도참고자료\n\n\n보도시점\n배포 즉시\n배포\n2025. 12. 23.(화)\n\n미(美) 상무부, 베트남산 제약용\n하드 캡슐 상계관세 최종 판정\n미국 상무부는 12.19일(현지시간) 베트남산 제약용 하드캡슐에 대한 상계 관세 조사와 관련하여 최종판정 결과를 발표하였다. 이번 판정에서 우리 기업의 베트남 현지법인에 부과된 상계관세율은 2.45%로 확정되었다. 이는 지난 3월 예비판정(2.15%)대비 소폭 상승한 수치이나, 함께 조사를 받은 인도(7.06%), 중국(3.14~8.81%), 브라질(10.67%) 등 경쟁국 중에서는 가장 낮은 수치이다.\n상무부는 최종판정에서 베트남 정부의 일부 지원 조치와 함께, 해외 사업관련 금융지원 프로그램 등을 검토 대상으로 포함하였으며, 해당 프로그램은 최종판정에서 일반 보조금으로 분류되어 보조금율 산정에 반영되었다.\n산업통상부(장관 김정관)는 조사개시 이후 업계 간담회(’24.12월, ‘25.3월, 5월, 9월) 등을 통해 우리 기업과 긴밀히 소통하고 한·미(’24.12월), 한·베 양자 협의(’24.12월, ‘25.9월), 미국 상무부에 답변서 및 법률 서면 제출(‘24.1~3월, ’25.3~9월), 실사 대응(‘25.5월), 공청회 참석(’25.9월) 등 조사 전반에 걸쳐 대응해 왔다.\n한편, 제약용 하드캡슐의 최종 관세부과 여부는 향후 미국 국제무역위원회(ITC)의 산업피해 최종판정(‘26.1월경)을 거쳐 최종 확정될 예정이다.\n산업통상부는 향후에도 우리 기업이 수입규제로 인해 직면한 어려움을 적극 지원하고, 관련 판정 동향을 지속적으로 점검해 나갈 예정이다.\n\n담당 부서\n다자통상법무관\n통상법무기획과\n양서진\n(044-203-5945)\n\n\n\n<!-- 표 1 -->[표 데이터]\n\n[담당 부서]\n- 부서: 다자통상법무관 통상법무기획과\n- 이름: 책임자\n- 이름: 과 장\n- 이름: 이원희\n- 전화번호: (044-203-5940)\n\n항목 2:\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 양서진\n- 전화번호: (044-203-5945)",
+    "text_length": 1000
+  },
+  "tables": [
+    {
+      "page_num": 1,
+      "table_index": 0,
+      "row_count": 2,
+      "col_count": 6,
+      "confidence": 0.7,
+      "extraction_method": "hwp_olefile",
+      "semantic_text": "[표 데이터]\n\n[담당 부서]\n- 부서: 다자통상법무관 통상법무기획과\n- 이름: 책임자\n- 이름: 과  장\n- 이름: 이원희\n- 전화번호: (044-203-5940)\n\n항목 2:\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 양서진\n- 전화번호: (044-203-5945) 漠杳",
+      "structured_data": {
+        "title": null,
+        "structure_type": "row_header",
+        "has_header": false,
+        "headers": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "column_semantics": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "rows": [
+          {
+            "직함": "담당 부서",
+            "부서": "다자통상법무관 통상법무기획과",
+            "이름": "이원희",
+            "전화번호": "(044-203-5940)"
+          },
+          {
+            "직함": "",
+            "부서": "",
+            "이름": "양서진",
+            "전화번호": "(044-203-5945) 漠杳"
+          }
+        ],
+        "metadata": {
+          "row_count": 2,
+          "col_count": 6,
+          "data_row_count": 2,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    }
+  ]
+}

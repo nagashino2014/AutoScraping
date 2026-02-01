@@ -1,0 +1,97 @@
+{
+  "metadata": {
+    "source_file": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData\\산업통상자원부\\보도참고자료\\2026-01\\(참고자료)한미FTA이행팀, 통상교섭본부장, 한국 디지털 입법 관련 대대적인 대미 아웃리치 전개.hwpx",
+    "file_format": "hwp",
+    "status": "completed",
+    "page_count": 1,
+    "char_count": 2172,
+    "token_count": 1086,
+    "quality_score": 1.0,
+    "extraction_method": "text_layer",
+    "processing_time_ms": 615,
+    "extracted_at": "2026-01-29T10:05:57.644511",
+    "corrections": [
+      {
+        "type": "utf16le_garbage_cleanup",
+        "description": "UTF-16 LE 오인식 한자 문자 제거",
+        "removed_chars": 8
+      },
+      {
+        "type": "hwp_space_garbage_cleanup",
+        "description": "HWP 공백 인코딩 오류 문자 제거",
+        "removed_chars": 16,
+        "patterns": [
+          "시퀀스 '漠杳' x4",
+          "시퀀스 '氠瑢' x4"
+        ]
+      }
+    ],
+    "tables_extracted": 1,
+    "tables_normalized": 1,
+    "normalization_applied": true,
+    "quality_details": {
+      "korean_ratio": 0.6742028985507247,
+      "broken_char_ratio": 0.0,
+      "sentence_structure": 1.0,
+      "repetition_anomaly": 0.0,
+      "overall_score": 1.0
+    }
+  },
+  "content": {
+    "text": "보도참고자료\n\n\n보도시점\n배포 즉시\n배포\n2026.1.15.(목)\n\n통상교섭본부장, 한국 디지털 입법 관련 대대적인 대미 아웃리치 전개\n산업통상부(장관 김정관) 여한구 통상교섭본부장은 1.11(일)부터 1.14(수)까지(미국 현지시간 기준) 미국 워싱턴 D.C.를 방문하여 미 의회, 업계 등 이해관계자들을 면담하여 디지털 입법 등 통상현안 관련 대대적인 아웃리치 활동을 진행하고, 미국 무역대표부(USTR) 대표, 관리예산실(OMB) 국장 등 정부 관계자를 만나 한미 관세협상 후속조치 현황에 대해 논의하였다.\n여한구 본부장은 최근 부각되고 있는 한국의 디지털 입법 사안에 대한 미측 우려 해소를 위해 주요 미국 연방 상·하원 의원 면담, 관련 협회 및 업계와의 라운드 테이블 등을 통해 적극 아웃리치하였다. 이에 대해 미 의회 및 업계는 우리 정부의 적극적인 소통 노력에 사의를 표하고, 지난 11월 발표된 한미 정상간 공동 설명자료에 따라 디지털 서비스 관련 법과 정책에 있어서 미국 기업들이 차별당하거나 불필요한 장벽에 직면하지 않도록 보장할 것을 희망한다며, 향후 한국의 디지털 입법 과정에서 충분한 이해관계자 의견수렴을 요청하였다.\n또한, 미 의회를 대상으로 최근 발생한 전례 없는 규모의 개인정보 유출 사건에 대해서는 관계 법령에 따라 관련 기관이 철저히 조사를 진행하고 있는 사안으로, 이를 한미 간 외교·통상 현안으로 확대해석하는 것은 부적절하다는 점을 명확히 설명하였다.\n< 1.11-1.14 통상교섭본부장 방미 주요 면담자 >\n\n➊ 연방의회 : 상원의원앤디 킴(Andy Kim, 민주당-뉴저지), 빌 해거티(Bill Hagerty, 공화당–테네시), 데이브 맥코믹(Dave McCormick, 공화당–펜실베니아), 토드 영(Todd Young, 공화당-인디애나), 하원의원에이드리언 스미스(Adrian Smith, 공화당–네브래스카, 하원 세입위원장), 대럴 아이사(Darrell Issa, 공화당–캘리포니아), 루디 야킴(Rudy Yakym, 공화당-인디애나) 등\n➋ 협회 및 싱크탱크 : 서비스산업연합(Coalition of Services Industries), 컴퓨터통신산업협회(Computer & Communications Industry Association), 전략국제문제연구소(Center for Strategic and International Studies), 정보기술혁신재단(Information Technology and Innovation Foundation),\n피터슨국제경제연구소(Peterson Institute for International Economics),\n전미대외무역위원회(National Foreign Trade Council) 등\n제이미슨 그리어(Jamieson Greer) USTR 대표와의 면담을 통해 한미 정상 간 공동 설명자료에 포함되었던 양국 간 비관세 관련 합의사항에 대한 이행 현황을 논의하였다. 또한 국제경제긴급권한법(IEEPA)에 근거하여 미 행정부가 부과한 상호관세의 위법 여부에 대한 판결을 앞두고있는 상황에서, 미국과 관세합의를 이룬 한국이 여타국 대비 불리한 대우를 받는 일은 없어야 할 것임을 미측에 전달하였다. 향후 IEEPA 판결 관련 어떠한 결과가 나오든지 간에 지금과 같은 상시 소통 채널을 통해 긴밀히 협의해나가기로 하였다.\n러셀 바우트(Russel Vought) 백악관 관리예산실 국장과도 관세협상 후속조치 추진현황 전반에 대해 논의하고 조선 등 핵심 산업에서 한미 간 투자협력을 강화해 나가기로 하였다.\n여한구 본부장은 이번 방미를 통하여 \"관세협상 합의 이후 전반적으로 미국 내 한미 간 통상 및 투자 협력에 대한 기대가 높으나, 디지털 통상 이슈, 미 대법원 판결 등에 따른 리스크 요인을 세밀하게 관리할 필요가 있다\" 고 평가하며 \"우리의 정책 의도와 배경을 정확하게 미국 정부, 의회, 업계에 설명하고 소통하는 것이 중요한 만큼, 앞으로도 관계부처 등과 함께 지속적으로 대미 아웃리치를 해 나갈 것\"이라고 밝혔다.\n\n책임자\n팀장\n(044-203-5641)\n\n\n\n<!-- 표 1 -->[표 데이터]\n\n[담당 부서]\n- 부서: 통상정책국\n- 이름: 책임자\n- 이름: 팀장\n- 이름: 정지선\n- 전화번호: (044-203-5640)\n\n항목 2:\n- 부서: 미주통상과 한미FTA이행팀\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 서준호\n- 전화번호: (044-203-5641)",
+    "text_length": 2170
+  },
+  "tables": [
+    {
+      "page_num": 1,
+      "table_index": 0,
+      "row_count": 2,
+      "col_count": 6,
+      "confidence": 0.7,
+      "extraction_method": "hwp_olefile",
+      "semantic_text": "[표 데이터]\n\n[담당 부서]\n- 부서: 통상정책국\n- 이름: 책임자\n- 이름: 팀장\n- 이름: 정지선\n- 전화번호: (044-203-5640)\n\n항목 2:\n- 부서: 미주통상과 한미FTA이행팀\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 서준호\n- 전화번호: (044-203-5641) 漠杳",
+      "structured_data": {
+        "title": null,
+        "structure_type": "row_header",
+        "has_header": false,
+        "headers": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "column_semantics": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "rows": [
+          {
+            "직함": "담당 부서",
+            "부서": "통상정책국",
+            "이름": "정지선",
+            "전화번호": "(044-203-5640)"
+          },
+          {
+            "직함": "",
+            "부서": "미주통상과 한미FTA이행팀",
+            "이름": "서준호",
+            "전화번호": "(044-203-5641) 漠杳"
+          }
+        ],
+        "metadata": {
+          "row_count": 2,
+          "col_count": 6,
+          "data_row_count": 2,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    }
+  ]
+}

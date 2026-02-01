@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "id": "admin-001",
+      "email": "admin@ecomonitor.ai",
+      "name": "관리자",
+      "role": "관리자",
+      "passwordHash": "$2b$10$O9PmNkby.nSHsDM4f4BPW.oXVpxnI3ujJy.11kAKMUpICDIJDh.hO",
+      "mustChangePassword": true
+    }
+  ]
+}

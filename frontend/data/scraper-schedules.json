@@ -1,0 +1,994 @@
+{
+  "schedules": [
+    {
+      "schedule_id": "sched_law_board1",
+      "name": "국가법령정보센터 - 현행법령",
+      "org_ids": [
+        "law"
+      ],
+      "targets": [
+        "law_board1"
+      ],
+      "cron": "50 6 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_moleg_board1",
+      "name": "국민참여입법센터 - 입법예고(기후에너지환경부)",
+      "org_ids": [
+        "moleg"
+      ],
+      "targets": [
+        "moleg_board1"
+      ],
+      "cron": "5 7 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_mcee_board1",
+      "name": "기후에너지환경부 - 보도·설명",
+      "org_ids": [
+        "mcee"
+      ],
+      "targets": [
+        "mcee_board1"
+      ],
+      "cron": "22 22 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_mcee_board2",
+      "name": "기후에너지환경부 - 공지·공고",
+      "org_ids": [
+        "mcee"
+      ],
+      "targets": [
+        "mcee_board2"
+      ],
+      "cron": "0 7 * * 1",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_mcee_board3",
+      "name": "기후에너지환경부 - 기후정책",
+      "org_ids": [
+        "mcee"
+      ],
+      "targets": [
+        "mcee_board3"
+      ],
+      "cron": "0 7 * * 1",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_motie_board1",
+      "name": "산업통상자원부 - 보도참고자료",
+      "org_ids": [
+        "motie"
+      ],
+      "targets": [
+        "motie_board1"
+      ],
+      "cron": "50 15 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_motie_board2",
+      "name": "산업통상자원부 - 1232",
+      "org_ids": [
+        "motie"
+      ],
+      "targets": [
+        "motie_board2"
+      ],
+      "cron": "0 9 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_keco_board1",
+      "name": "한국환경공단 - 보도자료",
+      "org_ids": [
+        "keco"
+      ],
+      "targets": [
+        "keco_board1"
+      ],
+      "cron": "0 4 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_keiti_board1",
+      "name": "한국환경산업기술원 - 보도자료",
+      "org_ids": [
+        "keiti"
+      ],
+      "targets": [
+        "keiti_board1"
+      ],
+      "cron": "30 7 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_kepco_board1",
+      "name": "한국전력공사 - 보도설명자료",
+      "org_ids": [
+        "kepco"
+      ],
+      "targets": [
+        "kepco_board1"
+      ],
+      "cron": "55 20 * * *",
+      "timezone": "Asia/Seoul",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_mcee_board4",
+      "name": "기후에너지환경부 - 한강보도",
+      "org_ids": [
+        "mcee"
+      ],
+      "targets": [
+        "mcee_board4"
+      ],
+      "cron": "0 9 * * 1",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_gir_board1",
+      "name": "온실가스종합정보센터 - 보도자료",
+      "org_ids": [
+        "gir"
+      ],
+      "targets": [
+        "gir_board1"
+      ],
+      "cron": "5 8 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_nier_board1",
+      "name": "국립환경과학원 - 보도·해명자료",
+      "org_ids": [
+        "nier"
+      ],
+      "targets": [
+        "nier_board1"
+      ],
+      "cron": "45 7 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    },
+    {
+      "schedule_id": "sched_gir_board2",
+      "name": "온실가스종합정보센터 - 국가·지역 온실가스 통계",
+      "org_ids": [
+        "gir"
+      ],
+      "targets": [
+        "gir_board2"
+      ],
+      "cron": "30 8 * * *",
+      "timezone": "Asia/Tokyo",
+      "max_runtime_sec": 1800,
+      "concurrency": {
+        "global": 2,
+        "per_org": 1
+      },
+      "retry_policy": {
+        "max": 3,
+        "backoff": "exponential",
+        "base_sec": 30
+      },
+      "rate_limit": {
+        "rps": 0.2,
+        "burst": 1
+      },
+      "enabled": true
+    }
+  ],
+  "runs": [
+    {
+      "run_id": "run_20260130115500953_u4cixs",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-30T11:55:00.953Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 11건 수집, 0건 다운로드 (1/1 보드, 148초)",
+      "finished_at": "2026-01-30T11:57:29.263Z",
+      "metrics": {
+        "new_records": 11,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 148310
+      }
+    },
+    {
+      "run_id": "run_20260129223001016_j3delu",
+      "schedule_id": "sched_keiti_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-29T22:30:01.016Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 24건 수집, 0건 다운로드 (1/1 보드, 299초)",
+      "finished_at": "2026-01-29T22:35:00.370Z",
+      "metrics": {
+        "new_records": 24,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 299354
+      }
+    },
+    {
+      "run_id": "run_20260129220501003_u8eqke",
+      "schedule_id": "sched_moleg_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-29T22:05:01.003Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 9건 수집, 0건 다운로드 (1/1 보드, 56초)",
+      "finished_at": "2026-01-29T22:05:56.992Z",
+      "metrics": {
+        "new_records": 9,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 55989
+      }
+    },
+    {
+      "run_id": "run_20260129215000992_iw9acy",
+      "schedule_id": "sched_law_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-29T21:50:00.992Z",
+      "status": "failed",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드, 1개 보드 실패 (0/1 보드, 0초)",
+      "finished_at": "2026-01-29T21:50:00.995Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 1,
+        "duration_ms": 3
+      }
+    },
+    {
+      "run_id": "run_20260129190000799_ge8blq",
+      "schedule_id": "sched_keco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-29T19:00:00.799Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 28건 수집, 0건 다운로드 (1/1 보드, 219초)",
+      "finished_at": "2026-01-29T19:03:40.036Z",
+      "metrics": {
+        "new_records": 28,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 219237
+      }
+    },
+    {
+      "run_id": "run_20260129132200062_2vrv8r",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-29T13:22:00.062Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 98건 수집, 18건 다운로드 (1/1 보드, 264초)",
+      "finished_at": "2026-01-29T13:26:24.560Z",
+      "metrics": {
+        "new_records": 98,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 264498
+      }
+    },
+    {
+      "run_id": "run_20260129115500023_p0ueam",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-29T11:55:00.023Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 11건 수집, 1건 다운로드 (1/1 보드, 148초)",
+      "finished_at": "2026-01-29T11:57:28.427Z",
+      "metrics": {
+        "new_records": 11,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 148404
+      }
+    },
+    {
+      "run_id": "run_20260128233000985_w1bjz4",
+      "schedule_id": "sched_gir_board2",
+      "triggered_by": "cron",
+      "started_at": "2026-01-28T23:30:00.985Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 9건 수집, 50건 다운로드 (1/1 보드, 137초)",
+      "finished_at": "2026-01-28T23:32:18.459Z",
+      "metrics": {
+        "new_records": 9,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 137474
+      }
+    },
+    {
+      "run_id": "run_20260128230500954_7xgei8",
+      "schedule_id": "sched_gir_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-28T23:05:00.954Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 1건 수집, 1건 다운로드 (1/1 보드, 24초)",
+      "finished_at": "2026-01-28T23:05:24.573Z",
+      "metrics": {
+        "new_records": 1,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 23619
+      }
+    },
+    {
+      "run_id": "run_20260128224500934_clytsd",
+      "schedule_id": "sched_nier_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-28T22:45:00.934Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 18건 수집, 18건 다운로드 (1/1 보드, 325초)",
+      "finished_at": "2026-01-28T22:50:25.527Z",
+      "metrics": {
+        "new_records": 18,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 324593
+      }
+    },
+    {
+      "run_id": "run_20260128223000907_wlp29n",
+      "schedule_id": "sched_keiti_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-28T22:30:00.907Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 24건 수집, 24건 다운로드 (1/1 보드, 310초)",
+      "finished_at": "2026-01-28T22:35:10.425Z",
+      "metrics": {
+        "new_records": 24,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 309518
+      }
+    },
+    {
+      "run_id": "run_20260128220500888_kovef4",
+      "schedule_id": "sched_moleg_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-28T22:05:00.888Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 9건 수집, 26건 다운로드 (1/1 보드, 984초)",
+      "finished_at": "2026-01-28T22:21:24.461Z",
+      "metrics": {
+        "new_records": 9,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 983573
+      }
+    },
+    {
+      "run_id": "run_20260128215000879_610k4o",
+      "schedule_id": "sched_law_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-28T21:50:00.879Z",
+      "status": "failed",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드, 1개 보드 실패 (0/1 보드, 0초)",
+      "finished_at": "2026-01-28T21:50:00.882Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 1,
+        "duration_ms": 3
+      }
+    },
+    {
+      "run_id": "run_20260128190000578_nnr1xe",
+      "schedule_id": "sched_keco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-28T19:00:00.578Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 28건 수집, 27건 다운로드 (1/1 보드, 432초)",
+      "finished_at": "2026-01-28T19:07:12.387Z",
+      "metrics": {
+        "new_records": 28,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 431809
+      }
+    },
+    {
+      "run_id": "run_20260128132200119_a1qhte",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-28T13:22:00.119Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 100건 수집, 10건 다운로드 (1/1 보드, 100초)",
+      "finished_at": "2026-01-28T13:23:40.162Z",
+      "metrics": {
+        "new_records": 100,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 100043
+      }
+    },
+    {
+      "run_id": "run_20260127132200333_j1c885",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-27T13:22:00.333Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 99건 수집, 12건 다운로드 (1/1 보드, 104초)",
+      "finished_at": "2026-01-27T13:23:44.471Z",
+      "metrics": {
+        "new_records": 99,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 104138
+      }
+    },
+    {
+      "run_id": "run_20260127115500081_ch0gck",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-27T11:55:00.081Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 10건 수집, 2건 다운로드 (1/1 보드, 134초)",
+      "finished_at": "2026-01-27T11:57:14.237Z",
+      "metrics": {
+        "new_records": 10,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 134156
+      }
+    },
+    {
+      "run_id": "run_20260126132200334_cr21qw",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-26T13:22:00.334Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 93건 수집, 14건 다운로드 (1/1 보드, 98초)",
+      "finished_at": "2026-01-26T13:23:38.114Z",
+      "metrics": {
+        "new_records": 93,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 97780
+      }
+    },
+    {
+      "run_id": "run_20260126115500225_yk9f0l",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-26T11:55:00.225Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 8건 수집, 0건 다운로드 (1/1 보드, 127초)",
+      "finished_at": "2026-01-26T11:57:07.513Z",
+      "metrics": {
+        "new_records": 8,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 127288
+      }
+    },
+    {
+      "run_id": "run_20260122132200221_whcrza",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-22T13:22:00.220Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 100건 수집, 25건 다운로드 (1/1 보드, 112초)",
+      "finished_at": "2026-01-22T13:23:51.984Z",
+      "metrics": {
+        "new_records": 100,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 111764
+      }
+    },
+    {
+      "run_id": "run_20260122115500067_7ij6bo",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-22T11:55:00.067Z",
+      "status": "failed",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드, 1개 보드 실패 (0/1 보드, 961초)",
+      "finished_at": "2026-01-22T12:11:01.054Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 1,
+        "duration_ms": 960987
+      }
+    },
+    {
+      "run_id": "run_20260121115500024_3z5799",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-21T11:55:00.024Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 120건 수집, 0건 다운로드 (1/1 보드, 2043초)",
+      "finished_at": "2026-01-21T12:29:03.132Z",
+      "metrics": {
+        "new_records": 120,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 2043108
+      }
+    },
+    {
+      "run_id": "run_20260120132200277_lrd0db",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-20T13:22:00.277Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 100건 수집, 16건 다운로드 (1/1 보드, 127초)",
+      "finished_at": "2026-01-20T13:24:07.430Z",
+      "metrics": {
+        "new_records": 100,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 127153
+      }
+    },
+    {
+      "run_id": "run_20260120115500172_0exucs",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-20T11:55:00.171Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 120건 수집, 3건 다운로드 (1/1 보드, 1972초)",
+      "finished_at": "2026-01-20T12:27:51.754Z",
+      "metrics": {
+        "new_records": 120,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 1971583
+      }
+    },
+    {
+      "run_id": "run_20260120000000960_h28zdm",
+      "schedule_id": "sched_motie_board2",
+      "triggered_by": "cron",
+      "started_at": "2026-01-20T00:00:00.960Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 5건 수집, 1건 다운로드 (1/1 보드, 40초)",
+      "finished_at": "2026-01-20T00:00:40.736Z",
+      "metrics": {
+        "new_records": 5,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 39776
+      }
+    },
+    {
+      "run_id": "run_20260119132200049_xdm6l5",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-19T13:22:00.049Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 96건 수집, 8건 다운로드 (1/1 보드, 102초)",
+      "finished_at": "2026-01-19T13:23:41.639Z",
+      "metrics": {
+        "new_records": 96,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 101590
+      }
+    },
+    {
+      "run_id": "run_20260119115500034_520gp6",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-19T11:55:00.034Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 120건 수집, 150건 다운로드 (1/1 보드, 2056초)",
+      "finished_at": "2026-01-19T12:29:16.282Z",
+      "metrics": {
+        "new_records": 120,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 2056248
+      }
+    },
+    {
+      "run_id": "run_20260118132200574_e1sdl2",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-18T13:22:00.574Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 95건 수집, 196건 다운로드 (1/1 보드, 250초)",
+      "finished_at": "2026-01-18T13:26:10.367Z",
+      "metrics": {
+        "new_records": 95,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 249793
+      }
+    },
+    {
+      "run_id": "run_20260118115500416_5f0lqd",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-18T11:55:00.416Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드 (1/1 보드, 15초)",
+      "finished_at": "2026-01-18T11:55:14.998Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 14582
+      }
+    },
+    {
+      "run_id": "run_20260118065000132_r4zowt",
+      "schedule_id": "sched_motie_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-18T06:50:00.132Z",
+      "status": "failed",
+      "summary": "서버 재시작으로 인해 자동 정리됨 (실행 시간 초과)",
+      "finished_at": "2026-01-18T07:32:22.838Z"
+    },
+    {
+      "run_id": "run_20260117132200477_i819a8",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-17T13:22:00.477Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드 (1/1 보드, 34초)",
+      "finished_at": "2026-01-17T13:22:34.553Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 34076
+      }
+    },
+    {
+      "run_id": "run_20260117115500399_p0h0oo",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-17T11:55:00.399Z",
+      "status": "failed",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드, 1개 보드 실패 (0/1 보드, 63초)",
+      "finished_at": "2026-01-17T11:56:03.510Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 1,
+        "duration_ms": 63111
+      }
+    },
+    {
+      "run_id": "run_20260117080000027_yhjn2q",
+      "schedule_id": "sched_keco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-17T08:00:00.027Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 1건 수집, 1건 다운로드 (1/1 보드, 6초)",
+      "finished_at": "2026-01-17T08:00:05.527Z",
+      "metrics": {
+        "new_records": 1,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 5500
+      }
+    },
+    {
+      "run_id": "run_20260117065000030_qywqms",
+      "schedule_id": "sched_motie_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-17T06:50:00.030Z",
+      "status": "failed",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드, 1개 보드 실패 (0/1 보드, 1091초)",
+      "finished_at": "2026-01-17T07:08:11.217Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 1,
+        "duration_ms": 1091187
+      }
+    },
+    {
+      "run_id": "run_20260117062000034_42mw85",
+      "schedule_id": "sched_motie_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-17T06:20:00.034Z",
+      "status": "failed",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드, 1개 보드 실패 (0/1 보드, 672초)",
+      "finished_at": "2026-01-17T06:31:12.011Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 1,
+        "duration_ms": 671977
+      }
+    },
+    {
+      "run_id": "run_20260117052000032_vurm4e",
+      "schedule_id": "sched_motie_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-17T05:20:00.032Z",
+      "status": "failed",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드, 1개 보드 실패 (0/1 보드, 157초)",
+      "finished_at": "2026-01-17T05:22:36.978Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 1,
+        "duration_ms": 156946
+      }
+    },
+    {
+      "run_id": "run_20260117045500042_hepncp",
+      "schedule_id": "sched_motie_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-17T04:55:00.042Z",
+      "status": "failed",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드, 1개 보드 실패 (0/1 보드, 157초)",
+      "finished_at": "2026-01-17T04:57:36.892Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 1,
+        "duration_ms": 156850
+      }
+    },
+    {
+      "run_id": "run_20260117042500032_wfwbaw",
+      "schedule_id": "sched_motie_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-17T04:25:00.032Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 10건 수집, 0건 스킵 (1/1 보드, 76초)",
+      "finished_at": "2026-01-17T04:26:16.408Z",
+      "metrics": {
+        "new_records": 10,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 76376
+      }
+    },
+    {
+      "run_id": "run_20260117000000983_a0d2h2",
+      "schedule_id": "sched_motie_board2",
+      "triggered_by": "cron",
+      "started_at": "2026-01-17T00:00:00.982Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 1건 수집, 9건 스킵 (1/1 보드, 10초)",
+      "finished_at": "2026-01-17T00:00:10.824Z",
+      "metrics": {
+        "new_records": 1,
+        "skipped_duplicates": 9,
+        "failed_records": 0,
+        "duration_ms": 9842
+      }
+    },
+    {
+      "run_id": "run_20260116132200022_bi5ftr",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-16T13:22:00.022Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 101건 수집, 0건 스킵 (1/1 보드, 772초)",
+      "finished_at": "2026-01-16T13:34:52.074Z",
+      "metrics": {
+        "new_records": 101,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 772052
+      }
+    },
+    {
+      "run_id": "run_20260116130300020_mry0uk",
+      "schedule_id": "sched_mcee_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-01-16T13:03:00.020Z",
+      "status": "success",
+      "summary": "스크래핑 완료: 101건 수집, 0건 스킵 (1/1 보드, 804초)",
+      "finished_at": "2026-01-16T13:16:24.165Z",
+      "metrics": {
+        "new_records": 101,
+        "skipped_duplicates": 0,
+        "failed_records": 0,
+        "duration_ms": 804145
+      }
+    }
+  ],
+  "updated_at": "2026-01-30T11:57:29.264Z"
+}

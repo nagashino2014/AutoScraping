@@ -1,0 +1,1712 @@
+"use client";
+
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import {
+  FileText,
+  Newspaper,
+  ScrollText,
+  Scale,
+  ChevronRight,
+  ChevronDown,
+  Search,
+  Check,
+  X,
+  RefreshCw,
+  Download,
+  Play,
+  Eye,
+  RotateCcw,
+  Trash2,
+  Settings,
+  HelpCircle,
+  Building2,
+  Folder,
+  FileSpreadsheet,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  Loader2,
+  Copy,
+  ExternalLink,
+  ChevronUp,
+  Filter,
+  Sparkles,
+  Megaphone,
+  FileType,
+  FileImage,
+  Table,
+} from "lucide-react";
+import Image from "next/image";
+import { cn } from "@/lib/utils";
+
+// ============================================================================
+// 타입 정의
+// ============================================================================
+
+type OrgStatus = "active" | "inactive";
+type CollectionMode = "web_scraping" | "api_only" | "hybrid";
+type OrganizationType = "국가기관" | "유관기관" | "협회 및 학회";
+
+type Organization = {
+  org_id: string;
+  org_name: string;
+  base_url: string;
+  status: OrgStatus;
+  default_policy: { rps: number; timeout_sec: number };
+  notes?: string;
+  collection_mode?: CollectionMode;
+  org_type?: OrganizationType;
+  logo_path?: string;
+};
+
+type BoardAccessMode = "api" | "static_html" | "dynamic_js" | "login_required";
+
+type Board = {
+  board_id: string;
+  org_id: string;
+  board_name: string;
+  access_mode: BoardAccessMode;
+  list_url?: string;
+  doc_type?: string;
+  domain_tags?: string[];
+  enabled: boolean;
+};
+
+type TreeNodeType = "category" | "organization" | "board";
+
+interface TreeNodeStats {
+  totalFiles: number;
+  extractedFiles: number;
+  pendingFiles: number;
+  failedFiles: number;
+  extractionRate: number;
+}
+
+interface TreeNode {
+  id: string;
+  type: TreeNodeType;
+  name: string;
+  icon?: string;
+  logo?: string;
+  children?: TreeNode[];
+  isExpanded?: boolean;
+  isChecked?: boolean;
+  isIndeterminate?: boolean;
+  stats?: TreeNodeStats;
+  orgType?: string;
+  docType?: string;
+  path?: string;
+}
+
+type FileFormat = "pdf" | "hwp" | "hwpx" | "docx" | "xlsx" | "html" | "txt" | "other";
+type ExtractStatus = "pending" | "processing" | "completed" | "failed" | "llm_fallback";
+
+interface ExtractedFile {
+  file_id: string;
+  org_id: string;
+  board_id: string;
+  org_name: string;
+  board_name: string;
+  original_filename: string;
+  file_format: FileFormat;
+  file_size_bytes: number;
+  file_path: string;
+  status: ExtractStatus;
+  extraction_method?: string;
+  error_message?: string;
+  quality_score?: number;
+  token_count?: number;
+  extracted_at?: string;
+  processing_time_ms?: number;
+}
+
+interface FormatStats {
+  format: FileFormat;
+  label: string;
+  total: number;
+  success: number;
+  failed: number;
+  rate: number;
+  ocrRequired?: number;
+}
+
+interface ExtractionSettings {
+  ocr: {
+    engine: "paddleocr" | "hybrid" | "easyocr" | "tesseract";
+  };
+  pdf: {
+    preferTextLayer: boolean;
+    enableOcr: boolean;
+    extractImageText: boolean;
+  };
+  hwp: {
+    preserveTableStructure: boolean;
+    convertBullets: boolean;
+    includeFootnotes: boolean;
+  };
+  postprocessing: {
+    removeHeaders: boolean;
+    removePageNumbers: boolean;
+    normalizeWhitespace: boolean;
+    ocrErrorCorrection: boolean;
+    domainTermCorrection: boolean;
+  };
+  qualityValidation: {
+    enabled: boolean;
+    passThreshold: number;
+    llmFallbackThreshold: number;
+    autoLlmFallback: boolean;
+  };
+  processing: {
+    concurrentFiles: number;
+    timeoutSeconds: number;
+    autoRetry: boolean;
+    maxRetries: number;
+  };
+}
+
+// ============================================================================
+// Mock 데이터
+// ============================================================================
+
+const mockFiles: ExtractedFile[] = [
+  {
+    file_id: "file_001",
+    org_id: "mcee",
+    board_id: "mcee_board1",
+    org_name: "환경부",
+    board_name: "고시/훈령/예규",
+    original_filename: "환경부_고시_제2026-12호.hwp",
+    file_format: "hwp",
+    file_size_bytes: 2412544,
+    file_path: "/ScrapingData/mcee/board1/2026-01/환경부_고시_제2026-12호.hwp",
+    status: "completed",
+    extraction_method: "paddleocr",
+    quality_score: 0.96,
+    token_count: 12450,
+    extracted_at: "2026-01-20T09:15:32",
+    processing_time_ms: 2300,
+  },
+  {
+    file_id: "file_002",
+    org_id: "mcee",
+    board_id: "mcee_board1",
+    org_name: "환경부",
+    board_name: "고시/훈령/예규",
+    original_filename: "대기환경보전법_시행규칙.pdf",
+    file_format: "pdf",
+    file_size_bytes: 5347328,
+    file_path: "/ScrapingData/mcee/board1/2026-01/대기환경보전법_시행규칙.pdf",
+    status: "completed",
+    extraction_method: "text_layer",
+    quality_score: 0.98,
+    token_count: 28320,
+    extracted_at: "2026-01-20T09:15:34",
+    processing_time_ms: 3100,
+  },
+  {
+    file_id: "file_003",
+    org_id: "mcee",
+    board_id: "mcee_board2",
+    org_name: "환경부",
+    board_name: "보도자료",
+    original_filename: "국립환경과학원_연구보고서.pdf",
+    file_format: "pdf",
+    file_size_bytes: 15945728,
+    file_path: "/ScrapingData/mcee/board2/2026-01/국립환경과학원_연구보고서.pdf",
+    status: "pending",
+  },
+  {
+    file_id: "file_004",
+    org_id: "mcee",
+    board_id: "mcee_board2",
+    org_name: "환경부",
+    board_name: "보도자료",
+    original_filename: "폐기물관리법_개정안.hwpx",
+    file_format: "hwpx",
+    file_size_bytes: 3565158,
+    file_path: "/ScrapingData/mcee/board2/2026-01/폐기물관리법_개정안.hwpx",
+    status: "failed",
+    error_message: "OCR 필요 - 스캔 문서 감지",
+  },
+  {
+    file_id: "file_005",
+    org_id: "mcee",
+    board_id: "mcee_board2",
+    org_name: "환경부",
+    board_name: "보도자료",
+    original_filename: "수질오염_총량관리_현황.xlsx",
+    file_format: "xlsx",
+    file_size_bytes: 876544,
+    file_path: "/ScrapingData/mcee/board2/2026-01/수질오염_총량관리_현황.xlsx",
+    status: "completed",
+    extraction_method: "openpyxl",
+    quality_score: 0.99,
+    token_count: 5680,
+    extracted_at: "2026-01-20T09:16:53",
+    processing_time_ms: 1200,
+  },
+  {
+    file_id: "file_006",
+    org_id: "motie",
+    board_id: "motie_board1",
+    org_name: "산업통상자원부",
+    board_name: "보도자료",
+    original_filename: "에너지_효율_개선_방안.pdf",
+    file_format: "pdf",
+    file_size_bytes: 4521984,
+    file_path: "/ScrapingData/motie/board1/2026-01/에너지_효율_개선_방안.pdf",
+    status: "processing",
+    extraction_method: "paddleocr",
+  },
+];
+
+const mockFormatStats: FormatStats[] = [
+  { format: "pdf", label: "PDF", total: 245, success: 240, failed: 5, rate: 98 },
+  { format: "hwp", label: "HWP", total: 132, success: 115, failed: 17, rate: 87, ocrRequired: 12 },
+  { format: "hwpx", label: "HWPX", total: 45, success: 43, failed: 2, rate: 96 },
+  { format: "docx", label: "DOCX", total: 56, success: 56, failed: 0, rate: 100 },
+  { format: "xlsx", label: "XLSX", total: 23, success: 22, failed: 1, rate: 95 },
+  { format: "other", label: "기타", total: 12, success: 8, failed: 4, rate: 67 },
+];
+
+const defaultSettings: ExtractionSettings = {
+  ocr: { engine: "paddleocr" },
+  pdf: { preferTextLayer: true, enableOcr: true, extractImageText: false },
+  hwp: { preserveTableStructure: true, convertBullets: true, includeFootnotes: true },
+  postprocessing: {
+    removeHeaders: true,
+    removePageNumbers: true,
+    normalizeWhitespace: true,
+    ocrErrorCorrection: true,
+    domainTermCorrection: true,
+  },
+  qualityValidation: {
+    enabled: true,
+    passThreshold: 0.85,
+    llmFallbackThreshold: 0.5,
+    autoLlmFallback: true,
+  },
+  processing: { concurrentFiles: 3, timeoutSeconds: 300, autoRetry: true, maxRetries: 2 },
+};
+
+// ============================================================================
+// 유틸리티 함수
+// ============================================================================
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  return date.toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getStatusIcon(status: ExtractStatus) {
+  switch (status) {
+    case "completed":
+      return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
+    case "processing":
+      return <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />;
+    case "pending":
+      return <Clock className="w-4 h-4 text-stone-500" />;
+    case "failed":
+      return <AlertCircle className="w-4 h-4 text-red-600" />;
+    case "llm_fallback":
+      return <RefreshCw className="w-4 h-4 text-amber-600" />;
+    default:
+      return <Clock className="w-4 h-4 text-stone-500" />;
+  }
+}
+
+function getStatusLabel(status: ExtractStatus): string {
+  switch (status) {
+    case "completed":
+      return "완료";
+    case "processing":
+      return "진행중";
+    case "pending":
+      return "대기";
+    case "failed":
+      return "실패";
+    case "llm_fallback":
+      return "LLM 전환";
+    default:
+      return "알 수 없음";
+  }
+}
+
+function getStatusBadgeClass(status: ExtractStatus): string {
+  switch (status) {
+    case "completed":
+      return "bg-gradient-to-r from-emerald-100 to-emerald-50 text-emerald-700 border border-emerald-200/50";
+    case "processing":
+      return "bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 border border-blue-200/50";
+    case "pending":
+      return "bg-gradient-to-r from-stone-100 to-stone-50 text-stone-600 border border-stone-200/50";
+    case "failed":
+      return "bg-gradient-to-r from-red-100 to-red-50 text-red-700 border border-red-200/50";
+    case "llm_fallback":
+      return "bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700 border border-amber-200/50";
+    default:
+      return "bg-gradient-to-r from-stone-100 to-stone-50 text-stone-600 border border-stone-200/50";
+  }
+}
+
+function getFormatIcon(format: FileFormat) {
+  switch (format) {
+    case "pdf":
+      return <FileText className="w-4 h-4 text-red-500" />;
+    case "hwp":
+      return <FileType className="w-4 h-4 text-blue-600" />;
+    case "hwpx":
+      return <FileType className="w-4 h-4 text-sky-500" />;
+    case "docx":
+      return <FileText className="w-4 h-4 text-blue-700" />;
+    case "xlsx":
+      return <Table className="w-4 h-4 text-emerald-600" />;
+    case "html":
+      return <FileImage className="w-4 h-4 text-orange-500" />;
+    default:
+      return <FileText className="w-4 h-4 text-stone-500" />;
+  }
+}
+
+function getDocTypeIcon(docType?: string) {
+  const t = (docType ?? "").trim();
+  if (!t) return <FileText className="w-4 h-4 text-stone-500" />;
+  if (t === "보도자료") return <Newspaper className="w-4 h-4 text-blue-700" />;
+  if (t === "공지") return <Megaphone className="w-4 h-4 text-amber-700" />;
+  if (t === "고시·훈령·예규") return <ScrollText className="w-4 h-4 text-emerald-700" />;
+  if (t === "입법예고") return <Scale className="w-4 h-4 text-orange-700" />;
+  if (t === "법령") return <Scale className="w-4 h-4 text-indigo-700" />;
+  return <FileText className="w-4 h-4 text-stone-500" />;
+}
+
+// API 호출 유틸리티
+async function jsonFetch<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+  const res = await fetch(input, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  });
+  const data = (await res.json().catch(() => ({}))) as T;
+  return data;
+}
+
+// ============================================================================
+// 컴포넌트: 도넛 차트
+// ============================================================================
+
+function DonutChart({
+  percentage,
+  label,
+  subLabel,
+  color,
+}: {
+  percentage: number;
+  label: string;
+  subLabel: string;
+  color: "blue" | "emerald" | "amber";
+}) {
+  const circumference = 2 * Math.PI * 42;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+  // 고정된 ID 사용 (hydration 에러 방지)
+  const gradientId = `donut-gradient-${color}`;
+
+  const gradientColors = {
+    blue: { start: "#3B82F6", end: "#60A5FA" },
+    emerald: { start: "#10B981", end: "#34D399" },
+    amber: { start: "#F59E0B", end: "#FBBF24" },
+  }[color];
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative w-36 h-36">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+          <defs>
+            <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={gradientColors.start} />
+              <stop offset="100%" stopColor={gradientColors.end} />
+            </linearGradient>
+          </defs>
+          {/* 배경 원 */}
+          <circle
+            cx="50"
+            cy="50"
+            r="42"
+            fill="none"
+            stroke="#E7E5E4"
+            strokeWidth="12"
+          />
+          {/* 진행률 원 (그라데이션) */}
+          <circle
+            cx="50"
+            cy="50"
+            r="42"
+            fill="none"
+            strokeWidth="12"
+            strokeLinecap="round"
+            stroke={`url(#${gradientId})`}
+            className="transition-all duration-1000 ease-out"
+            style={{
+              strokeDasharray: circumference,
+              strokeDashoffset: strokeDashoffset,
+            }}
+          />
+        </svg>
+        {/* 중앙 텍스트 (투명 배경) */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold text-stone-800">{percentage}%</span>
+          <span className="text-xs text-stone-500">{label}</span>
+        </div>
+      </div>
+      <span className="mt-2 text-sm text-stone-600 font-medium">{subLabel}</span>
+    </div>
+  );
+}
+
+// ============================================================================
+// 컴포넌트: 수평 바 차트 (글라스 효과 + 그라데이션)
+// ============================================================================
+
+function HorizontalBar({
+  stat,
+  onClick,
+}: {
+  stat: FormatStats;
+  onClick?: () => void;
+}) {
+  const barGradient =
+    stat.rate >= 90
+      ? "from-emerald-400 to-emerald-500"
+      : stat.rate >= 70
+        ? "from-amber-400 to-amber-500"
+        : "from-red-400 to-red-500";
+
+  const Icon = () => getFormatIcon(stat.format as FileFormat);
+
+  return (
+    <div
+      className="group cursor-pointer hover:bg-white/40 rounded-xl p-3 -mx-2 transition-all duration-200 hover:shadow-md"
+      onClick={onClick}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-white/60 backdrop-blur-sm shadow-sm">
+            <Icon />
+          </div>
+          <span className="text-sm font-semibold text-stone-700">{stat.label}</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-stone-500">
+          <span>{stat.total}개</span>
+          <span
+            className={cn(
+              "px-2.5 py-1 rounded-full font-semibold backdrop-blur-sm shadow-sm",
+              stat.rate >= 90
+                ? "bg-gradient-to-r from-emerald-100/80 to-emerald-50/80 text-emerald-700 border border-emerald-200/50"
+                : stat.rate >= 70
+                  ? "bg-gradient-to-r from-amber-100/80 to-amber-50/80 text-amber-700 border border-amber-200/50"
+                  : "bg-gradient-to-r from-red-100/80 to-red-50/80 text-red-700 border border-red-200/50"
+            )}
+          >
+            {stat.rate}%
+          </span>
+        </div>
+      </div>
+      {/* 진행률 바 (글라스 효과) */}
+      <div className="w-full h-3 bg-white/40 backdrop-blur-sm rounded-full overflow-hidden shadow-inner border border-white/60">
+        <div
+          className={cn(
+            "h-full rounded-full transition-all duration-700 bg-gradient-to-r shadow-sm",
+            barGradient
+          )}
+          style={{ width: `${stat.rate}%` }}
+        />
+      </div>
+      <div className="flex items-center gap-4 mt-2 text-xs text-stone-500">
+        <span className="flex items-center gap-1">
+          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+          성공: {stat.success}
+        </span>
+        <span className="flex items-center gap-1">
+          <AlertCircle className="w-3 h-3 text-red-500" />
+          실패: {stat.failed}
+        </span>
+        {stat.ocrRequired !== undefined && (
+          <span className="flex items-center gap-1 text-amber-600">
+            <Eye className="w-3 h-3" />
+            OCR 필요: {stat.ocrRequired}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 컴포넌트: 트리뷰 노드
+// ============================================================================
+
+function TreeNodeComponent({
+  node,
+  depth = 0,
+  onToggleExpand,
+  onToggleCheck,
+  onNodeClick,
+}: {
+  node: TreeNode;
+  depth?: number;
+  onToggleExpand: (id: string) => void;
+  onToggleCheck: (id: string) => void;
+  onNodeClick: (node: TreeNode) => void;
+}) {
+  const paddingLeft = depth * 20;
+  const hasChildren = node.children && node.children.length > 0;
+
+  const NodeIcon = () => {
+    if (node.type === "category") {
+      return <Folder className="w-4 h-4 text-amber-600" />;
+    }
+    if (node.type === "organization") {
+      if (node.logo) {
+        return (
+          <Image
+            src={node.logo}
+            alt={node.name}
+            width={20}
+            height={20}
+            className="w-5 h-5 rounded object-contain"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+        );
+      }
+      return <Building2 className="w-4 h-4 text-stone-600" />;
+    }
+    return getDocTypeIcon(node.docType);
+  };
+
+  return (
+    <div>
+      <div
+        className={cn(
+          "flex items-center gap-2 py-2 px-3 rounded-xl cursor-pointer transition-all duration-200",
+          "hover:bg-white/50 hover:shadow-sm",
+          node.isChecked && "bg-primary/10 border border-primary/20"
+        )}
+        style={{ paddingLeft: paddingLeft + 12 }}
+      >
+        {/* 확장/축소 버튼 */}
+        {hasChildren ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand(node.id);
+            }}
+            className="w-5 h-5 flex items-center justify-center text-stone-400 hover:text-stone-600 hover:bg-white/60 rounded transition-colors"
+          >
+            {node.isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        ) : (
+          <div className="w-5" />
+        )}
+
+        {/* 체크박스 (글라스 스타일) */}
+        {node.type !== "category" && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCheck(node.id);
+            }}
+            className={cn(
+              "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shadow-sm",
+              node.isChecked
+                ? "bg-gradient-to-br from-primary to-primary/80 border-primary text-white shadow-primary/30"
+                : node.isIndeterminate
+                  ? "bg-gradient-to-br from-primary/50 to-primary/30 border-primary/50 text-white"
+                  : "border-stone-300 bg-white/60 backdrop-blur-sm hover:border-primary/50 hover:bg-white/80"
+            )}
+          >
+            {(node.isChecked || node.isIndeterminate) && <Check className="w-3 h-3" />}
+          </button>
+        )}
+
+        {/* 아이콘 */}
+        <div className="p-1 rounded-md bg-white/40 backdrop-blur-sm">
+          <NodeIcon />
+        </div>
+
+        {/* 노드명 */}
+        <span
+          className="flex-1 text-sm font-medium text-stone-700 truncate"
+          onClick={() => onNodeClick(node)}
+        >
+          {node.name}
+        </span>
+
+        {/* 통계 배지 */}
+        {node.stats && (
+          <div className="flex items-center gap-2 text-xs text-stone-500">
+            <span className="hidden sm:inline px-2 py-0.5 rounded-full bg-white/50 backdrop-blur-sm">
+              {node.stats.totalFiles}개
+            </span>
+            <span
+              className={cn(
+                "px-2 py-0.5 rounded-full font-medium backdrop-blur-sm shadow-sm",
+                node.stats.extractionRate >= 90
+                  ? "bg-gradient-to-r from-emerald-100/80 to-emerald-50/80 text-emerald-700 border border-emerald-200/50"
+                  : node.stats.extractionRate >= 70
+                    ? "bg-gradient-to-r from-amber-100/80 to-amber-50/80 text-amber-700 border border-amber-200/50"
+                    : "bg-gradient-to-r from-red-100/80 to-red-50/80 text-red-700 border border-red-200/50"
+              )}
+            >
+              {node.stats.extractionRate}%
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* 자식 노드 */}
+      {node.isExpanded && hasChildren && (
+        <div className="relative">
+          <div className="absolute left-[30px] top-0 bottom-2 w-px bg-gradient-to-b from-stone-200 to-transparent" />
+          {node.children!.map((child) => (
+            <TreeNodeComponent
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              onToggleExpand={onToggleExpand}
+              onToggleCheck={onToggleCheck}
+              onNodeClick={onNodeClick}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// 컴포넌트: 파일 테이블 행
+// ============================================================================
+
+function FileTableRow({
+  file,
+  isSelected,
+  onSelect,
+  onView,
+  onRetry,
+}: {
+  file: ExtractedFile;
+  isSelected: boolean;
+  onSelect: () => void;
+  onView: () => void;
+  onRetry: () => void;
+}) {
+  return (
+    <tr className={cn(
+      "border-b border-stone-200/40 transition-all duration-200",
+      isSelected ? "bg-primary/5" : "hover:bg-white/40"
+    )}>
+      <td className="px-4 py-3">
+        <button
+          onClick={onSelect}
+          className={cn(
+            "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shadow-sm",
+            isSelected
+              ? "bg-gradient-to-br from-primary to-primary/80 border-primary text-white"
+              : "border-stone-300 bg-white/60 backdrop-blur-sm hover:border-primary/50"
+          )}
+        >
+          {isSelected && <Check className="w-3 h-3" />}
+        </button>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-white/60 backdrop-blur-sm shadow-sm">
+            {getFormatIcon(file.file_format)}
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-stone-800 truncate max-w-[200px]">{file.original_filename}</div>
+            <div className="text-xs text-stone-500">
+              {file.org_name} &gt; {file.board_name}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <span className="text-xs font-semibold text-stone-600 uppercase px-2 py-1 rounded-md bg-white/50 backdrop-blur-sm">
+          {file.file_format}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <span className="text-sm text-stone-600">{formatFileSize(file.file_size_bytes)}</span>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          {getStatusIcon(file.status)}
+          <span className={cn("px-2.5 py-1 rounded-full text-xs font-semibold", getStatusBadgeClass(file.status))}>
+            {getStatusLabel(file.status)}
+          </span>
+        </div>
+        {file.error_message && <div className="text-xs text-red-600 mt-1">{file.error_message}</div>}
+      </td>
+      <td className="px-4 py-3">
+        {file.quality_score !== undefined && (
+          <span
+            className={cn(
+              "px-2.5 py-1 rounded-full text-xs font-semibold backdrop-blur-sm",
+              file.quality_score >= 0.85
+                ? "bg-gradient-to-r from-emerald-100/80 to-emerald-50/80 text-emerald-700 border border-emerald-200/50"
+                : file.quality_score >= 0.7
+                  ? "bg-gradient-to-r from-amber-100/80 to-amber-50/80 text-amber-700 border border-amber-200/50"
+                  : "bg-gradient-to-r from-red-100/80 to-red-50/80 text-red-700 border border-red-200/50"
+            )}
+          >
+            {(file.quality_score * 100).toFixed(0)}%
+          </span>
+        )}
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1">
+          {file.status === "completed" && (
+            <button
+              onClick={onView}
+              className="p-2 rounded-lg bg-white/50 backdrop-blur-sm hover:bg-white/80 text-stone-500 hover:text-stone-700 transition-all shadow-sm"
+              title="미리보기"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
+          {(file.status === "failed" || file.status === "pending") && (
+            <button
+              onClick={onRetry}
+              className="p-2 rounded-lg bg-white/50 backdrop-blur-sm hover:bg-white/80 text-stone-500 hover:text-stone-700 transition-all shadow-sm"
+              title={file.status === "failed" ? "재시도" : "추출 시작"}
+            >
+              {file.status === "failed" ? <RotateCcw className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ============================================================================
+// 컴포넌트: 추출 결과 미리보기 패널
+// ============================================================================
+
+function PreviewPanel({
+  file,
+  onClose,
+}: {
+  file: ExtractedFile | null;
+  onClose: () => void;
+}) {
+  if (!file) return null;
+
+  const previewText = `환경부고시 제2026-12호
+
+「대기환경보전법」제16조 및 같은 법 시행규칙 제15조에 따라 대기오염물질
+배출시설의 설치허가 기준을 다음과 같이 개정·고시합니다.
+
+2026년 1월 15일
+환경부장관
+
+제1조(목적) 이 고시는 「대기환경보전법」(이하 "법"이라 한다) 제16조...
+
+[미리보기 텍스트 - 실제 추출 결과로 대체됨]`;
+
+  return (
+    <div className="glass-panel rounded-2xl p-4 mt-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base font-bold text-stone-800 flex items-center gap-2">
+          추출 결과 미리보기
+        </h3>
+        <button onClick={onClose} className="p-2 rounded-xl bg-white/50 backdrop-blur-sm hover:bg-white/80 text-stone-500 transition-all shadow-sm">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* 파일 정보 */}
+      <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 mb-4 border border-white/60">
+        <div className="text-sm font-medium text-stone-800 mb-2">{file.original_filename}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-stone-600">
+          <div>추출일: {file.extracted_at ? formatDate(file.extracted_at) : "-"}</div>
+          <div>소요시간: {file.processing_time_ms ? `${(file.processing_time_ms / 1000).toFixed(1)}초` : "-"}</div>
+          <div>토큰: {file.token_count?.toLocaleString() ?? "-"}</div>
+          <div>품질 점수: {file.quality_score !== undefined ? `${(file.quality_score * 100).toFixed(0)}%` : "-"}</div>
+        </div>
+      </div>
+
+      {/* 메타데이터 */}
+      <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-3 mb-4 backdrop-blur-sm">
+        <div className="text-xs font-semibold text-primary mb-2">메타데이터</div>
+        <div className="grid grid-cols-2 gap-2 text-xs text-stone-600">
+          <div>출처: {file.org_name} &gt; {file.board_name}</div>
+          <div>추출 방법: {file.extraction_method ?? "-"}</div>
+        </div>
+      </div>
+
+      {/* 추출된 텍스트 */}
+      <div className="bg-white/30 backdrop-blur-sm rounded-xl p-4 max-h-[300px] overflow-y-auto border border-white/60">
+        <div className="text-xs font-semibold text-stone-500 mb-2">추출된 텍스트 (처음 1000자)</div>
+        <pre className="text-sm text-stone-700 whitespace-pre-wrap font-sans">{previewText}</pre>
+      </div>
+
+      {/* 액션 버튼 */}
+      <div className="flex items-center gap-2 mt-4">
+        <button className="glass-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium hover:shadow-md transition-all">
+          <Copy className="w-4 h-4" />
+          전체 텍스트 복사
+        </button>
+        <button className="glass-button flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium hover:shadow-md transition-all">
+          <Download className="w-4 h-4" />
+          TXT 다운로드
+        </button>
+        <button className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-stone-800 to-stone-900 text-white hover:from-black hover:to-stone-800 transition-all shadow-lg">
+          <ExternalLink className="w-4 h-4" />
+          청킹/벡터화로 이동
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// 메인 페이지 컴포넌트
+// ============================================================================
+
+export default function TextExtractionPage(): React.JSX.Element {
+  // API에서 가져온 실제 데이터
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [boards, setBoards] = useState<Board[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 트리뷰 데이터 (실제 기관/보드 기반)
+  const [treeData, setTreeData] = useState<TreeNode[]>([]);
+  const [files, setFiles] = useState<ExtractedFile[]>(mockFiles);
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+  const [previewFile, setPreviewFile] = useState<ExtractedFile | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [formatFilter, setFormatFilter] = useState<FileFormat | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<ExtractStatus | "all">("all");
+  const [settings, setSettings] = useState<ExtractionSettings>(defaultSettings);
+
+  // API에서 기관/보드 데이터 가져오기
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        const [orgsRes, boardsRes] = await Promise.all([
+          jsonFetch<{ orgs: Organization[] }>("/api/scraper/targets/orgs"),
+          jsonFetch<{ boards: Board[] }>("/api/scraper/targets/boards"),
+        ]);
+        setOrgs(orgsRes.orgs || []);
+        setBoards(boardsRes.boards || []);
+      } catch (err) {
+        console.error("Failed to fetch data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  // 실제 기관/보드 데이터를 트리뷰 구조로 변환
+  useEffect(() => {
+    if (orgs.length === 0) return;
+
+    // 기관 유형별로 그룹화
+    const orgsByType: Record<string, Organization[]> = {
+      "국가기관": [],
+      "유관기관": [],
+      "협회 및 학회": [],
+    };
+
+    orgs.forEach((org) => {
+      const type = org.org_type || "유관기관";
+      if (!orgsByType[type]) orgsByType[type] = [];
+      orgsByType[type].push(org);
+    });
+
+    // 트리 노드 생성
+    const tree: TreeNode[] = Object.entries(orgsByType)
+      .filter(([, orgList]) => orgList.length > 0)
+      .map(([category, orgList]) => ({
+        id: `cat_${category}`,
+        type: "category" as TreeNodeType,
+        name: category,
+        icon: "Folder",
+        isExpanded: category === "국가기관",
+        children: orgList.map((org) => {
+          const orgBoards = boards.filter((b) => b.org_id === org.org_id && b.enabled);
+          // Mock 통계 (추후 실제 데이터로 대체)
+          const totalFiles = Math.floor(Math.random() * 200) + 50;
+          const extractedFiles = Math.floor(totalFiles * (0.7 + Math.random() * 0.28));
+
+          return {
+            id: org.org_id,
+            type: "organization" as TreeNodeType,
+            name: org.org_name,
+            logo: org.logo_path,
+            icon: "Building2",
+            isExpanded: false,
+            stats: {
+              totalFiles,
+              extractedFiles,
+              pendingFiles: totalFiles - extractedFiles,
+              failedFiles: Math.floor(Math.random() * 5),
+              extractionRate: Math.round((extractedFiles / totalFiles) * 100),
+            },
+            children: orgBoards.map((board) => {
+              const boardTotal = Math.floor(Math.random() * 80) + 20;
+              const boardExtracted = Math.floor(boardTotal * (0.8 + Math.random() * 0.18));
+
+              return {
+                id: board.board_id,
+                type: "board" as TreeNodeType,
+                name: board.board_name,
+                docType: board.doc_type,
+                stats: {
+                  totalFiles: boardTotal,
+                  extractedFiles: boardExtracted,
+                  pendingFiles: boardTotal - boardExtracted,
+                  failedFiles: Math.floor(Math.random() * 3),
+                  extractionRate: Math.round((boardExtracted / boardTotal) * 100),
+                },
+              };
+            }),
+          };
+        }),
+      }));
+
+    setTreeData(tree);
+  }, [orgs, boards]);
+
+  // 통계 계산
+  const stats = useMemo(() => {
+    const totalFiles = 513;
+    const scrapedFiles = 450;
+    const extractedFiles = 484;
+    const scrapingRate = Math.round((scrapedFiles / totalFiles) * 100);
+    const extractionRate = Math.round((extractedFiles / totalFiles) * 100);
+
+    return {
+      totalFiles,
+      scrapedFiles,
+      extractedFiles,
+      scrapingRate,
+      extractionRate,
+      lastExtraction: "2026-01-20 09:15",
+      duration: "32분",
+      extractedSize: "1.2GB",
+      tokens: "2.4M",
+    };
+  }, []);
+
+  // 선택된 기관/보드 계산
+  const selectedTreeStats = useMemo(() => {
+    let orgCount = 0;
+    let boardCount = 0;
+    let fileCount = 0;
+
+    const countSelected = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+        if (node.isChecked) {
+          if (node.type === "organization") {
+            orgCount++;
+            fileCount += node.stats?.totalFiles ?? 0;
+          } else if (node.type === "board") {
+            boardCount++;
+            fileCount += node.stats?.totalFiles ?? 0;
+          }
+        }
+        if (node.children) {
+          countSelected(node.children);
+        }
+      }
+    };
+    countSelected(treeData);
+
+    return { orgCount, boardCount, fileCount };
+  }, [treeData]);
+
+  // 필터링된 파일 목록
+  const filteredFiles = useMemo(() => {
+    return files.filter((file) => {
+      if (formatFilter !== "all" && file.file_format !== formatFilter) return false;
+      if (statusFilter !== "all" && file.status !== statusFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (
+          file.original_filename.toLowerCase().includes(q) ||
+          file.org_name.toLowerCase().includes(q) ||
+          file.board_name.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [files, formatFilter, statusFilter, searchQuery]);
+
+  // 트리뷰 핸들러
+  const handleToggleExpand = useCallback((id: string) => {
+    setTreeData((prev) => {
+      const updateNode = (nodes: TreeNode[]): TreeNode[] => {
+        return nodes.map((node) => {
+          if (node.id === id) {
+            return { ...node, isExpanded: !node.isExpanded };
+          }
+          if (node.children) {
+            return { ...node, children: updateNode(node.children) };
+          }
+          return node;
+        });
+      };
+      return updateNode(prev);
+    });
+  }, []);
+
+  const handleToggleCheck = useCallback((id: string) => {
+    setTreeData((prev) => {
+      const updateNode = (nodes: TreeNode[]): TreeNode[] => {
+        return nodes.map((node) => {
+          if (node.id === id) {
+            const newChecked = !node.isChecked;
+            const updateChildren = (children?: TreeNode[]): TreeNode[] | undefined => {
+              if (!children) return undefined;
+              return children.map((child) => ({
+                ...child,
+                isChecked: newChecked,
+                isIndeterminate: false,
+                children: updateChildren(child.children),
+              }));
+            };
+            return {
+              ...node,
+              isChecked: newChecked,
+              isIndeterminate: false,
+              children: updateChildren(node.children),
+            };
+          }
+          if (node.children) {
+            const updatedChildren = updateNode(node.children);
+            const checkedCount = updatedChildren.filter((c) => c.isChecked).length;
+            const indeterminateCount = updatedChildren.filter((c) => c.isIndeterminate).length;
+            const totalChildren = updatedChildren.length;
+
+            return {
+              ...node,
+              children: updatedChildren,
+              isChecked: checkedCount === totalChildren && totalChildren > 0,
+              isIndeterminate: (checkedCount > 0 && checkedCount < totalChildren) || indeterminateCount > 0,
+            };
+          }
+          return node;
+        });
+      };
+      return updateNode(prev);
+    });
+  }, []);
+
+  const handleNodeClick = useCallback((node: TreeNode) => {
+    console.log("Node clicked:", node);
+  }, []);
+
+  // 파일 선택 핸들러
+  const handleSelectFile = useCallback((fileId: string) => {
+    setSelectedFileIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(fileId)) {
+        newSet.delete(fileId);
+      } else {
+        newSet.add(fileId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedFileIds.size === filteredFiles.length) {
+      setSelectedFileIds(new Set());
+    } else {
+      setSelectedFileIds(new Set(filteredFiles.map((f) => f.file_id)));
+    }
+  }, [filteredFiles, selectedFileIds.size]);
+
+  // 추출 핸들러
+  const handleStartExtraction = useCallback(() => {
+    console.log("Starting extraction for:", selectedFileIds);
+  }, [selectedFileIds]);
+
+  const handleLLMExtraction = useCallback(() => {
+    console.log("Starting LLM extraction for:", selectedFileIds);
+  }, [selectedFileIds]);
+
+  const handleRetryFailed = useCallback(() => {
+    const failedIds = files.filter((f) => f.status === "failed").map((f) => f.file_id);
+    console.log("Retrying failed files:", failedIds);
+  }, [files]);
+
+  const failedCount = files.filter((f) => f.status === "failed").length;
+
+  return (
+    <div className="space-y-4">
+      <div className="glass-panel rounded-3xl p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 backdrop-blur-sm shadow-lg">
+              <FileText className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-stone-800">텍스트 추출</h1>
+              <p className="text-sm text-stone-500">수집된 문서에서 텍스트를 추출하고 품질을 검증합니다</p>
+            </div>
+          </div>
+          <button className="p-2.5 rounded-xl bg-white/50 backdrop-blur-sm hover:bg-white/80 text-stone-400 transition-all shadow-sm">
+            <HelpCircle className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 메인 콘텐츠 - 3열 레이아웃 (35% / 40% / 25%) */}
+      <div className="flex gap-4">
+        {/* 좌측 열 (35%) - 추출 현황 요약 + 파일 형식별 추출 현황 */}
+        <div className="w-[35%] space-y-4">
+          {/* 추출 현황 요약 카드 (높이: 380px) */}
+          <div className="glass-panel rounded-2xl p-5 flex flex-col" style={{ height: "380px" }}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-stone-800">추출 현황 요약</h2>
+              <span className="text-xs text-stone-500 px-2 py-0.5 rounded-full bg-white/50 backdrop-blur-sm">2026-01-20 기준</span>
+            </div>
+
+            <div className="flex-1 flex items-center justify-around">
+              <DonutChart
+                percentage={stats.scrapingRate}
+                label="진행률"
+                subLabel={`${stats.scrapedFiles}/${stats.totalFiles} 파일`}
+                color="blue"
+              />
+              <DonutChart
+                percentage={stats.extractionRate}
+                label="완료율"
+                subLabel={`${stats.extractedFiles}/${stats.totalFiles} 파일`}
+                color="emerald"
+              />
+            </div>
+
+            <div className="bg-white/40 backdrop-blur-sm rounded-xl p-3 border border-white/60 mt-auto">
+              <div className="text-xs font-semibold text-stone-600 mb-2">최근 작업</div>
+              <div className="grid grid-cols-2 gap-1.5 text-xs text-stone-600">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3 h-3 text-stone-400" />
+                  마지막: {stats.lastExtraction}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <RefreshCw className="w-3 h-3 text-stone-400" />
+                  소요: {stats.duration}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <FileText className="w-3 h-3 text-stone-400" />
+                  텍스트: {stats.extractedSize}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3 text-stone-400" />
+                  토큰: 약 {stats.tokens}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 형식별 통계 카드 (높이: 520px) */}
+          <div className="glass-panel rounded-2xl p-5 flex flex-col" style={{ height: "520px" }}>
+            <h2 className="font-bold text-stone-800 mb-4">파일 형식별 추출 현황</h2>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {mockFormatStats.map((stat) => (
+                <HorizontalBar
+                  key={stat.format}
+                  stat={stat}
+                  onClick={() => setFormatFilter(stat.format)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 중앙 열 (40%) - 대상기관/보드 선택 + 파일 목록 */}
+        <div className="w-[40%] space-y-4">
+          {/* 대상기관/보드 선택 트리뷰 (높이: 380px) */}
+          <div className="glass-panel rounded-2xl p-5 flex flex-col" style={{ height: "380px" }}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold text-stone-800">대상기관/보드 선택</h2>
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="검색..."
+                  className="ui-field pl-10 pr-3 py-2 text-sm w-32 text-center placeholder:text-center"
+                />
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                <span className="ml-3 text-stone-500 text-sm">기관/보드 정보를 불러오는 중...</span>
+              </div>
+            ) : treeData.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-stone-500">
+                <Building2 className="w-10 h-10 mb-2 opacity-30" />
+                <p className="text-sm">등록된 기관이 없습니다</p>
+                <p className="text-xs mt-1">먼저 대상기관 관리에서 기관을 등록해주세요</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto pr-1">
+                {treeData.map((node) => (
+                  <TreeNodeComponent
+                    key={node.id}
+                    node={node}
+                    onToggleExpand={handleToggleExpand}
+                    onToggleCheck={handleToggleCheck}
+                    onNodeClick={handleNodeClick}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className="mt-3 pt-3 border-t border-stone-200/60 text-xs text-stone-600 flex items-center justify-between">
+              <span>
+                선택됨: 기관 {selectedTreeStats.orgCount}개, 보드 {selectedTreeStats.boardCount}개
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-white/50 backdrop-blur-sm font-medium">
+                총 파일: {selectedTreeStats.fileCount}개
+              </span>
+            </div>
+          </div>
+
+          {/* 파일 목록 테이블 (높이: 520px) */}
+          <div className="glass-panel rounded-2xl p-5 flex flex-col" style={{ height: "520px" }}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-bold text-stone-800">파일 목록</h2>
+              <span className="text-xs text-stone-500 px-2 py-0.5 rounded-full bg-white/50 backdrop-blur-sm">
+                총 {filteredFiles.length}개
+              </span>
+            </div>
+
+            {/* 필터 바 - 좌측에 셀렉트 박스, 우측에 검색창 */}
+            <div className="flex items-center gap-2 mb-3">
+              <select
+                value={formatFilter}
+                onChange={(e) => setFormatFilter(e.target.value as any)}
+                className="ui-field text-xs py-1.5"
+                style={{ width: "120px" }}
+              >
+                <option value="all">전체 형식</option>
+                <option value="pdf">PDF</option>
+                <option value="hwp">HWP</option>
+                <option value="hwpx">HWPX</option>
+                <option value="docx">DOCX</option>
+                <option value="xlsx">XLSX</option>
+              </select>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="ui-field text-xs py-1.5"
+                style={{ width: "120px" }}
+              >
+                <option value="all">전체 상태</option>
+                <option value="completed">완료</option>
+                <option value="processing">진행중</option>
+                <option value="pending">대기</option>
+                <option value="failed">실패</option>
+              </select>
+              <div className="flex-1" />
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="파일 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="ui-field pl-10 pr-3 py-1.5 text-xs w-36 text-center placeholder:text-center"
+                />
+              </div>
+            </div>
+
+              {/* 선택 액션 바 */}
+              <div className="flex items-center gap-2 mb-2 p-2 bg-white/40 backdrop-blur-sm rounded-xl border border-white/60">
+                <button
+                  onClick={handleSelectAll}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all",
+                    selectedFileIds.size === filteredFiles.length && filteredFiles.length > 0
+                      ? "bg-primary/10 text-primary border border-primary/30"
+                      : "hover:bg-white/60 text-stone-600"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-3 h-3 rounded border-2 flex items-center justify-center transition-all",
+                      selectedFileIds.size === filteredFiles.length && filteredFiles.length > 0
+                        ? "bg-primary border-primary text-white"
+                        : "border-stone-300 bg-white/60"
+                    )}
+                  >
+                    {selectedFileIds.size === filteredFiles.length && filteredFiles.length > 0 && (
+                      <Check className="w-2 h-2" />
+                    )}
+                  </div>
+                  전체
+                </button>
+                <span className="text-[10px] text-stone-500">{selectedFileIds.size}개</span>
+                <div className="flex-1" />
+                <button
+                  onClick={handleLLMExtraction}
+                  disabled={selectedFileIds.size === 0}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all shadow-sm",
+                    selectedFileIds.size > 0
+                      ? "bg-gradient-to-r from-violet-500 to-purple-500 text-white hover:from-violet-600 hover:to-purple-600"
+                      : "bg-stone-200 text-stone-400 cursor-not-allowed"
+                  )}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  LLM
+                </button>
+                <button
+                  disabled={selectedFileIds.size === 0}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-all shadow-sm",
+                    selectedFileIds.size > 0
+                      ? "bg-gradient-to-r from-primary to-primary/80 text-white hover:from-primary/90 hover:to-primary/70"
+                      : "bg-stone-200 text-stone-400 cursor-not-allowed"
+                  )}
+                >
+                  <Play className="w-3 h-3" />
+                  추출
+                </button>
+                <button
+                  disabled={selectedFileIds.size === 0}
+                  className="p-1 rounded-lg text-xs bg-white/50 hover:bg-white/80 text-stone-600 transition-all disabled:opacity-50"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </button>
+                <button
+                  disabled={selectedFileIds.size === 0}
+                  className="p-1 rounded-lg text-xs bg-white/50 hover:bg-red-50 text-red-600 transition-all disabled:opacity-50"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* 파일 체크박스 목록 */}
+              <div className="flex-1 overflow-y-auto rounded-xl border border-white/60 bg-white/20 backdrop-blur-sm">
+                {filteredFiles.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-stone-500">
+                    <FileText className="w-10 h-10 mb-2 opacity-30" />
+                    <p className="text-sm">표시할 파일이 없습니다</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-stone-200/40">
+                    {filteredFiles.map((file) => (
+                      <div 
+                        key={file.file_id}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 hover:bg-white/40 transition-colors cursor-pointer",
+                          selectedFileIds.has(file.file_id) && "bg-primary/5"
+                        )}
+                        onClick={() => handleSelectFile(file.file_id)}
+                      >
+                        <button
+                          className={cn(
+                            "w-3.5 h-3.5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0",
+                            selectedFileIds.has(file.file_id)
+                              ? "bg-gradient-to-br from-primary to-primary/80 border-primary text-white"
+                              : "border-stone-300 bg-white/60 hover:border-primary/50"
+                          )}
+                        >
+                          {selectedFileIds.has(file.file_id) && <Check className="w-2 h-2" />}
+                        </button>
+                        <div className="p-1 rounded-md bg-white/60 backdrop-blur-sm flex-shrink-0">
+                          {getFormatIcon(file.file_format)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] font-medium text-stone-800 truncate">{file.original_filename}</div>
+                          <div className="text-[9px] text-stone-500 truncate">{file.org_name} &gt; {file.board_name}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[9px] text-stone-500 uppercase font-semibold">{file.file_format}</span>
+                          <span className="text-[9px] text-stone-500">{formatFileSize(file.file_size_bytes)}</span>
+                          {getStatusIcon(file.status)}
+                        </div>
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                          {file.status === "completed" && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setPreviewFile(file); }}
+                              className="p-1 rounded-lg bg-white/50 hover:bg-white/80 text-stone-500 hover:text-stone-700 transition-all"
+                            >
+                              <Eye className="w-3 h-3" />
+                            </button>
+                          )}
+                          {(file.status === "failed" || file.status === "pending") && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); console.log("Retry:", file.file_id); }}
+                              className="p-1 rounded-lg bg-white/50 hover:bg-white/80 text-stone-500 hover:text-stone-700 transition-all"
+                            >
+                              {file.status === "failed" ? <RotateCcw className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 추출 결과 미리보기 */}
+          {previewFile && <PreviewPanel file={previewFile} onClose={() => setPreviewFile(null)} />}
+        </div>
+
+        {/* 우측 열 (25%) - 빠른 작업 + 추출 설정 */}
+        <div className="w-[25%] space-y-4">
+          {/* 빠른 작업 카드 (높이: 380px) */}
+          <div className="glass-panel rounded-2xl p-4 flex flex-col" style={{ height: "380px" }}>
+            <h2 className="font-bold text-stone-800 mb-3">빠른 작업</h2>
+            <div className="flex-1 flex flex-col gap-2">
+              <button
+                onClick={handleStartExtraction}
+                disabled={selectedTreeStats.fileCount === 0}
+                className={cn(
+                  "w-full flex items-center gap-2 p-3 rounded-xl text-left transition-all",
+                  selectedTreeStats.fileCount > 0
+                    ? "bg-gradient-to-r from-primary/15 to-primary/5 hover:from-primary/20 hover:to-primary/10 text-primary border border-primary/20 shadow-sm hover:shadow-md"
+                    : "bg-white/30 text-stone-400 cursor-not-allowed border border-white/40"
+                )}
+              >
+                <div className="p-1.5 rounded-lg bg-white/60 backdrop-blur-sm">
+                  <Play className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs">선택 항목 추출 시작</div>
+                  <div className="text-[10px] opacity-70 truncate">
+                    {selectedTreeStats.fileCount}개 파일 선택됨
+                  </div>
+                </div>
+              </button>
+
+              <button
+                onClick={handleRetryFailed}
+                disabled={failedCount === 0}
+                className={cn(
+                  "w-full flex items-center gap-2 p-3 rounded-xl text-left transition-all",
+                  failedCount > 0
+                    ? "bg-gradient-to-r from-amber-100/80 to-amber-50/60 hover:from-amber-100 hover:to-amber-50 text-amber-700 border border-amber-200/50 shadow-sm hover:shadow-md"
+                    : "bg-white/30 text-stone-400 cursor-not-allowed border border-white/40"
+                )}
+              >
+                <div className="p-1.5 rounded-lg bg-white/60 backdrop-blur-sm">
+                  <RefreshCw className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs">실패 항목 재시도</div>
+                  <div className="text-[10px] opacity-70">실패한 {failedCount}개 파일 재추출</div>
+                </div>
+              </button>
+
+              <button className="w-full flex items-center gap-2 p-3 rounded-xl text-left bg-white/40 backdrop-blur-sm hover:bg-white/60 text-stone-700 border border-white/60 transition-all shadow-sm hover:shadow-md">
+                <div className="p-1.5 rounded-lg bg-white/60 backdrop-blur-sm">
+                  <Download className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-xs">결과 내보내기</div>
+                  <div className="text-[10px] opacity-70">JSON / CSV / TXT 형식</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* 추출 설정 패널 (높이: 520px) */}
+          <div className="glass-panel rounded-2xl p-4 flex flex-col" style={{ height: "520px" }}>
+            <h2 className="font-bold text-stone-800 mb-3">추출 설정</h2>
+            
+            <div className="flex-1 overflow-y-auto space-y-3">
+              {/* OCR 엔진 선택 */}
+              <div className="bg-white/30 backdrop-blur-sm rounded-xl p-2.5 border border-white/60">
+                <div className="text-[10px] font-semibold text-stone-600 mb-1.5">OCR 엔진</div>
+                <div className="space-y-1">
+                  {[
+                    { value: "paddleocr", label: "PaddleOCR v4 (권장)" },
+                    { value: "hybrid", label: "하이브리드" },
+                    { value: "easyocr", label: "EasyOCR" },
+                    { value: "tesseract", label: "Tesseract" },
+                  ].map((option) => (
+                    <label key={option.value} className={cn(
+                      "flex items-center gap-1.5 cursor-pointer p-1.5 rounded-lg transition-all",
+                      settings.ocr.engine === option.value
+                        ? "bg-primary/10 border border-primary/30"
+                        : "hover:bg-white/40"
+                    )}>
+                      <div className={cn(
+                        "w-3 h-3 rounded-full border-2 flex items-center justify-center transition-all",
+                        settings.ocr.engine === option.value
+                          ? "border-primary bg-primary"
+                          : "border-stone-300 bg-white/60"
+                      )}>
+                        {settings.ocr.engine === option.value && (
+                          <div className="w-1 h-1 rounded-full bg-white" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-stone-700">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* PDF/HWP 설정 */}
+              <div className="bg-white/30 backdrop-blur-sm rounded-xl p-2.5 border border-white/60">
+                <div className="text-[10px] font-semibold text-stone-600 mb-1.5">PDF 설정</div>
+                <div className="space-y-1">
+                  {[
+                    { key: "preferTextLayer", label: "텍스트 레이어 우선" },
+                    { key: "enableOcr", label: "자동 OCR 적용" },
+                    { key: "extractImageText", label: "이미지 내 텍스트" },
+                  ].map((option) => (
+                    <label key={option.key} className="flex items-center gap-1.5 cursor-pointer p-1 rounded hover:bg-white/40">
+                      <div className={cn(
+                        "w-3 h-3 rounded border flex items-center justify-center transition-all",
+                        (settings.pdf as any)[option.key]
+                          ? "bg-primary border-primary text-white"
+                          : "border-stone-300 bg-white/60"
+                      )}>
+                        {(settings.pdf as any)[option.key] && <Check className="w-2 h-2" />}
+                      </div>
+                      <span className="text-[10px] text-stone-700">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* 후처리 옵션 */}
+              <div className="bg-white/30 backdrop-blur-sm rounded-xl p-2.5 border border-white/60">
+                <div className="text-[10px] font-semibold text-stone-600 mb-1.5">후처리 옵션</div>
+                <div className="space-y-1">
+                  {[
+                    { key: "removeHeaders", label: "머리글/바닥글 제거" },
+                    { key: "removePageNumbers", label: "페이지 번호 제거" },
+                    { key: "normalizeWhitespace", label: "공백 정리" },
+                    { key: "ocrErrorCorrection", label: "OCR 오류 교정" },
+                  ].map((option) => (
+                    <label key={option.key} className="flex items-center gap-1.5 cursor-pointer p-1 rounded hover:bg-white/40">
+                      <div className={cn(
+                        "w-3 h-3 rounded border flex items-center justify-center transition-all",
+                        (settings.postprocessing as any)[option.key]
+                          ? "bg-primary border-primary text-white"
+                          : "border-stone-300 bg-white/60"
+                      )}>
+                        {(settings.postprocessing as any)[option.key] && <Check className="w-2 h-2" />}
+                      </div>
+                      <span className="text-[10px] text-stone-700">{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* 품질 검증 / 동시 처리 설정 */}
+              <div className="bg-white/30 backdrop-blur-sm rounded-xl p-2.5 border border-white/60">
+                <div className="text-[10px] font-semibold text-stone-600 mb-1.5">처리 설정</div>
+                <div className="space-y-2">
+                  <div>
+                    <label className="text-[9px] text-stone-500 mb-0.5 block">품질 통과 임계값</label>
+                    <select
+                      value={settings.qualityValidation.passThreshold}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          qualityValidation: {
+                            ...settings.qualityValidation,
+                            passThreshold: parseFloat(e.target.value),
+                          },
+                        })
+                      }
+                      className="ui-field w-full text-[10px] py-1"
+                    >
+                      {[0.7, 0.75, 0.8, 0.85, 0.9, 0.95].map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-stone-500 mb-0.5 block">동시 처리 파일 수</label>
+                    <select
+                      value={settings.processing.concurrentFiles}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          processing: {
+                            ...settings.processing,
+                            concurrentFiles: parseInt(e.target.value),
+                          },
+                        })
+                      }
+                      className="ui-field w-full text-[10px] py-1"
+                    >
+                      {[1, 2, 3, 4, 5].map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-stone-500 mb-0.5 block">타임아웃 (초)</label>
+                    <select
+                      value={settings.processing.timeoutSeconds}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          processing: {
+                            ...settings.processing,
+                            timeoutSeconds: parseInt(e.target.value),
+                          },
+                        })
+                      }
+                      className="ui-field w-full text-[10px] py-1"
+                    >
+                      {[60, 120, 180, 300, 600].map((v) => (
+                        <option key={v} value={v}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 버튼 */}
+            <div className="flex items-center justify-end gap-2 pt-2 mt-2 border-t border-stone-200/60">
+              <button className="glass-button px-2 py-1.5 rounded-lg text-[10px] font-medium hover:shadow-md transition-all">
+                기본값
+              </button>
+              <button className="px-2 py-1.5 rounded-lg text-[10px] font-medium bg-gradient-to-r from-stone-800 to-stone-900 text-white hover:from-black hover:to-stone-800 transition-all shadow-lg">
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

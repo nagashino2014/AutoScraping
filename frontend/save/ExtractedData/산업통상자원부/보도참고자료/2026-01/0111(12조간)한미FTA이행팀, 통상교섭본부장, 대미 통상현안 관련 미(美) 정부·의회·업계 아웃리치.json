@@ -1,0 +1,97 @@
+{
+  "metadata": {
+    "source_file": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData\\산업통상자원부\\보도참고자료\\2026-01\\0111(12조간)한미FTA이행팀, 통상교섭본부장, 대미 통상현안 관련 미(美) 정부·의회·업계 아웃리치.hwpx",
+    "file_format": "hwp",
+    "status": "completed",
+    "page_count": 1,
+    "char_count": 905,
+    "token_count": 452,
+    "quality_score": 1.0,
+    "extraction_method": "text_layer",
+    "processing_time_ms": 615,
+    "extracted_at": "2026-01-29T10:06:02.953133",
+    "corrections": [
+      {
+        "type": "utf16le_garbage_cleanup",
+        "description": "UTF-16 LE 오인식 한자 문자 제거",
+        "removed_chars": 8
+      },
+      {
+        "type": "hwp_space_garbage_cleanup",
+        "description": "HWP 공백 인코딩 오류 문자 제거",
+        "removed_chars": 14,
+        "patterns": [
+          "시퀀스 '漠杳' x4",
+          "시퀀스 '氠瑢' x3"
+        ]
+      }
+    ],
+    "tables_extracted": 1,
+    "tables_normalized": 1,
+    "normalization_applied": true,
+    "quality_details": {
+      "korean_ratio": 0.7428571428571429,
+      "broken_char_ratio": 0.0,
+      "sentence_structure": 1.0,
+      "repetition_anomaly": 0.0,
+      "overall_score": 1.0
+    }
+  },
+  "content": {
+    "text": "보도자료\n\n\n보도시점\n2026.1.11.(일) 10:00\n< 1.12.(월) 조간 >\n배포\n2026.1.11.(일)\n\n통상교섭본부장, 대미 통상현안 관련 미(美) 정부·의회·업계 아웃리치\n산업통상부(장관 김정관) 여한구 통상교섭본부장은 1.11(일)부터 1.14(수)까지(美 현지시간) 미국 워싱턴 D.C.를 방문하여 美 무역대표부(USTR) 등 美 정부, 의회, 업계 등 이해관계자 등 주요 인사들을 만나 대미 통상현안에 대해 논의할 계획이다.\n현재 미 대법원은 국제경제긴급권한법(IEEPA)에 근거하여 미 행정부가 부과한 상호관세의 위법 여부에 대한 판결을 앞두고 있는바, 여 본부장은 이와 관련하여 업계 영향을 최소화하기 위한 대응 전략을 모색하기 위해 미국 내 동향을 두루두루 청취할 계획이다.\n아울러, 최근 美 의회, 업계 등 이해관계자들은 한국의 국내 디지털 입법 사안에 대해 우려를 제기하고 있는바 금번 방미 계기 미측이 제기하는 우려에 대해 세부적으로 청취하는 한편, 美 기업들에 대해 차별적이거나 불필요한 장벽이 아니라는 점도 적극 설명할 계획이다.\n또한 美 무역대표부와의 면담을 통해 한미 FTA 공동위원회 준비 현황을 점검하고, 의제·일정 등도 조율할 계획이다.\n여한구 통상교섭본부장은 “디지털 등 국내 입법 과정에서 관계부처의 충분한 이해관계자 의견수렴 및 설명을 통해 한미 통상환경을 안정적으로 관리하는 것이 중요하다”고 강조하였다.\n\n책임자\n팀장\n(044-203-5641)\n\n\n\n<!-- 표 1 -->[표 데이터]\n\n[담당 부서]\n- 부서: 통상정책국\n- 이름: 책임자\n- 이름: 팀장\n- 이름: 정지선\n- 전화번호: (044-203-5640)\n\n항목 2:\n- 부서: 미주통상과 한미FTA이행팀\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 서준호\n- 전화번호: (044-203-5641)",
+    "text_length": 903
+  },
+  "tables": [
+    {
+      "page_num": 1,
+      "table_index": 0,
+      "row_count": 2,
+      "col_count": 6,
+      "confidence": 0.7,
+      "extraction_method": "hwp_olefile",
+      "semantic_text": "[표 데이터]\n\n[담당 부서]\n- 부서: 통상정책국\n- 이름: 책임자\n- 이름: 팀장\n- 이름: 정지선\n- 전화번호: (044-203-5640)\n\n항목 2:\n- 부서: 미주통상과 한미FTA이행팀\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 서준호\n- 전화번호: (044-203-5641) 漠杳",
+      "structured_data": {
+        "title": null,
+        "structure_type": "row_header",
+        "has_header": false,
+        "headers": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "column_semantics": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "rows": [
+          {
+            "직함": "담당 부서",
+            "부서": "통상정책국",
+            "이름": "정지선",
+            "전화번호": "(044-203-5640)"
+          },
+          {
+            "직함": "",
+            "부서": "미주통상과 한미FTA이행팀",
+            "이름": "서준호",
+            "전화번호": "(044-203-5641) 漠杳"
+          }
+        ],
+        "metadata": {
+          "row_count": 2,
+          "col_count": 6,
+          "data_row_count": 2,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    }
+  ]
+}

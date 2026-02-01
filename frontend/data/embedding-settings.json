@@ -1,0 +1,6 @@
+{
+  "model": "openai-small",
+  "batchSize": 100,
+  "concurrent": 5,
+  "autoRetry": true
+}

@@ -1,0 +1,4820 @@
+{
+  "orgs": [
+    {
+      "org_id": "mcee",
+      "org_name": "기후에너지환경부",
+      "base_url": "https://www.me.go.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 2,
+        "timeout_sec": 30
+      },
+      "org_type": "국가기관",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/orgs/mcee.png",
+      "notes": "환경정책 및 법령 정보 수집"
+    },
+    {
+      "org_id": "motie",
+      "org_name": "산업통상자원부",
+      "base_url": "https://www.motie.go.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 2,
+        "timeout_sec": 30
+      },
+      "org_type": "국가기관",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/orgs/motie.png",
+      "notes": "산업/에너지 정책 정보 수집"
+    },
+    {
+      "org_id": "moleg",
+      "org_name": "국민참여입법센터",
+      "base_url": "https://opinion.lawmaking.go.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 1,
+        "timeout_sec": 30
+      },
+      "org_type": "국가기관",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/mogleg.png",
+      "notes": "국민참여입법센터 입법예고 정보 수집"
+    },
+    {
+      "org_id": "law",
+      "org_name": "국가법령정보센터",
+      "base_url": "https://www.law.go.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 1,
+        "timeout_sec": 30
+      },
+      "org_type": "국가기관",
+      "collection_mode": "api_only",
+      "logo_path": "/logos/law.png",
+      "notes": "Open API 활용 법령 데이터 수집",
+      "api_profile": {
+        "organization": "국가법령정보센터",
+        "base_url": "https://www.law.go.kr",
+        "guide_url": "",
+        "auth": {
+          "type": "param",
+          "param_name": "OC",
+          "secret_ref": "ENV:SCRAPER_LAW_OC"
+        },
+        "endpoints": [
+          {
+            "name": "현행법령(시행일) 본문 조회",
+            "path": "/DRF/lawService.do",
+            "method": "GET",
+            "required_params": [
+              "OC",
+              "target",
+              "type",
+              "efYd"
+            ],
+            "fixed_params": {
+              "target": "eflaw"
+            },
+            "variable_params": [
+              "ID",
+              "MST",
+              "JO",
+              "chrClsCd"
+            ],
+            "description": "국가법령정보센터 기준으로 현행법령(시행일) 본문을 조회하는 API",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일의 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID(g4c@korea.kr일 경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "서비스 대상 (eflaw)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태 : HTML/XML/JSON (생략시 기본값 : XML)"
+              },
+              {
+                "name": "ID",
+                "name_ko": "법령 ID",
+                "required": false,
+                "type": "char",
+                "description": "법령 ID (ID 또는 MST 중 하나는 반드시 입력, ID로 검색하면 그 법령의 현행 법령 본문 조회)"
+              },
+              {
+                "name": "MST",
+                "name_ko": "법령 마스터 번호",
+                "required": false,
+                "type": "char",
+                "description": "법령 마스터 번호 - 법령테이블의 lsi_seq 값을 의미함"
+              },
+              {
+                "name": "efYd",
+                "name_ko": "법령의 시행일자",
+                "required": true,
+                "type": "int",
+                "description": "법령의 시행일자 (ID 입력시에는 무시하는 값으로 입력하지 않음)"
+              },
+              {
+                "name": "JO",
+                "name_ko": "조번호",
+                "required": false,
+                "type": "int",
+                "description": "조번호 생략(기본값) : 모든 조를 표시함 6자리숫자 : 조번호(4자리)+조가지번호(2자리) (000200 : 2조, 001002 : 10조의 2)"
+              },
+              {
+                "name": "chrClsCd",
+                "name_ko": "원문/한글 여부",
+                "required": false,
+                "type": "char",
+                "description": "원문/한글 여부 생략(기본값) : 한글 (010202 : 한글, 010201 : 원문)"
+              }
+            ],
+            "response_fields": [
+              {
+                "name": "법령ID",
+                "name_ko": "법령ID",
+                "type": "int",
+                "description": "법령ID"
+              },
+              {
+                "name": "공포일자",
+                "name_ko": "공포일자",
+                "type": "int",
+                "description": "공포일자"
+              },
+              {
+                "name": "공포번호",
+                "name_ko": "공포번호",
+                "type": "int",
+                "description": "공포번호"
+              },
+              {
+                "name": "언어",
+                "name_ko": "언어",
+                "type": "string",
+                "description": "언어종류"
+              },
+              {
+                "name": "법종구분",
+                "name_ko": "법종구분",
+                "type": "string",
+                "description": "법종류의 구분"
+              },
+              {
+                "name": "법종구분코드",
+                "name_ko": "법종구분코드",
+                "type": "string",
+                "description": "법종구분코드"
+              },
+              {
+                "name": "법령명_한글",
+                "name_ko": "법령명_한글",
+                "type": "string",
+                "description": "한글법령명"
+              },
+              {
+                "name": "법령명_한자",
+                "name_ko": "법령명_한자",
+                "type": "string",
+                "description": "법령명_한자"
+              },
+              {
+                "name": "법령명약칭",
+                "name_ko": "법령명약칭",
+                "type": "string",
+                "description": "법령명약칭"
+              },
+              {
+                "name": "편장절관",
+                "name_ko": "편장절관",
+                "type": "int",
+                "description": "편장절관 일련번호"
+              },
+              {
+                "name": "소관부처코드",
+                "name_ko": "소관부처코드",
+                "type": "int",
+                "description": "소관부처코드"
+              },
+              {
+                "name": "소관부처",
+                "name_ko": "소관부처",
+                "type": "string",
+                "description": "소관부처명"
+              },
+              {
+                "name": "전화번호",
+                "name_ko": "전화번호",
+                "type": "string",
+                "description": "전화번호"
+              },
+              {
+                "name": "시행일자",
+                "name_ko": "시행일자",
+                "type": "int",
+                "description": "시행일자"
+              },
+              {
+                "name": "제개정구분",
+                "name_ko": "제개정구분",
+                "type": "string",
+                "description": "제개정구분"
+              },
+              {
+                "name": "조문시행일자문자열",
+                "name_ko": "조문시행일자문자열",
+                "type": "string",
+                "description": "조문시행일자문자열"
+              },
+              {
+                "name": "별표시행일자문자열",
+                "name_ko": "별표시행일자문자열",
+                "type": "string",
+                "description": "별표시행일자문자열"
+              },
+              {
+                "name": "별표편집여부",
+                "name_ko": "별표편집여부",
+                "type": "string",
+                "description": "별표편집여부"
+              },
+              {
+                "name": "공포법령여부",
+                "name_ko": "공포법령여부",
+                "type": "string",
+                "description": "공포법령여부"
+              },
+              {
+                "name": "소관부처명",
+                "name_ko": "소관부처명",
+                "type": "string",
+                "description": "소관부처명"
+              },
+              {
+                "name": "소관부처코드",
+                "name_ko": "소관부처코드",
+                "type": "int",
+                "description": "소관부처코드"
+              },
+              {
+                "name": "부서명",
+                "name_ko": "부서명",
+                "type": "string",
+                "description": "연락부서명"
+              },
+              {
+                "name": "부서연락처",
+                "name_ko": "부서연락처",
+                "type": "string",
+                "description": "연락부서 전화번호"
+              },
+              {
+                "name": "공동부령구분",
+                "name_ko": "공동부령구분",
+                "type": "string",
+                "description": "공동부령의 구분"
+              },
+              {
+                "name": "구분코드",
+                "name_ko": "구분코드",
+                "type": "string",
+                "description": "구분코드(공동부령구분 구분코드)"
+              },
+              {
+                "name": "공포번호",
+                "name_ko": "공포번호",
+                "type": "string",
+                "description": "공포번호(공동부령의 공포번호)"
+              },
+              {
+                "name": "조문번호",
+                "name_ko": "조문번호",
+                "type": "int",
+                "description": "조문번호"
+              },
+              {
+                "name": "조문가지번호",
+                "name_ko": "조문가지번호",
+                "type": "int",
+                "description": "조문가지번호"
+              },
+              {
+                "name": "조문여부",
+                "name_ko": "조문여부",
+                "type": "string",
+                "description": "조문여부"
+              },
+              {
+                "name": "조문제목",
+                "name_ko": "조문제목",
+                "type": "string",
+                "description": "조문제목"
+              },
+              {
+                "name": "조문시행일자",
+                "name_ko": "조문시행일자",
+                "type": "int",
+                "description": "조문시행일자"
+              },
+              {
+                "name": "조문제개정유형",
+                "name_ko": "조문제개정유형",
+                "type": "string",
+                "description": "조문제개정유형"
+              },
+              {
+                "name": "조문이동이전",
+                "name_ko": "조문이동이전",
+                "type": "int",
+                "description": "조문이동이전"
+              },
+              {
+                "name": "조문이동이후",
+                "name_ko": "조문이동이후",
+                "type": "int",
+                "description": "조문이동이후"
+              },
+              {
+                "name": "조문변경여부",
+                "name_ko": "조문변경여부",
+                "type": "string",
+                "description": "조문변경여부 (Y값이 있으면 해당 조문내에 변경 내용 있음 )"
+              },
+              {
+                "name": "조문내용",
+                "name_ko": "조문내용",
+                "type": "string",
+                "description": "조문내용"
+              },
+              {
+                "name": "항번호",
+                "name_ko": "항번호",
+                "type": "int",
+                "description": "항번호"
+              },
+              {
+                "name": "항제개정유형",
+                "name_ko": "항제개정유형",
+                "type": "string",
+                "description": "항제개정유형"
+              },
+              {
+                "name": "항제개정일자문자열",
+                "name_ko": "항제개정일자문자열",
+                "type": "string",
+                "description": "항제개정일자문자열"
+              },
+              {
+                "name": "항내용",
+                "name_ko": "항내용",
+                "type": "string",
+                "description": "항내용"
+              },
+              {
+                "name": "호번호",
+                "name_ko": "호번호",
+                "type": "int",
+                "description": "호번호"
+              },
+              {
+                "name": "호내용",
+                "name_ko": "호내용",
+                "type": "string",
+                "description": "호내용"
+              },
+              {
+                "name": "조문참고자료",
+                "name_ko": "조문참고자료",
+                "type": "string",
+                "description": "조문참고자료"
+              },
+              {
+                "name": "부칙공포일자",
+                "name_ko": "부칙공포일자",
+                "type": "int",
+                "description": "부칙공포일자"
+              },
+              {
+                "name": "부칙공포번호",
+                "name_ko": "부칙공포번호",
+                "type": "int",
+                "description": "부칙공포번호"
+              },
+              {
+                "name": "부칙내용",
+                "name_ko": "부칙내용",
+                "type": "string",
+                "description": "부칙내용"
+              },
+              {
+                "name": "별표번호",
+                "name_ko": "별표번호",
+                "type": "int",
+                "description": "별표번호"
+              },
+              {
+                "name": "별표가지번호",
+                "name_ko": "별표가지번호",
+                "type": "int",
+                "description": "별표가지번호"
+              },
+              {
+                "name": "별표구분",
+                "name_ko": "별표구분",
+                "type": "string",
+                "description": "별표구분"
+              },
+              {
+                "name": "별표제목",
+                "name_ko": "별표제목",
+                "type": "string",
+                "description": "별표제목"
+              },
+              {
+                "name": "별표제목 문자열",
+                "name_ko": "별표제목 문자열",
+                "type": "string",
+                "description": "별표제목문자열"
+              },
+              {
+                "name": "별표시행일자",
+                "name_ko": "별표시행일자",
+                "type": "int",
+                "description": "별표시행일자"
+              },
+              {
+                "name": "별표서식 파일링크",
+                "name_ko": "별표서식 파일링크",
+                "type": "string",
+                "description": "별표서식파일링크"
+              },
+              {
+                "name": "별표HWP 파일명",
+                "name_ko": "별표HWP 파일명",
+                "type": "string",
+                "description": "별표 HWP 파일명"
+              },
+              {
+                "name": "별표서식 PDF파일링크",
+                "name_ko": "별표서식 PDF파일링크",
+                "type": "string",
+                "description": "별표서식PDF파일링크"
+              },
+              {
+                "name": "별표PDF 파일명",
+                "name_ko": "별표PDF 파일명",
+                "type": "string",
+                "description": "별표 PDF 파일명"
+              },
+              {
+                "name": "별표이미지 파일명",
+                "name_ko": "별표이미지 파일명",
+                "type": "string",
+                "description": "별표 이미지 파일명"
+              },
+              {
+                "name": "별표내용",
+                "name_ko": "별표내용",
+                "type": "string",
+                "description": "별표내용"
+              },
+              {
+                "name": "개정문내용",
+                "name_ko": "개정문내용",
+                "type": "string",
+                "description": "개정문내용"
+              },
+              {
+                "name": "제개정이유내용",
+                "name_ko": "제개정이유내용",
+                "type": "string",
+                "description": "제개정이유내용"
+              }
+            ]
+          },
+          {
+            "name": "현행법령(시행일) 목록 조회",
+            "path": "/DRF/lawSearch.do",
+            "method": "GET",
+            "required_params": [
+              "OC",
+              "target",
+              "type"
+            ],
+            "fixed_params": {
+              "target": "eflaw"
+            },
+            "variable_params": [
+              "search",
+              "query",
+              "nw",
+              "LID",
+              "display",
+              "page",
+              "sort",
+              "efYd",
+              "date",
+              "ancYd",
+              "ancNo",
+              "rrClsCd",
+              "nb",
+              "org",
+              "knd",
+              "gana",
+              "popYn"
+            ],
+            "description": "국가법령정보센터 기준으로 현행법령(시행일) 목록을 조회하는 API",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일의 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID(g4c@korea.kr일경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "서비스 대상 (고정값: eflaw)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태 HTML/XML/JSON (기본값: XML)"
+              },
+              {
+                "name": "search",
+                "name_ko": "검색범위",
+                "required": false,
+                "type": "int",
+                "description": "검색범위 (기본: 1 법령명, 2: 본문검색)"
+              },
+              {
+                "name": "query",
+                "name_ko": "검색 질의",
+                "required": false,
+                "type": "string",
+                "description": "법령명에서 검색을 원하는 질의 (정확한 검색을 위한 문자열 검색 query=\"자동차\")"
+              },
+              {
+                "name": "nw",
+                "name_ko": "현행연혁코드",
+                "required": false,
+                "type": "int",
+                "description": "1: 연혁, 2: 시행예정, 3: 현행 (기본값: 전체)"
+              },
+              {
+                "name": "LID",
+                "name_ko": "법령ID",
+                "required": false,
+                "type": "string",
+                "description": "법령ID (예: LID=830)"
+              },
+              {
+                "name": "display",
+                "name_ko": "결과 개수",
+                "required": false,
+                "type": "int",
+                "description": "검색된 결과 개수 (기본값: 20, 최대값: 100)"
+              },
+              {
+                "name": "page",
+                "name_ko": "결과 페이지",
+                "required": false,
+                "type": "int",
+                "description": "검색 결과 페이지 (기본값: 1)"
+              },
+              {
+                "name": "sort",
+                "name_ko": "정렬 옵션",
+                "required": false,
+                "type": "string",
+                "description": "정렬 옵션 (기본값: lasc 법령오름차순)"
+              },
+              {
+                "name": "efYd",
+                "name_ko": "시행일자 범위",
+                "required": false,
+                "type": "string",
+                "description": "시행일자 범위 검색 (예: 20090101~20090130)"
+              },
+              {
+                "name": "date",
+                "name_ko": "공포일자",
+                "required": false,
+                "type": "string",
+                "description": "공포일자 검색"
+              },
+              {
+                "name": "ancYd",
+                "name_ko": "공포일자 범위",
+                "required": false,
+                "type": "string",
+                "description": "공포일자 범위 검색 (예: 20090101~20090130)"
+              },
+              {
+                "name": "ancNo",
+                "name_ko": "공포번호 범위",
+                "required": false,
+                "type": "string",
+                "description": "공포번호 범위 검색 (예: 306~400)"
+              },
+              {
+                "name": "rrClsCd",
+                "name_ko": "법령 제개정 종류",
+                "required": false,
+                "type": "string",
+                "description": "법령 제개정 종류 코드 (예: 300201-제정, 300202-일부개정 등)"
+              },
+              {
+                "name": "nb",
+                "name_ko": "공포번호",
+                "required": false,
+                "type": "int",
+                "description": "법령의 공포번호 검색"
+              },
+              {
+                "name": "org",
+                "name_ko": "소관부처",
+                "required": false,
+                "type": "string",
+                "description": "소관부처별 검색 (소관부처코드 제공)"
+              },
+              {
+                "name": "knd",
+                "name_ko": "법령종류",
+                "required": false,
+                "type": "string",
+                "description": "법령종류 (코드 제공)"
+              },
+              {
+                "name": "gana",
+                "name_ko": "사전식 검색",
+                "required": false,
+                "type": "string",
+                "description": "사전식 검색 (예: ga, na, da 등)"
+              },
+              {
+                "name": "popYn",
+                "name_ko": "팝업창 여부",
+                "required": false,
+                "type": "string",
+                "description": "상세화면 팝업창 여부 (팝업창으로 띄우고 싶을 때만 'popYn=Y')"
+              }
+            ],
+            "response_fields": [
+              {
+                "name": "target",
+                "name_ko": "검색서비스 대상",
+                "type": "string",
+                "description": "검색서비스 대상"
+              },
+              {
+                "name": "키워드",
+                "name_ko": "검색어",
+                "type": "string",
+                "description": "검색어"
+              },
+              {
+                "name": "section",
+                "name_ko": "검색범위",
+                "type": "string",
+                "description": "검색범위"
+              },
+              {
+                "name": "totalCnt",
+                "name_ko": "검색건수",
+                "type": "int",
+                "description": "검색건수"
+              },
+              {
+                "name": "page",
+                "name_ko": "결과페이지번호",
+                "type": "int",
+                "description": "결과페이지번호"
+              },
+              {
+                "name": "law id",
+                "name_ko": "결과 번호",
+                "type": "int",
+                "description": "결과 번호"
+              },
+              {
+                "name": "법령일련번호",
+                "name_ko": "법령일련번호",
+                "type": "int",
+                "description": "법령일련번호"
+              },
+              {
+                "name": "현행연혁코드",
+                "name_ko": "현행연혁코드",
+                "type": "string",
+                "description": "현행연혁코드"
+              },
+              {
+                "name": "법령명한글",
+                "name_ko": "법령명한글",
+                "type": "string",
+                "description": "법령명한글"
+              },
+              {
+                "name": "법령약칭명",
+                "name_ko": "법령약칭명",
+                "type": "string",
+                "description": "법령약칭명"
+              },
+              {
+                "name": "법령ID",
+                "name_ko": "법령ID",
+                "type": "int",
+                "description": "법령ID"
+              },
+              {
+                "name": "공포일자",
+                "name_ko": "공포일자",
+                "type": "int",
+                "description": "공포일자"
+              },
+              {
+                "name": "공포번호",
+                "name_ko": "공포번호",
+                "type": "int",
+                "description": "공포번호"
+              },
+              {
+                "name": "제개정구분명",
+                "name_ko": "제개정구분명",
+                "type": "string",
+                "description": "제개정구분명"
+              },
+              {
+                "name": "소관부처코드",
+                "name_ko": "소관부처코드",
+                "type": "string",
+                "description": "소관부처코드"
+              },
+              {
+                "name": "소관부처명",
+                "name_ko": "소관부처명",
+                "type": "string",
+                "description": "소관부처명"
+              },
+              {
+                "name": "법령구분명",
+                "name_ko": "법령구분명",
+                "type": "string",
+                "description": "법령구분명"
+              },
+              {
+                "name": "공동부령구분",
+                "name_ko": "공동부령구분",
+                "type": "string",
+                "description": "공동부령구분"
+              },
+              {
+                "name": "공포번호",
+                "name_ko": "공포번호(공동부령)",
+                "type": "string",
+                "description": "공포번호(공동부령의 공포번호)"
+              },
+              {
+                "name": "시행일자",
+                "name_ko": "시행일자",
+                "type": "int",
+                "description": "시행일자"
+              },
+              {
+                "name": "자법타법여부",
+                "name_ko": "자법타법여부",
+                "type": "string",
+                "description": "자법타법여부"
+              },
+              {
+                "name": "법령상세링크",
+                "name_ko": "법령상세링크",
+                "type": "string",
+                "description": "법령상세링크"
+              }
+            ]
+          },
+          {
+            "name": "3단 비교 목록 조회",
+            "path": "/DRF/lawSearch.do",
+            "method": "GET",
+            "required_params": [
+              "OC",
+              "target",
+              "type"
+            ],
+            "fixed_params": {
+              "target": "thdCmp"
+            },
+            "variable_params": [
+              "query",
+              "display",
+              "page",
+              "sort",
+              "efYd",
+              "ancYd",
+              "date",
+              "nb",
+              "ancNo",
+              "rrClsCd",
+              "org",
+              "knd",
+              "gana",
+              "popYn"
+            ],
+            "description": "법령의 삼단 비교 목록을 조회하는 API",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일의 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID(g4c@korea.kr일 경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "서비스 대상 (고정값: thdCmp)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태 HTML/XML/JSON"
+              },
+              {
+                "name": "query",
+                "name_ko": "검색 질의",
+                "required": false,
+                "type": "string",
+                "description": "법령명에서 검색을 원하는 질의"
+              },
+              {
+                "name": "display",
+                "name_ko": "검색 결과 개수",
+                "required": false,
+                "type": "int",
+                "description": "검색된 결과 개수 (default=20, max=100)"
+              },
+              {
+                "name": "page",
+                "name_ko": "페이지 번호",
+                "required": false,
+                "type": "int",
+                "description": "검색 결과 페이지 (default=1)"
+              },
+              {
+                "name": "sort",
+                "name_ko": "정렬 옵션",
+                "required": false,
+                "type": "string",
+                "description": "정렬 옵션 (기본: lasc 법령오름차순, ldes: 법령내림차순, dasc: 공포일자 오름차순, ddes: 공포일자 내림차순, nasc: 공포번호 오름차순, ndes: 공포번호 내림차순, efasc: 시행일자 오름차순, efdes: 시행일자 내림차순)"
+              },
+              {
+                "name": "efYd",
+                "name_ko": "시행일자 범위",
+                "required": false,
+                "type": "string",
+                "description": "시행일자 범위 검색 (예: 20090101~20090130)"
+              },
+              {
+                "name": "ancYd",
+                "name_ko": "공포일자 범위",
+                "required": false,
+                "type": "string",
+                "description": "공포일자 범위 검색 (예: 20090101~20090130)"
+              },
+              {
+                "name": "date",
+                "name_ko": "공포일자",
+                "required": false,
+                "type": "int",
+                "description": "공포일자 검색"
+              },
+              {
+                "name": "nb",
+                "name_ko": "공포번호",
+                "required": false,
+                "type": "int",
+                "description": "공포번호 검색"
+              },
+              {
+                "name": "ancNo",
+                "name_ko": "공포번호 범위",
+                "required": false,
+                "type": "string",
+                "description": "공포번호 범위 검색 (예: 10000~20000)"
+              },
+              {
+                "name": "rrClsCd",
+                "name_ko": "법령 제개정 종류",
+                "required": false,
+                "type": "string",
+                "description": "법령 제개정 종류 (예: 300201-제정, 300202-일부개정, 300203-전부개정, 300204-폐지, 300205-폐지제정, 300206-일괄개정, 300207-일괄폐지, 300209-타법개정, 300210-타법폐지, 300208-기타)"
+              },
+              {
+                "name": "org",
+                "name_ko": "소관부처",
+                "required": false,
+                "type": "string",
+                "description": "소관부처별 검색 (소관부처코드 제공)"
+              },
+              {
+                "name": "knd",
+                "name_ko": "법령 종류",
+                "required": false,
+                "type": "string",
+                "description": "법령 종류 (코드 제공)"
+              },
+              {
+                "name": "gana",
+                "name_ko": "사전식 검색",
+                "required": false,
+                "type": "string",
+                "description": "사전식 검색 (예: ga, na, da 등)"
+              },
+              {
+                "name": "popYn",
+                "name_ko": "팝업창 여부",
+                "required": false,
+                "type": "string",
+                "description": "상세화면 팝업창 여부 (팝업창으로 띄우고 싶을 때만 'popYn=Y')"
+              }
+            ],
+            "response_fields": [
+              {
+                "name": "target",
+                "name_ko": "검색서비스 대상",
+                "type": "string",
+                "description": "검색서비스 대상"
+              },
+              {
+                "name": "키워드",
+                "name_ko": "검색 단어",
+                "type": "string",
+                "description": "검색 단어"
+              },
+              {
+                "name": "section",
+                "name_ko": "검색범위",
+                "type": "string",
+                "description": "검색범위"
+              },
+              {
+                "name": "totalCnt",
+                "name_ko": "검색 건수",
+                "type": "int",
+                "description": "검색 건수"
+              },
+              {
+                "name": "page",
+                "name_ko": "현재 페이지번호",
+                "type": "int",
+                "description": "현재 페이지번호"
+              },
+              {
+                "name": "numOfRows",
+                "name_ko": "페이지 당 출력 결과 수",
+                "type": "int",
+                "description": "페이지 당 출력 결과 수"
+              },
+              {
+                "name": "resultCode",
+                "name_ko": "조회 결과 코드",
+                "type": "int",
+                "description": "조회 여부 (성공: 00 / 실패: 01)"
+              },
+              {
+                "name": "resultMsg",
+                "name_ko": "조회 결과 메시지",
+                "type": "int",
+                "description": "조회 여부 (성공: success / 실패: fail)"
+              },
+              {
+                "name": "thdCmp id",
+                "name_ko": "검색결과 순번",
+                "type": "int",
+                "description": "검색결과 순번"
+              },
+              {
+                "name": "삼단비교 일련번호",
+                "name_ko": "삼단비교 일련번호",
+                "type": "int",
+                "description": "삼단비교 일련번호"
+              },
+              {
+                "name": "법령명 한글",
+                "name_ko": "법령명 한글",
+                "type": "string",
+                "description": "법령명 한글"
+              },
+              {
+                "name": "법령ID",
+                "name_ko": "법령ID",
+                "type": "int",
+                "description": "법령ID"
+              },
+              {
+                "name": "공포일자",
+                "name_ko": "공포일자",
+                "type": "int",
+                "description": "공포일자"
+              },
+              {
+                "name": "공포번호",
+                "name_ko": "공포번호",
+                "type": "int",
+                "description": "공포번호"
+              },
+              {
+                "name": "제개정구분명",
+                "name_ko": "제개정구분명",
+                "type": "string",
+                "description": "제개정구분명"
+              },
+              {
+                "name": "소관부처코드",
+                "name_ko": "소관부처코드",
+                "type": "int",
+                "description": "소관부처코드"
+              },
+              {
+                "name": "소관부처명",
+                "name_ko": "소관부처명",
+                "type": "string",
+                "description": "소관부처명"
+              },
+              {
+                "name": "법령구분명",
+                "name_ko": "법령구분명",
+                "type": "string",
+                "description": "법령구분명"
+              },
+              {
+                "name": "시행일자",
+                "name_ko": "시행일자",
+                "type": "int",
+                "description": "시행일자"
+              },
+              {
+                "name": "인용조문_삼단비교상세링크",
+                "name_ko": "인용조문 상세링크",
+                "type": "string",
+                "description": "인용조문_삼단비교 상세링크"
+              },
+              {
+                "name": "위임조문_삼단비교상세링크",
+                "name_ko": "위임조문 상세링크",
+                "type": "string",
+                "description": "위임조문_삼단비교 상세링크"
+              }
+            ]
+          },
+          {
+            "name": "3단 비교 본문 조회",
+            "path": "/DRF/lawService.do",
+            "method": "GET",
+            "required_params": [
+              "OC",
+              "target",
+              "type",
+              "knd"
+            ],
+            "fixed_params": {
+              "target": "thdCmp"
+            },
+            "variable_params": [
+              "ID",
+              "MST",
+              "LM",
+              "LD",
+              "LN"
+            ],
+            "description": "3단 비교 본문을 조회하는 API로, 법령 ID 또는 마스터 번호를 통해 법령 정보를 검색하고 3단 비교 데이터를 제공합니다.",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID (예: g4c@korea.kr일 경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "서비스 대상 (고정값: thdCmp)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태 (HTML/XML/JSON 중 하나)"
+              },
+              {
+                "name": "knd",
+                "name_ko": "3단 비교 종류",
+                "required": true,
+                "type": "int",
+                "description": "3단 비교 종류별 검색 (인용조문: 1, 위임조문: 2)"
+              },
+              {
+                "name": "ID",
+                "name_ko": "법령 ID",
+                "required": false,
+                "type": "char",
+                "description": "법령 ID (ID 또는 MST 중 하나는 반드시 입력)"
+              },
+              {
+                "name": "MST",
+                "name_ko": "법령 마스터 번호",
+                "required": false,
+                "type": "char",
+                "description": "법령 마스터 번호 (법령테이블의 lsi_seq 값)"
+              },
+              {
+                "name": "LM",
+                "name_ko": "법령명",
+                "required": false,
+                "type": "string",
+                "description": "법령의 법령명 (법령명 입력 시 해당 법령 링크 제공)"
+              },
+              {
+                "name": "LD",
+                "name_ko": "공포일자",
+                "required": false,
+                "type": "int",
+                "description": "법령의 공포일자"
+              },
+              {
+                "name": "LN",
+                "name_ko": "공포번호",
+                "required": false,
+                "type": "int",
+                "description": "법령의 공포번호"
+              }
+            ],
+            "response_fields": [
+              {
+                "name": "기본정보",
+                "name_ko": "기본정보",
+                "type": "string",
+                "description": "인용 삼단비교 기본정보"
+              },
+              {
+                "name": "법령ID",
+                "name_ko": "법령 ID",
+                "type": "int",
+                "description": "법령 ID"
+              },
+              {
+                "name": "시행령ID",
+                "name_ko": "시행령 ID",
+                "type": "int",
+                "description": "시행령 ID"
+              },
+              {
+                "name": "시행규칙ID",
+                "name_ko": "시행규칙 ID",
+                "type": "int",
+                "description": "시행규칙 ID"
+              },
+              {
+                "name": "법령명",
+                "name_ko": "법령명",
+                "type": "string",
+                "description": "법령 명"
+              },
+              {
+                "name": "시행령명",
+                "name_ko": "시행령명",
+                "type": "string",
+                "description": "법령시행령 명"
+              },
+              {
+                "name": "시행규칙명",
+                "name_ko": "시행규칙명",
+                "type": "string",
+                "description": "시행규칙 명"
+              },
+              {
+                "name": "법령요약정보",
+                "name_ko": "법령 요약정보",
+                "type": "string",
+                "description": "법령 요약정보"
+              },
+              {
+                "name": "시행령 요약정보",
+                "name_ko": "시행령 요약정보",
+                "type": "string",
+                "description": "시행령 요약정보"
+              },
+              {
+                "name": "시행규칙 요약정보",
+                "name_ko": "시행규칙 요약정보",
+                "type": "string",
+                "description": "시행규칙 요약정보"
+              },
+              {
+                "name": "삼단비교기준",
+                "name_ko": "삼단비교 기준",
+                "type": "string",
+                "description": "삼단비교 기준"
+              },
+              {
+                "name": "삼단비교 존재여부",
+                "name_ko": "삼단비교 존재여부",
+                "type": "int",
+                "description": "삼단비교 존재하지 않으면 N이 조회"
+              },
+              {
+                "name": "시행일자",
+                "name_ko": "시행일자",
+                "type": "int",
+                "description": "시행일자"
+              },
+              {
+                "name": "관련삼단비교목록",
+                "name_ko": "관련 삼단비교 목록",
+                "type": "string",
+                "description": "관련 삼단비교 목록"
+              },
+              {
+                "name": "목록명",
+                "name_ko": "목록명",
+                "type": "string",
+                "description": "목록명"
+              },
+              {
+                "name": "삼단비교 목록상세링크",
+                "name_ko": "삼단비교 목록상세링크",
+                "type": "string",
+                "description": "인용조문 삼단비교 목록 상세링크"
+              },
+              {
+                "name": "인용조문 삼단비교",
+                "name_ko": "인용조문 삼단비교",
+                "type": "string",
+                "description": "인용조문 삼단비교"
+              },
+              {
+                "name": "법률조문",
+                "name_ko": "법률조문",
+                "type": "string",
+                "description": "법률조문"
+              },
+              {
+                "name": "조번호",
+                "name_ko": "조번호",
+                "type": "int",
+                "description": "조번호"
+              },
+              {
+                "name": "조가지번호",
+                "name_ko": "조가지번호",
+                "type": "int",
+                "description": "조가지번호"
+              },
+              {
+                "name": "조제목",
+                "name_ko": "조제목",
+                "type": "string",
+                "description": "조제목"
+              },
+              {
+                "name": "조내용",
+                "name_ko": "조내용",
+                "type": "string",
+                "description": "조내용"
+              },
+              {
+                "name": "시행령 조문목록",
+                "name_ko": "시행령 조문목록",
+                "type": "string",
+                "description": "시행령조문목록"
+              },
+              {
+                "name": "시행령조문",
+                "name_ko": "시행령조문",
+                "type": "string",
+                "description": "하위 시행령조문"
+              },
+              {
+                "name": "시행규칙 조문목록",
+                "name_ko": "시행규칙 조문목록",
+                "type": "string",
+                "description": "시행규칙조문목록"
+              },
+              {
+                "name": "시행규칙조문",
+                "name_ko": "시행규칙조문",
+                "type": "string",
+                "description": "하위 시행규칙조문"
+              },
+              {
+                "name": "위임행정규칙목록",
+                "name_ko": "위임행정규칙목록",
+                "type": "string",
+                "description": "위임행정규칙목록"
+              },
+              {
+                "name": "위임행정규칙",
+                "name_ko": "위임행정규칙",
+                "type": "string",
+                "description": "위임행정규칙"
+              },
+              {
+                "name": "위임행정규칙명",
+                "name_ko": "위임행정규칙명",
+                "type": "string",
+                "description": "위임행정규칙명"
+              },
+              {
+                "name": "위임행정규칙일련번호",
+                "name_ko": "위임행정규칙일련번호",
+                "type": "int",
+                "description": "위임행정규칙일련번호"
+              },
+              {
+                "name": "위임행정규칙조번호",
+                "name_ko": "위임행정규칙조번호",
+                "type": "int",
+                "description": "위임행정규칙조번호"
+              },
+              {
+                "name": "위임행정규칙조가지번호",
+                "name_ko": "위임행정규칙조가지번호",
+                "type": "int",
+                "description": "위임행정규칙조가지번호"
+              }
+            ]
+          },
+          {
+            "name": "행정규칙 본문 조회",
+            "path": "/DRF/lawService.do",
+            "method": "GET",
+            "required_params": [
+              "OC",
+              "target",
+              "type"
+            ],
+            "fixed_params": {
+              "target": "admrul"
+            },
+            "variable_params": [
+              "ID",
+              "LID",
+              "LM"
+            ],
+            "description": "행정규칙 본문을 조회하는 API로, 행정규칙 일련번호, ID, 또는 정확한 행정규칙명을 입력하여 조회할 수 있습니다.",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일의 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID (예: g4c@korea.kr일 경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "서비스 대상 (고정값: admrul)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태 (HTML/XML/JSON 중 하나)"
+              },
+              {
+                "name": "ID",
+                "name_ko": "행정규칙 일련번호",
+                "required": false,
+                "type": "char",
+                "description": "행정규칙 일련번호"
+              },
+              {
+                "name": "LID",
+                "name_ko": "행정규칙 ID",
+                "required": false,
+                "type": "char",
+                "description": "행정규칙 ID"
+              },
+              {
+                "name": "LM",
+                "name_ko": "행정규칙명",
+                "required": false,
+                "type": "string",
+                "description": "조회하고자 하는 정확한 행정규칙명"
+              }
+            ],
+            "response_fields": [
+              {
+                "name": "행정규칙 일련번호",
+                "name_ko": "행정규칙일련번호",
+                "type": "int",
+                "description": "행정규칙일련번호"
+              },
+              {
+                "name": "행정규칙명",
+                "name_ko": "행정규칙명",
+                "type": "string",
+                "description": "행정규칙명"
+              },
+              {
+                "name": "행정규칙종류",
+                "name_ko": "행정규칙종류",
+                "type": "string",
+                "description": "행정규칙종류"
+              },
+              {
+                "name": "행정규칙종류코드",
+                "name_ko": "행정규칙종류코드",
+                "type": "string",
+                "description": "행정규칙종류코드"
+              },
+              {
+                "name": "발령일자",
+                "name_ko": "발령일자",
+                "type": "int",
+                "description": "발령일자"
+              },
+              {
+                "name": "발령번호",
+                "name_ko": "발령번호",
+                "type": "string",
+                "description": "발령번호"
+              },
+              {
+                "name": "제개정구분명",
+                "name_ko": "제개정구분명",
+                "type": "string",
+                "description": "제개정구분명"
+              },
+              {
+                "name": "제개정 구분코드",
+                "name_ko": "제개정구분코드",
+                "type": "string",
+                "description": "제개정구분코드"
+              },
+              {
+                "name": "조문형식여부",
+                "name_ko": "조문형식여부",
+                "type": "string",
+                "description": "조문형식여부"
+              },
+              {
+                "name": "행정규칙ID",
+                "name_ko": "행정규칙",
+                "type": "int",
+                "description": "행정규칙"
+              },
+              {
+                "name": "소관부처명",
+                "name_ko": "소관부처명",
+                "type": "string",
+                "description": "소관부처명"
+              },
+              {
+                "name": "소관부처코드",
+                "name_ko": "소관부처코드",
+                "type": "string",
+                "description": "소관부처코드"
+              },
+              {
+                "name": "상위부처명",
+                "name_ko": "상위부처명",
+                "type": "string",
+                "description": "상위부처명"
+              },
+              {
+                "name": "담당부서기관코드",
+                "name_ko": "담당부서기관코드",
+                "type": "string",
+                "description": "담당부서기관코드"
+              },
+              {
+                "name": "담당부서기관명",
+                "name_ko": "담당부서기관명",
+                "type": "string",
+                "description": "담당부서기관명"
+              },
+              {
+                "name": "담당자명",
+                "name_ko": "담당자명",
+                "type": "string",
+                "description": "담당자명"
+              },
+              {
+                "name": "전화번호",
+                "name_ko": "전화번호",
+                "type": "string",
+                "description": "전화번호"
+              },
+              {
+                "name": "현행여부",
+                "name_ko": "현행여부",
+                "type": "string",
+                "description": "현행여부"
+              },
+              {
+                "name": "시행일자",
+                "name_ko": "시행일자",
+                "type": "string",
+                "description": "시행일자"
+              },
+              {
+                "name": "생성일자",
+                "name_ko": "생성일자",
+                "type": "string",
+                "description": "생성일자"
+              },
+              {
+                "name": "조문내용",
+                "name_ko": "조문내용",
+                "type": "string",
+                "description": "조문내용"
+              },
+              {
+                "name": "부칙",
+                "name_ko": "부칙",
+                "type": "string",
+                "description": "부칙"
+              },
+              {
+                "name": "부칙공포일자",
+                "name_ko": "부칙공포일자",
+                "type": "int",
+                "description": "부칙공포일자"
+              },
+              {
+                "name": "부칙공포번호",
+                "name_ko": "부칙공포번호",
+                "type": "int",
+                "description": "부칙공포번호"
+              },
+              {
+                "name": "부칙내용",
+                "name_ko": "부칙내용",
+                "type": "string",
+                "description": "부칙내용"
+              },
+              {
+                "name": "별표",
+                "name_ko": "별표",
+                "type": "string",
+                "description": "별표"
+              },
+              {
+                "name": "별표번호",
+                "name_ko": "별표번호",
+                "type": "int",
+                "description": "별표번호"
+              },
+              {
+                "name": "별표가지번호",
+                "name_ko": "별표가지번호",
+                "type": "int",
+                "description": "별표가지번호"
+              },
+              {
+                "name": "별표구분",
+                "name_ko": "별표구분",
+                "type": "string",
+                "description": "별표구분"
+              },
+              {
+                "name": "별표제목",
+                "name_ko": "별표제목",
+                "type": "string",
+                "description": "별표제목"
+              },
+              {
+                "name": "별표서식파일링크",
+                "name_ko": "별표서식파일링크",
+                "type": "string",
+                "description": "별표서식파일링크"
+              },
+              {
+                "name": "별표서식PDF파일링크",
+                "name_ko": "별표서식PDF파일링크",
+                "type": "string",
+                "description": "별표서식PDF파일링크"
+              },
+              {
+                "name": "별표내용",
+                "name_ko": "별표내용",
+                "type": "string",
+                "description": "별표내용"
+              }
+            ]
+          },
+          {
+            "name": "행정규칙 목록 조회",
+            "path": "/DRF/lawSearch.do",
+            "method": "GET",
+            "required_params": [
+              "OC",
+              "target",
+              "type"
+            ],
+            "fixed_params": {
+              "target": "admrul"
+            },
+            "variable_params": [
+              "nw",
+              "search",
+              "query",
+              "display",
+              "page",
+              "org",
+              "knd",
+              "gana",
+              "sort",
+              "date",
+              "prmlYd",
+              "modYd",
+              "nb",
+              "popYn"
+            ],
+            "description": "행정규칙 목록을 조회하는 API로, 다양한 검색 조건을 통해 행정규칙 정보를 검색할 수 있습니다.",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일의 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID (예: g4c@korea.kr일 경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "서비스 대상 (고정값: admrul)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태 (HTML/XML/JSON 중 선택)"
+              },
+              {
+                "name": "nw",
+                "name_ko": "현행/연혁 구분",
+                "required": false,
+                "type": "int",
+                "description": "1: 현행, 2: 연혁 (기본값: 현행)"
+              },
+              {
+                "name": "search",
+                "name_ko": "검색 범위",
+                "required": false,
+                "type": "int",
+                "description": "검색 범위 (1: 행정규칙명, 2: 본문검색, 기본값: 1)"
+              },
+              {
+                "name": "query",
+                "name_ko": "검색 질의",
+                "required": false,
+                "type": "string",
+                "description": "검색 범위에서 검색을 원하는 질의 (예: query='자동차')"
+              },
+              {
+                "name": "display",
+                "name_ko": "결과 개수",
+                "required": false,
+                "type": "int",
+                "description": "검색된 결과 개수 (기본값: 20, 최대값: 100)"
+              },
+              {
+                "name": "page",
+                "name_ko": "결과 페이지",
+                "required": false,
+                "type": "int",
+                "description": "검색 결과 페이지 (기본값: 1)"
+              },
+              {
+                "name": "org",
+                "name_ko": "소관 부처",
+                "required": false,
+                "type": "string",
+                "description": "소관 부처별 검색 (코드 별도 제공)"
+              },
+              {
+                "name": "knd",
+                "name_ko": "행정규칙 종류",
+                "required": false,
+                "type": "string",
+                "description": "행정규칙 종류별 검색 (1: 훈령, 2: 예규, 3: 고시, 4: 공고, 5: 지침, 6: 기타)"
+              },
+              {
+                "name": "gana",
+                "name_ko": "사전식 검색",
+                "required": false,
+                "type": "string",
+                "description": "사전식 검색 (예: ga, na, da 등)"
+              },
+              {
+                "name": "sort",
+                "name_ko": "정렬 옵션",
+                "required": false,
+                "type": "string",
+                "description": "정렬 옵션 (기본값: lasc, 예: ldes, dasc, ddes, nasc, ndes, efasc, efdes)"
+              },
+              {
+                "name": "date",
+                "name_ko": "발령일자",
+                "required": false,
+                "type": "int",
+                "description": "행정규칙 발령일자"
+              },
+              {
+                "name": "prmlYd",
+                "name_ko": "발령일자 기간",
+                "required": false,
+                "type": "string",
+                "description": "발령일자 기간 검색 (예: 20090101~20090130)"
+              },
+              {
+                "name": "modYd",
+                "name_ko": "수정일자 기간",
+                "required": false,
+                "type": "string",
+                "description": "수정일자 기간 검색 (예: 20090101~20090130)"
+              },
+              {
+                "name": "nb",
+                "name_ko": "발령 번호",
+                "required": false,
+                "type": "int",
+                "description": "행정규칙 발령번호 (예: 제2023-8호 검색 시 nb=20238)"
+              },
+              {
+                "name": "popYn",
+                "name_ko": "팝업 여부",
+                "required": false,
+                "type": "string",
+                "description": "상세화면 팝업창 여부 (팝업창으로 띄우고 싶을 때만 'popYn=Y')"
+              }
+            ],
+            "response_fields": [
+              {
+                "name": "target",
+                "name_ko": "검색 서비스 대상",
+                "type": "string",
+                "description": "검색 서비스 대상"
+              },
+              {
+                "name": "키워드",
+                "name_ko": "검색어",
+                "type": "string",
+                "description": "검색어"
+              },
+              {
+                "name": "section",
+                "name_ko": "검색 범위",
+                "type": "string",
+                "description": "검색 범위"
+              },
+              {
+                "name": "totalCnt",
+                "name_ko": "검색 건수",
+                "type": "int",
+                "description": "검색 건수"
+              },
+              {
+                "name": "page",
+                "name_ko": "결과 페이지 번호",
+                "type": "int",
+                "description": "결과 페이지 번호"
+              },
+              {
+                "name": "admrul id",
+                "name_ko": "결과 번호",
+                "type": "int",
+                "description": "결과 번호"
+              },
+              {
+                "name": "행정규칙 일련번호",
+                "name_ko": "행정규칙 일련번호",
+                "type": "int",
+                "description": "행정규칙 일련번호"
+              },
+              {
+                "name": "행정규칙명",
+                "name_ko": "행정규칙명",
+                "type": "string",
+                "description": "행정규칙명"
+              },
+              {
+                "name": "행정규칙종류",
+                "name_ko": "행정규칙 종류",
+                "type": "string",
+                "description": "행정규칙 종류"
+              },
+              {
+                "name": "발령일자",
+                "name_ko": "발령일자",
+                "type": "int",
+                "description": "발령일자"
+              },
+              {
+                "name": "발령번호",
+                "name_ko": "발령번호",
+                "type": "int",
+                "description": "발령번호"
+              },
+              {
+                "name": "소관부처명",
+                "name_ko": "소관 부처명",
+                "type": "string",
+                "description": "소관 부처명"
+              },
+              {
+                "name": "현행연혁구분",
+                "name_ko": "현행/연혁 구분",
+                "type": "string",
+                "description": "현행/연혁 구분"
+              },
+              {
+                "name": "제개정 구분코드",
+                "name_ko": "제개정 구분코드",
+                "type": "string",
+                "description": "제개정 구분코드"
+              },
+              {
+                "name": "제개정구분명",
+                "name_ko": "제개정 구분명",
+                "type": "string",
+                "description": "제개정 구분명"
+              },
+              {
+                "name": "행정규칙ID",
+                "name_ko": "행정규칙 ID",
+                "type": "int",
+                "description": "행정규칙 ID"
+              },
+              {
+                "name": "행정규칙 상세링크",
+                "name_ko": "행정규칙 상세 링크",
+                "type": "string",
+                "description": "행정규칙 상세 링크"
+              },
+              {
+                "name": "시행일자",
+                "name_ko": "시행일자",
+                "type": "int",
+                "description": "시행일자"
+              },
+              {
+                "name": "생성일자",
+                "name_ko": "생성일자",
+                "type": "int",
+                "description": "생성일자"
+              }
+            ]
+          },
+          {
+            "name": "판례 목록 조회",
+            "path": "/DRF/lawSearch.do",
+            "method": "GET",
+            "required_params": [
+              "OC",
+              "target",
+              "type"
+            ],
+            "fixed_params": {
+              "target": "prec"
+            },
+            "variable_params": [
+              "search",
+              "query",
+              "display",
+              "page",
+              "org",
+              "curt",
+              "JO",
+              "gana",
+              "sort",
+              "date",
+              "prncYd",
+              "nb",
+              "datSrcNm",
+              "popYn"
+            ],
+            "description": "자치법규 카테고리에서 판례 목록을 조회하는 API",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일의 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID(g4c@korea.kr일경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "검색 대상 (고정값: prec)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태 : HTML/XML/JSON"
+              },
+              {
+                "name": "search",
+                "name_ko": "검색 범위",
+                "required": false,
+                "type": "int",
+                "description": "검색 범위 (기본: 1 판례명, 2: 본문검색)"
+              },
+              {
+                "name": "query",
+                "name_ko": "검색 질의",
+                "required": false,
+                "type": "string",
+                "description": "검색 범위에서 검색을 원하는 질의 (예: query='자동차')"
+              },
+              {
+                "name": "display",
+                "name_ko": "검색 결과 개수",
+                "required": false,
+                "type": "int",
+                "description": "검색된 결과 개수 (default=20, max=100)"
+              },
+              {
+                "name": "page",
+                "name_ko": "검색 결과 페이지",
+                "required": false,
+                "type": "int",
+                "description": "검색 결과 페이지 (default=1)"
+              },
+              {
+                "name": "org",
+                "name_ko": "법원 종류",
+                "required": false,
+                "type": "string",
+                "description": "법원 종류 (대법원:400201, 하위법원:400202)"
+              },
+              {
+                "name": "curt",
+                "name_ko": "법원명",
+                "required": false,
+                "type": "string",
+                "description": "법원명 (대법원, 서울고등법원, 광주지법, 인천지방법원)"
+              },
+              {
+                "name": "JO",
+                "name_ko": "참조 법령명",
+                "required": false,
+                "type": "string",
+                "description": "참조 법령명 (형법, 민법 등)"
+              },
+              {
+                "name": "gana",
+                "name_ko": "사전식 검색",
+                "required": false,
+                "type": "string",
+                "description": "사전식 검색 (ga, na, da, etc)"
+              },
+              {
+                "name": "sort",
+                "name_ko": "정렬 옵션",
+                "required": false,
+                "type": "string",
+                "description": "정렬 옵션 (lasc: 사건명 오름차순, ldes: 사건명 내림차순, dasc: 선고일자 오름차순, ddes: 선고일자 내림차순, nasc: 법원명 오름차순, ndes: 법원명 내림차순)"
+              },
+              {
+                "name": "date",
+                "name_ko": "판례 선고일자",
+                "required": false,
+                "type": "int",
+                "description": "판례 선고일자"
+              },
+              {
+                "name": "prncYd",
+                "name_ko": "선고일자 검색",
+                "required": false,
+                "type": "string",
+                "description": "선고일자 검색 (예: 20090101~20090130)"
+              },
+              {
+                "name": "nb",
+                "name_ko": "판례 사건번호",
+                "required": false,
+                "type": "string",
+                "description": "판례 사건번호"
+              },
+              {
+                "name": "datSrcNm",
+                "name_ko": "데이터 출처명",
+                "required": false,
+                "type": "string",
+                "description": "데이터 출처명 (국세법령정보시스템, 근로복지공단산재판례, 대법원)"
+              },
+              {
+                "name": "popYn",
+                "name_ko": "상세화면 팝업 여부",
+                "required": false,
+                "type": "string",
+                "description": "상세화면 팝업창 여부 (팝업창으로 띄우고 싶을 때만 'popYn=Y')"
+              }
+            ],
+            "response_fields": [
+              {
+                "name": "target",
+                "name_ko": "검색 대상",
+                "type": "string",
+                "description": "검색 대상"
+              },
+              {
+                "name": "공포번호",
+                "name_ko": "공포번호",
+                "type": "string",
+                "description": "공포번호"
+              },
+              {
+                "name": "키워드",
+                "name_ko": "검색어",
+                "type": "string",
+                "description": "검색어"
+              },
+              {
+                "name": "section",
+                "name_ko": "검색 범위",
+                "type": "string",
+                "description": "검색 범위 (EvtNm: 판례명, bdyText: 본문)"
+              },
+              {
+                "name": "totalCnt",
+                "name_ko": "검색 결과 갯수",
+                "type": "int",
+                "description": "검색 결과 갯수"
+              },
+              {
+                "name": "page",
+                "name_ko": "출력 페이지",
+                "type": "int",
+                "description": "출력 페이지"
+              },
+              {
+                "name": "prec id",
+                "name_ko": "검색 결과 번호",
+                "type": "int",
+                "description": "검색 결과 번호"
+              },
+              {
+                "name": "판례일련번호",
+                "name_ko": "판례 일련번호",
+                "type": "int",
+                "description": "판례 일련번호"
+              },
+              {
+                "name": "사건명",
+                "name_ko": "사건명",
+                "type": "string",
+                "description": "사건명"
+              },
+              {
+                "name": "사건번호",
+                "name_ko": "사건번호",
+                "type": "string",
+                "description": "사건번호"
+              },
+              {
+                "name": "선고일자",
+                "name_ko": "선고일자",
+                "type": "string",
+                "description": "선고일자"
+              },
+              {
+                "name": "법원명",
+                "name_ko": "법원명",
+                "type": "string",
+                "description": "법원명"
+              },
+              {
+                "name": "법원종류코드",
+                "name_ko": "법원 종류 코드",
+                "type": "int",
+                "description": "법원 종류 코드 (대법원:400201, 하위법원:400202)"
+              },
+              {
+                "name": "사건종류명",
+                "name_ko": "사건 종류명",
+                "type": "string",
+                "description": "사건 종류명"
+              },
+              {
+                "name": "사건종류코드",
+                "name_ko": "사건 종류 코드",
+                "type": "int",
+                "description": "사건 종류 코드"
+              },
+              {
+                "name": "판결유형",
+                "name_ko": "판결 유형",
+                "type": "string",
+                "description": "판결 유형"
+              },
+              {
+                "name": "선고",
+                "name_ko": "선고",
+                "type": "string",
+                "description": "선고"
+              },
+              {
+                "name": "데이터출처명",
+                "name_ko": "데이터 출처명",
+                "type": "string",
+                "description": "데이터 출처명"
+              },
+              {
+                "name": "판례상세링크",
+                "name_ko": "판례 상세 링크",
+                "type": "string",
+                "description": "판례 상세 링크"
+              }
+            ]
+          },
+          {
+            "name": "판례 본문 조회",
+            "path": "/DRF/lawService.do",
+            "method": "GET",
+            "required_params": [
+              "OC",
+              "target",
+              "type",
+              "ID"
+            ],
+            "fixed_params": {
+              "target": "prec"
+            },
+            "variable_params": [
+              "OC",
+              "type",
+              "ID",
+              "LM"
+            ],
+            "description": "자치법규 카테고리에서 판례 본문을 조회하는 API입니다.",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일의 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID (예: g4c@korea.kr일 경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "서비스 대상 (항상 'prec' 값 사용)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태: HTML/XML/JSON (국세청 판례 본문 조회는 HTML만 가능)"
+              },
+              {
+                "name": "ID",
+                "name_ko": "판례 일련번호",
+                "required": true,
+                "type": "char",
+                "description": "판례 일련번호"
+              },
+              {
+                "name": "LM",
+                "name_ko": "판례명",
+                "required": false,
+                "type": "string",
+                "description": "판례명"
+              }
+            ],
+            "response_fields": [
+              {
+                "name": "판례정보일련번호",
+                "name_ko": "판례정보일련번호",
+                "type": "int",
+                "description": "판례정보일련번호"
+              },
+              {
+                "name": "사건명",
+                "name_ko": "사건명",
+                "type": "string",
+                "description": "사건명"
+              },
+              {
+                "name": "사건번호",
+                "name_ko": "사건번호",
+                "type": "string",
+                "description": "사건번호"
+              },
+              {
+                "name": "선고일자",
+                "name_ko": "선고일자",
+                "type": "int",
+                "description": "선고일자"
+              },
+              {
+                "name": "선고",
+                "name_ko": "선고",
+                "type": "string",
+                "description": "선고"
+              },
+              {
+                "name": "법원명",
+                "name_ko": "법원명",
+                "type": "string",
+                "description": "법원명"
+              },
+              {
+                "name": "법원종류코드",
+                "name_ko": "법원종류코드",
+                "type": "int",
+                "description": "법원종류코드 (대법원:400201, 하위법원:400202)"
+              },
+              {
+                "name": "사건종류명",
+                "name_ko": "사건종류명",
+                "type": "string",
+                "description": "사건종류명"
+              },
+              {
+                "name": "사건종류코드",
+                "name_ko": "사건종류코드",
+                "type": "int",
+                "description": "사건종류코드"
+              },
+              {
+                "name": "판결유형",
+                "name_ko": "판결유형",
+                "type": "string",
+                "description": "판결유형"
+              },
+              {
+                "name": "판시사항",
+                "name_ko": "판시사항",
+                "type": "string",
+                "description": "판시사항"
+              },
+              {
+                "name": "판결요지",
+                "name_ko": "판결요지",
+                "type": "string",
+                "description": "판결요지"
+              },
+              {
+                "name": "참조조문",
+                "name_ko": "참조조문",
+                "type": "string",
+                "description": "참조조문"
+              },
+              {
+                "name": "참조판례",
+                "name_ko": "참조판례",
+                "type": "string",
+                "description": "참조판례"
+              },
+              {
+                "name": "판례내용",
+                "name_ko": "판례내용",
+                "type": "string",
+                "description": "판례내용"
+              }
+            ]
+          },
+          {
+            "name": "행정심판례 목록 조회",
+            "path": "/DRF/lawSearch.do",
+            "method": "GET",
+            "required_params": [],
+            "fixed_params": {
+              "target": "decc"
+            },
+            "variable_params": [],
+            "description": "행정심판례 목록을 조회하는 API로, 다양한 검색 조건을 통해 결과를 필터링할 수 있습니다.",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일의 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID (예: g4c@korea.kr일 경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "서비스 대상 (고정값: decc)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태 (HTML/XML/JSON 중 하나)"
+              },
+              {
+                "name": "search",
+                "name_ko": "검색 범위",
+                "required": true,
+                "type": "int",
+                "description": "검색 범위 (1: 행정심판례명, 2: 본문검색)"
+              },
+              {
+                "name": "query",
+                "name_ko": "검색 질의",
+                "required": true,
+                "type": "string",
+                "description": "검색 범위에서 검색을 원하는 질의 (예: query='자동차')"
+              },
+              {
+                "name": "display",
+                "name_ko": "결과 개수",
+                "required": true,
+                "type": "int",
+                "description": "검색된 결과 개수 (기본값: 20, 최대값: 100)"
+              },
+              {
+                "name": "page",
+                "name_ko": "결과 페이지",
+                "required": true,
+                "type": "int",
+                "description": "검색 결과 페이지 (기본값: 1)"
+              },
+              {
+                "name": "cls",
+                "name_ko": "재결례 유형",
+                "required": true,
+                "type": "string",
+                "description": "재결례 유형 (출력 결과 필드에 있는 재결구분코드)"
+              },
+              {
+                "name": "gana",
+                "name_ko": "사전식 검색",
+                "required": true,
+                "type": "string",
+                "description": "사전식 검색 (예: ga, na, da 등)"
+              },
+              {
+                "name": "date",
+                "name_ko": "의결일자",
+                "required": true,
+                "type": "int",
+                "description": "의결일자"
+              },
+              {
+                "name": "dpaYd",
+                "name_ko": "처분일자 검색",
+                "required": true,
+                "type": "string",
+                "description": "처분일자 검색 (예: 20090101~20090130)"
+              },
+              {
+                "name": "rslYd",
+                "name_ko": "의결일자 검색",
+                "required": true,
+                "type": "string",
+                "description": "의결일자 검색 (예: 20090101~20090130)"
+              },
+              {
+                "name": "sort",
+                "name_ko": "정렬 옵션",
+                "required": true,
+                "type": "string",
+                "description": "정렬 옵션 (기본값: lasc - 재결례명 오름차순, ldes - 재결례명 내림차순, dasc - 의결일자 오름차순, ddes - 의결일자 내림차순, nasc - 사건번호 오름차순, ndes - 사건번호 내림차순)"
+              },
+              {
+                "name": "popYn",
+                "name_ko": "팝업창 여부",
+                "required": true,
+                "type": "string",
+                "description": "상세화면 팝업창 여부 (팝업창으로 띄우고 싶을 때만 'popYn=Y')"
+              }
+            ],
+            "response_fields": []
+          },
+          {
+            "name": "행정심판례 본문 조회",
+            "path": "/DRF/lawService.do",
+            "method": "GET",
+            "required_params": [
+              "OC",
+              "target",
+              "type",
+              "ID"
+            ],
+            "fixed_params": {
+              "target": "decc"
+            },
+            "variable_params": [
+              "OC",
+              "type",
+              "ID",
+              "LM"
+            ],
+            "description": "행정심판례 본문을 조회하는 API로, 행정심판례 일련번호를 통해 관련 정보를 제공합니다.",
+            "request_params": [
+              {
+                "name": "OC",
+                "name_ko": "사용자 이메일의 ID",
+                "required": true,
+                "type": "string",
+                "description": "사용자 이메일의 ID (예: g4c@korea.kr일 경우 OC값=g4c)"
+              },
+              {
+                "name": "target",
+                "name_ko": "서비스 대상",
+                "required": true,
+                "type": "string",
+                "description": "서비스 대상 (고정값: decc)"
+              },
+              {
+                "name": "type",
+                "name_ko": "출력 형태",
+                "required": true,
+                "type": "char",
+                "description": "출력 형태 (HTML/XML/JSON 중 하나)"
+              },
+              {
+                "name": "ID",
+                "name_ko": "행정심판례 일련번호",
+                "required": true,
+                "type": "char",
+                "description": "행정심판례 일련번호"
+              },
+              {
+                "name": "LM",
+                "name_ko": "행정심판례명",
+                "required": false,
+                "type": "string",
+                "description": "행정심판례명"
+              }
+            ],
+            "response_fields": [
+              {
+                "name": "행정심판례일련번호",
+                "name_ko": "행정심판례일련번호",
+                "type": "int",
+                "description": "행정심판례일련번호"
+              },
+              {
+                "name": "사건명",
+                "name_ko": "사건명",
+                "type": "string",
+                "description": "사건명"
+              },
+              {
+                "name": "사건번호",
+                "name_ko": "사건번호",
+                "type": "string",
+                "description": "사건번호"
+              },
+              {
+                "name": "처분일자",
+                "name_ko": "처분일자",
+                "type": "int",
+                "description": "처분일자"
+              },
+              {
+                "name": "의결일자",
+                "name_ko": "의결일자",
+                "type": "int",
+                "description": "의결일자"
+              },
+              {
+                "name": "처분청",
+                "name_ko": "처분청",
+                "type": "string",
+                "description": "처분청"
+              },
+              {
+                "name": "재결청",
+                "name_ko": "재결청",
+                "type": "string",
+                "description": "재결청"
+              },
+              {
+                "name": "재결례유형명",
+                "name_ko": "재결례유형명",
+                "type": "string",
+                "description": "재결례유형명"
+              },
+              {
+                "name": "재결례유형코드",
+                "name_ko": "재결례유형코드",
+                "type": "int",
+                "description": "재결례유형코드"
+              },
+              {
+                "name": "주문",
+                "name_ko": "주문",
+                "type": "string",
+                "description": "주문"
+              },
+              {
+                "name": "청구취지",
+                "name_ko": "청구취지",
+                "type": "string",
+                "description": "청구취지"
+              },
+              {
+                "name": "이유",
+                "name_ko": "이유",
+                "type": "string",
+                "description": "이유"
+              },
+              {
+                "name": "재결요지",
+                "name_ko": "재결요지",
+                "type": "string",
+                "description": "재결요지"
+              }
+            ]
+          }
+        ],
+        "default_params": {
+          "type": "XML"
+        },
+        "response_mapping": {
+          "format": "XML",
+          "list_xpath": "//item",
+          "total_xpath": "//totalCount"
+        },
+        "constraints": {
+          "ip_allowlist_required": false,
+          "rate_limit_hint": "",
+          "approval_required": false
+        },
+        "status": "draft"
+      }
+    },
+    {
+      "org_id": "koea",
+      "org_name": "대한전기협회",
+      "base_url": "https://www.koea.or.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 2,
+        "timeout_sec": 30
+      },
+      "org_type": "협회 및 학회",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/koea.png",
+      "notes": "전기 관련 법규/고시 정보"
+    },
+    {
+      "org_id": "keta",
+      "org_name": "한국전력기술인협회",
+      "base_url": "https://www.keta.or.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 2,
+        "timeout_sec": 30
+      },
+      "org_type": "협회 및 학회",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/keta.png",
+      "notes": "전력기술 관련 정보"
+    },
+    {
+      "org_id": "kepco",
+      "org_name": "한국전력공사",
+      "base_url": "https://www.kepco.co.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 2,
+        "timeout_sec": 30
+      },
+      "org_type": "유관기관",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/kepco.png",
+      "notes": "전력공급 정책 및 공지사항"
+    },
+    {
+      "org_id": "keco",
+      "org_name": "한국환경공단",
+      "base_url": "https://www.keco.or.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 2,
+        "timeout_sec": 30
+      },
+      "org_type": "유관기관",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/keco.png",
+      "notes": "환경오염 관리 및 정책 정보"
+    },
+    {
+      "org_id": "nier",
+      "org_name": "국립환경과학원",
+      "base_url": "https://www.nier.go.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 2,
+        "timeout_sec": 30
+      },
+      "org_type": "유관기관",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/orgs/nier.png",
+      "notes": "환경과학 연구 및 기준 정보"
+    },
+    {
+      "org_id": "keiti",
+      "org_name": "한국환경산업기술원",
+      "base_url": "https://www.keiti.re.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 2,
+        "timeout_sec": 30
+      },
+      "org_type": "유관기관",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/keiti.png",
+      "notes": "환경산업 기술 및 인증 정보"
+    },
+    {
+      "org_id": "keia",
+      "org_name": "한국환경산업협회",
+      "base_url": "https://www.keia.or.kr",
+      "status": "active",
+      "default_policy": {
+        "rps": 2,
+        "timeout_sec": 30
+      },
+      "org_type": "협회 및 학회",
+      "collection_mode": "web_scraping",
+      "logo_path": "/logos/keia.png",
+      "notes": "환경산업 동향 및 정책 정보"
+    },
+    {
+      "org_id": "gir",
+      "org_name": "온실가스종합정보센터",
+      "base_url": "https://www.gir.go.kr/home/main.do",
+      "status": "active",
+      "default_policy": {
+        "rps": 0.2,
+        "timeout_sec": 30
+      },
+      "notes": "",
+      "collection_mode": "web_scraping",
+      "org_type": "유관기관",
+      "logo_path": "/logos/orgs/gir_1768871413586.png"
+    }
+  ],
+  "boards": [
+    {
+      "board_id": "law_board1",
+      "org_id": "law",
+      "board_name": "현행법령",
+      "access_mode": "api",
+      "doc_type": "법령",
+      "domain_tags": [
+        "대기",
+        "수질",
+        "폐기물",
+        "기후",
+        "에너지",
+        "기타"
+      ],
+      "enabled": true,
+      "board_mode": "api",
+      "schedule_cron": "50 6 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "interval",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "6",
+        "minute": "50"
+      },
+      "dedup_key": "id",
+      "collection_range": {
+        "type": "",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 30,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": false,
+          "all": false,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "api_config": {
+        "primary_endpoint": {
+          "name": "현행법령(시행일) 본문 조회",
+          "path": "/DRF/lawService.do",
+          "method": "GET"
+        },
+        "params": {
+          "target": "eflaw",
+          "type": "XML"
+        },
+        "secondary_endpoints": [
+          {
+            "name": "현행법령(시행일) 목록 조회",
+            "path": "/DRF/lawSearch.do",
+            "method": "GET",
+            "params": {
+              "target": "eflaw",
+              "type": "XML",
+              "query": "환경오염시설",
+              "display": "100"
+            },
+            "response_fields": [
+              "법령ID",
+              "법령명한글"
+            ]
+          }
+        ],
+        "pagination": {
+          "type": "page",
+          "param_name": "page",
+          "page_size": 100,
+          "max_pages": 10
+        },
+        "response_fields": [
+          "법령ID",
+          "공포일자",
+          "공포번호",
+          "법종구분",
+          "법종구분코드",
+          "법령명_한글",
+          "법령명약칭",
+          "소관부처코드",
+          "소관부처",
+          "시행일자",
+          "제개정구분",
+          "조문시행일자문자열",
+          "별표시행일자문자열",
+          "별표편집여부",
+          "공포법령여부",
+          "소관부처명",
+          "부서명",
+          "공동부령구분",
+          "구분코드",
+          "조문번호",
+          "조문가지번호",
+          "조문여부",
+          "조문제목",
+          "조문시행일자",
+          "조문제개정유형",
+          "조문이동이전",
+          "조문이동이후",
+          "조문변경여부",
+          "조문내용",
+          "항번호",
+          "항제개정유형",
+          "항제개정일자문자열",
+          "항내용",
+          "호번호",
+          "호내용",
+          "조문참고자료",
+          "부칙공포일자",
+          "부칙공포번호",
+          "부칙내용",
+          "별표번호",
+          "별표가지번호",
+          "별표구분",
+          "별표제목",
+          "별표제목 문자열",
+          "별표시행일자",
+          "별표서식 파일링크",
+          "별표HWP 파일명",
+          "별표서식 PDF파일링크",
+          "별표PDF 파일명",
+          "별표이미지 파일명",
+          "별표내용",
+          "개정문내용",
+          "제개정이유내용"
+        ],
+        "search_filters": [
+          {
+            "field": "법령명_한글",
+            "keywords": [
+              "환경오염시설의 통합관리에 관한 법률",
+              "폐기물 관리법",
+              "물환경보전법",
+              "대기환경보전법"
+            ],
+            "match_type": "any"
+          }
+        ],
+        "two_phase": {
+          "enabled": true,
+          "field_mappings": [
+            {
+              "source_field": "법령ID",
+              "target_param": "ID"
+            }
+          ],
+          "filter_mappings": [
+            {
+              "primary_filter_idx": 0,
+              "secondary_field": "법령명한글"
+            }
+          ],
+          "use_filter_keywords": true,
+          "query_param_name": "query",
+          "max_list_items": 10000,
+          "max_detail_items": 1000
+        }
+      }
+    },
+    {
+      "board_id": "moleg_board1",
+      "org_id": "moleg",
+      "board_name": "입법예고(기후에너지환경부)",
+      "access_mode": "dynamic_js",
+      "list_url": "https://opinion.lawmaking.go.kr/gcom/ogLmPp",
+      "doc_type": "입법예고",
+      "domain_tags": [
+        "대기",
+        "수질",
+        "폐기물",
+        "에너지",
+        "기타",
+        "기후"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "5 7 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "interval",
+        "monthlyDay": "1",
+        "weeklyDay": "sun",
+        "intervalDays": "1",
+        "hour": "7",
+        "minute": "5"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table tbody tr td:nth-child(5)",
+        "format": "YYYY. MM. DD. ~ YYYY. MM. DD."
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 180,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "dynamic_js",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table",
+          "pagination": {
+            "type": "page_param",
+            "param": "pageIndex",
+            "start": 1,
+            "max_pages": 9,
+            "detected_method": "페이지 파라미터 \"pageIndex\" 감지 (시작: 1)"
+          }
+        },
+        "parse_rules": {
+          "title": "td.subject a",
+          "date": "td:nth-child(5)",
+          "link": "td.subject a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 180
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#ogLmPpVo",
+        "submit_selector": "#scSubmit",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "select",
+            "name": "cptOfiOrgCd",
+            "label": "소관부처",
+            "selector": "#cptOfiOrgCd",
+            "options": [
+              {
+                "value": "",
+                "label": "소관부처 대상 선택"
+              },
+              {
+                "value": "1834600",
+                "label": "10.29이태원참사진상규명과재발방지를위한특별조사위원회"
+              },
+              {
+                "value": "1071400",
+                "label": "4차산업혁명위원회(구)"
+              },
+              {
+                "value": "1075000",
+                "label": "5.18민주화운동진상규명조사위원회"
+              },
+              {
+                "value": "1074601",
+                "label": "가습기살균제사건과4.16세월호참사특별조사위원회"
+              },
+              {
+                "value": "1040000",
+                "label": "감사원"
+              },
+              {
+                "value": "1790365",
+                "label": "개인정보보호위원회"
+              },
+              {
+                "value": "1320000",
+                "label": "경찰청"
+              },
+              {
+                "value": "1492000",
+                "label": "고용노동부"
+              },
+              {
+                "value": "1790364",
+                "label": "고위공직자범죄수사처"
+              },
+              {
+                "value": "1791100",
+                "label": "고준위방사성폐기물관리위원회"
+              },
+              {
+                "value": "1130000",
+                "label": "공정거래위원회"
+              },
+              {
+                "value": "1721000",
+                "label": "과학기술정보통신부"
+              },
+              {
+                "value": "1220000",
+                "label": "관세청"
+              },
+              {
+                "value": "1342000",
+                "label": "교육부"
+              },
+              {
+                "value": "1813266",
+                "label": "국가교육위원회"
+              },
+              {
+                "value": "1241000",
+                "label": "국가데이터처"
+              },
+              {
+                "value": "1830000",
+                "label": "국가보훈부"
+              },
+              {
+                "value": "1180000",
+                "label": "국가보훈처(구)"
+              },
+              {
+                "value": "1025000",
+                "label": "국가안보실"
+              },
+              {
+                "value": "1833100",
+                "label": "국가유산청"
+              },
+              {
+                "value": "1620000",
+                "label": "국가인권위원회"
+              },
+              {
+                "value": "1030000",
+                "label": "국가정보원"
+              },
+              {
+                "value": "1092000",
+                "label": "국무조정실"
+              },
+              {
+                "value": "0000002",
+                "label": "국무총리"
+              },
+              {
+                "value": "1103000",
+                "label": "국무총리비서실"
+              },
+              {
+                "value": "1140100",
+                "label": "국민권익위원회"
+              },
+              {
+                "value": "1290000",
+                "label": "국방부"
+              },
+              {
+                "value": "1210000",
+                "label": "국세청"
+              },
+              {
+                "value": "1613000",
+                "label": "국토교통부"
+              },
+              {
+                "value": "9700000",
+                "label": "국회"
+              },
+              {
+                "value": "1074900",
+                "label": "군사망사고진상규명위원회(구)"
+              },
+              {
+                "value": "1160100",
+                "label": "금융위원회"
+              },
+              {
+                "value": "1360000",
+                "label": "기상청"
+              },
+              {
+                "value": "1052000",
+                "label": "기획예산처"
+              },
+              {
+                "value": "1051000",
+                "label": "기획재정부"
+              },
+              {
+                "value": "1482000",
+                "label": "기후에너지환경부"
+              },
+              {
+                "value": "1543000",
+                "label": "농림축산식품부"
+              },
+              {
+                "value": "1390000",
+                "label": "농촌진흥청"
+              },
+              {
+                "value": "1280000",
+                "label": "대검찰청"
+              },
+              {
+                "value": "9740000",
+                "label": "대법원"
+              },
+              {
+                "value": "1021100",
+                "label": "대통령경호처"
+              },
+              {
+                "value": "1015000",
+                "label": "대통령비서실"
+              },
+              {
+                "value": "1371000",
+                "label": "문화체육관광부"
+              },
+              {
+                "value": "1081000",
+                "label": "민주평화통일자문회의사무처"
+              },
+              {
+                "value": "1571000",
+                "label": "방송미디어통신위원회"
+              },
+              {
+                "value": "1570100",
+                "label": "방송통신위원회(구)"
+              },
+              {
+                "value": "1690000",
+                "label": "방위사업청"
+              },
+              {
+                "value": "1270000",
+                "label": "법무부"
+              },
+              {
+                "value": "1170000",
+                "label": "법제처"
+              },
+              {
+                "value": "1300000",
+                "label": "병무청"
+              },
+              {
+                "value": "1352000",
+                "label": "보건복지부"
+              },
+              {
+                "value": "1400000",
+                "label": "산림청"
+              },
+              {
+                "value": "1451000",
+                "label": "산업통상부"
+              },
+              {
+                "value": "1450000",
+                "label": "산업통상자원부(구)"
+              },
+              {
+                "value": "1730000",
+                "label": "새만금개발청"
+              },
+              {
+                "value": "1384000",
+                "label": "성평등가족부"
+              },
+              {
+                "value": "1661000",
+                "label": "소방청"
+              },
+              {
+                "value": "1471000",
+                "label": "식품의약품안전처"
+              },
+              {
+                "value": "1383000",
+                "label": "여성가족부(구)"
+              },
+              {
+                "value": "1813231",
+                "label": "여수.순천10.19사건진상규명및희생자명예회복위원회"
+              },
+              {
+                "value": "1262000",
+                "label": "외교부"
+              },
+              {
+                "value": "1834100",
+                "label": "우주항공청"
+              },
+              {
+                "value": "1079960",
+                "label": "원자력안전위원회"
+              },
+              {
+                "value": "1760000",
+                "label": "인사혁신처"
+              },
+              {
+                "value": "1832000",
+                "label": "재외동포청"
+              },
+              {
+                "value": "1053000",
+                "label": "재정경제부"
+              },
+              {
+                "value": "1230000",
+                "label": "조달청"
+              },
+              {
+                "value": "1421000",
+                "label": "중소벤처기업부"
+              },
+              {
+                "value": "9760000",
+                "label": "중앙선거관리위원회"
+              },
+              {
+                "value": "1431000",
+                "label": "지식재산처"
+              },
+              {
+                "value": "1790558",
+                "label": "진실화해를위한과거사정리위원회"
+              },
+              {
+                "value": "1790387",
+                "label": "질병관리청"
+              },
+              {
+                "value": "1240000",
+                "label": "통계청(구)"
+              },
+              {
+                "value": "1250000",
+                "label": "통일부"
+              },
+              {
+                "value": "1430000",
+                "label": "특허청(구)"
+              },
+              {
+                "value": "1532000",
+                "label": "해양경찰청"
+              },
+              {
+                "value": "1192000",
+                "label": "해양수산부"
+              },
+              {
+                "value": "1741000",
+                "label": "행정안전부"
+              },
+              {
+                "value": "1670000",
+                "label": "행정중심복합도시건설청"
+              },
+              {
+                "value": "9750000",
+                "label": "헌법재판소"
+              },
+              {
+                "value": "1480000",
+                "label": "환경부(구)"
+              }
+            ],
+            "default_value": "",
+            "selected_value": "1482000"
+          },
+          {
+            "type": "select",
+            "name": "lsClsCd",
+            "label": "법령종류",
+            "selector": "#lsClsCd",
+            "options": [
+              {
+                "value": "",
+                "label": "법령종류 대상 선택"
+              },
+              {
+                "value": "AA0101",
+                "label": "법률"
+              },
+              {
+                "value": "AA0102",
+                "label": "대통령령"
+              },
+              {
+                "value": "AA0103",
+                "label": "총리령"
+              },
+              {
+                "value": "AA0104",
+                "label": "부령"
+              },
+              {
+                "value": "AA0105",
+                "label": "대통령훈령"
+              },
+              {
+                "value": "AA0106",
+                "label": "국무총리훈령"
+              }
+            ],
+            "default_value": ""
+          },
+          {
+            "type": "select",
+            "name": "lsiFdCd",
+            "label": "법령분야",
+            "selector": "#lsiFdCd",
+            "options": [
+              {
+                "value": "",
+                "label": "법령분야 대상 선택"
+              },
+              {
+                "value": "CD_00000000",
+                "label": "기타"
+              },
+              {
+                "value": "CD_24000000",
+                "label": "농업"
+              },
+              {
+                "value": "CD_25000000",
+                "label": "축산"
+              },
+              {
+                "value": "CD_26000000",
+                "label": "산림"
+              },
+              {
+                "value": "CD_27000000",
+                "label": "수산"
+              },
+              {
+                "value": "CD_28000000",
+                "label": "상업ㆍ무역ㆍ공업"
+              },
+              {
+                "value": "CD_29000000",
+                "label": "공업규격ㆍ계량"
+              },
+              {
+                "value": "CD_30000000",
+                "label": "공업소유권"
+              },
+              {
+                "value": "CD_31000000",
+                "label": "에너지이용ㆍ광업"
+              },
+              {
+                "value": "CD_32000000",
+                "label": "전기ㆍ가스"
+              },
+              {
+                "value": "CD_33000000",
+                "label": "국토개발ㆍ도시"
+              },
+              {
+                "value": "CD_34000000",
+                "label": "주택ㆍ건축ㆍ도로"
+              },
+              {
+                "value": "CD_35000000",
+                "label": "수자원ㆍ토지ㆍ건설업"
+              },
+              {
+                "value": "CD_36000000",
+                "label": "보건ㆍ의사"
+              },
+              {
+                "value": "CD_37000000",
+                "label": "약사"
+              },
+              {
+                "value": "CD_38000000",
+                "label": "사회복지"
+              },
+              {
+                "value": "CD_39000000",
+                "label": "환경"
+              },
+              {
+                "value": "CD_40000000",
+                "label": "노동"
+              },
+              {
+                "value": "CD_41000000",
+                "label": "육운ㆍ항공ㆍ관광"
+              },
+              {
+                "value": "CD_42000000",
+                "label": "해운"
+              },
+              {
+                "value": "CD_43000000",
+                "label": "정보통신"
+              },
+              {
+                "value": "CD_23000000",
+                "label": "통화ㆍ국채ㆍ금융"
+              },
+              {
+                "value": "CD_22000000",
+                "label": "담배ㆍ인삼"
+              },
+              {
+                "value": "CD_21000000",
+                "label": "관세"
+              },
+              {
+                "value": "CD_01000000",
+                "label": "헌법"
+              },
+              {
+                "value": "CD_02000000",
+                "label": "국회"
+              },
+              {
+                "value": "CD_03000000",
+                "label": "선거ㆍ정당"
+              },
+              {
+                "value": "CD_04000000",
+                "label": "행정일반"
+              },
+              {
+                "value": "CD_05000000",
+                "label": "국가공무원"
+              },
+              {
+                "value": "CD_06000000",
+                "label": "법원"
+              },
+              {
+                "value": "CD_07000000",
+                "label": "법무"
+              },
+              {
+                "value": "CD_08000000",
+                "label": "민사법"
+              },
+              {
+                "value": "CD_09000000",
+                "label": "형사법"
+              },
+              {
+                "value": "CD_10000000",
+                "label": "지방제도"
+              },
+              {
+                "value": "CD_11000000",
+                "label": "경찰"
+              },
+              {
+                "value": "CD_12000000",
+                "label": "민방위ㆍ소방"
+              },
+              {
+                "value": "CD_13000000",
+                "label": "군사"
+              },
+              {
+                "value": "CD_14000000",
+                "label": "병무"
+              },
+              {
+                "value": "CD_15000000",
+                "label": "국가보훈"
+              },
+              {
+                "value": "CD_16000000",
+                "label": "교육ㆍ학술"
+              },
+              {
+                "value": "CD_17000000",
+                "label": "문화ㆍ공보"
+              },
+              {
+                "value": "CD_18000000",
+                "label": "과학ㆍ기술"
+              },
+              {
+                "value": "CD_19000000",
+                "label": "재정ㆍ경제일반"
+              },
+              {
+                "value": "CD_20000000",
+                "label": "내국세"
+              },
+              {
+                "value": "CD_44000000",
+                "label": "외무"
+              }
+            ],
+            "default_value": ""
+          },
+          {
+            "type": "select",
+            "name": "alignTrgt",
+            "label": "정렬방식",
+            "selector": "#alignTrgt",
+            "options": [
+              {
+                "value": "정렬방식 대상 선택",
+                "label": "정렬방식 대상 선택"
+              },
+              {
+                "value": "alignTrgt1",
+                "label": "최신순"
+              },
+              {
+                "value": "alignTrgt2",
+                "label": "마감임박순"
+              },
+              {
+                "value": "alignTrgt3",
+                "label": "의견수순"
+              },
+              {
+                "value": "alignTrgt5",
+                "label": "조회수순"
+              }
+            ],
+            "default_value": "정렬방식 대상 선택"
+          },
+          {
+            "type": "text",
+            "name": "stYdFmt",
+            "label": "2025-01-02",
+            "selector": "#stYdFmt",
+            "placeholder": "2025-01-02"
+          },
+          {
+            "type": "text",
+            "name": "edYdFmt",
+            "label": "~",
+            "selector": "#edYdFmt",
+            "placeholder": "2025-01-30"
+          },
+          {
+            "type": "text",
+            "name": "lsNm",
+            "label": "법령 제명",
+            "selector": "#lsNm",
+            "placeholder": "법령 제명을 입력하세요."
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "mcee_board1",
+      "org_id": "mcee",
+      "board_name": "보도·설명",
+      "access_mode": "static_html",
+      "list_url": "https://mcee.go.kr/home/web/index.do?menuId=10525",
+      "doc_type": "보도자료",
+      "domain_tags": [
+        "대기",
+        "수질",
+        "폐기물",
+        "기후",
+        "에너지",
+        "기타"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "10 21 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "period",
+        "startDate": "2026-01-16",
+        "cycleType": "interval",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "21",
+        "minute": "10"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table.table_case01 tbody tr td:nth-child(5)",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 30,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "static_html",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table.table_case01",
+          "pagination": {
+            "type": "next_button",
+            "selector": "a.next",
+            "detected_method": "다음 버튼 기반 페이지네이션 감지"
+          }
+        },
+        "parse_rules": {
+          "title": "td.al a",
+          "date": "td:nth-child(5)",
+          "link": "td.al a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 30
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#totalSearchForm",
+        "submit_selector": "#search_btn",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "sckeyword",
+            "label": "검색어를 입력하세요.",
+            "selector": "#sckeyword",
+            "placeholder": "검색어를 입력하세요."
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "mcee_board2",
+      "org_id": "mcee",
+      "board_name": "공지·공고",
+      "access_mode": "dynamic_js",
+      "list_url": "https://mcee.go.kr/home/web/index.do?menuId=10524",
+      "doc_type": "공지",
+      "domain_tags": [
+        "대기",
+        "수질",
+        "폐기물",
+        "기후",
+        "에너지",
+        "기타"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "0 7 * * 1",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "weekly",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "7",
+        "minute": "0"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table.table_case01 tbody tr td:nth-child(5)",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 30,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "dynamic_js",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table.table_case01",
+          "pagination": {
+            "type": "next_button",
+            "selector": "a.next",
+            "detected_method": "다음 버튼 기반 페이지네이션 감지"
+          }
+        },
+        "parse_rules": {
+          "title": "td.al a",
+          "date": "td:nth-child(5)",
+          "link": "td.al a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 30
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#totalSearchForm",
+        "submit_selector": "#search_btn",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "sckeyword",
+            "label": "검색어를 입력하세요.",
+            "selector": "#sckeyword",
+            "placeholder": "검색어를 입력하세요."
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "mcee_board3",
+      "org_id": "mcee",
+      "board_name": "기후정책",
+      "access_mode": "static_html",
+      "list_url": "https://mcee.go.kr/home/web/index.do?menuId=10262",
+      "doc_type": "정책",
+      "domain_tags": [
+        "대기",
+        "수질",
+        "폐기물",
+        "기후",
+        "에너지",
+        "기타"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "0 7 * * 1",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "weekly",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "7",
+        "minute": "0"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table.table_case01 tbody tr td:nth-child(3)",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 90,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "static_html",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table.table_case01",
+          "pagination": {
+            "type": "next_button",
+            "selector": "a.next",
+            "detected_method": "다음 버튼 기반 페이지네이션 감지"
+          }
+        },
+        "parse_rules": {
+          "title": "td.al a",
+          "date": "td:nth-child(3)",
+          "link": "td.al a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 90
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#totalSearchForm",
+        "submit_selector": "#search_btn",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "sckeyword",
+            "label": "검색어를 입력하세요.",
+            "selector": "#sckeyword",
+            "placeholder": "검색어를 입력하세요."
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "motie_board1",
+      "org_id": "motie",
+      "board_name": "보도참고자료",
+      "access_mode": "dynamic_js",
+      "list_url": "https://www.motir.go.kr/kor/article/ATCL3f49a5a8c",
+      "doc_type": "보도자료",
+      "domain_tags": [
+        "에너지",
+        "기타",
+        "대기",
+        "폐기물"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "50 15 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "period",
+        "startDate": "2026-01-17",
+        "endDate": "2026-01-17",
+        "cycleType": "weekly",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "15",
+        "minute": "50"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "#mytable tbody tr td:nth-child(5)",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 30,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": false,
+          "hwpx": true,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "static_html",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "#mytable",
+          "pagination": {
+            "type": "offset_param",
+            "param": "pageIndex",
+            "start": 1,
+            "step": 420,
+            "max_pages": 7.997619047619048,
+            "detected_method": "오프셋 파라미터 \"pageIndex\" 감지 (증가값: 420)"
+          }
+        },
+        "parse_rules": {
+          "title": "td.ta-l a",
+          "date": "td:nth-child(5)",
+          "link": "td.ta-l a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 30
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": false,
+          "file_types": [
+            "hwpx",
+            "hwp"
+          ],
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "form",
+        "submit_selector": "#unitySearchBtn",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "total-input-box",
+            "label": "검색어를 입력하세요",
+            "selector": "#total-input-box",
+            "placeholder": "검색어를 입력하세요"
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "motie_board2",
+      "org_id": "motie",
+      "board_name": "1232",
+      "access_mode": "dynamic_js",
+      "list_url": "https://www.mss.go.kr/site/smba/ex/bbs/List.do?cbIdx=86",
+      "doc_type": "보도자료",
+      "domain_tags": [
+        "대기"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "0 9 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "interval",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "9",
+        "minute": "0"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table tbody tr td.mobile",
+        "format": "YYYY. MM. DD."
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 7,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "dynamic_js",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table",
+          "pagination": {
+            "type": "javascript",
+            "start": 1,
+            "onclick_pattern": "doBbsFPag",
+            "detected_method": "다음 버튼 onclick 기반 페이지네이션 감지"
+          }
+        },
+        "parse_rules": {
+          "title": "td.mobile a",
+          "date": "td.mobile",
+          "link": "td.mobile a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 7
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#bbsFVo",
+        "submit_selector": "button",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "select",
+            "name": "tgtTypeCd",
+            "label": "검색분류 선택",
+            "selector": "#tgtTypeCd",
+            "options": [
+              {
+                "value": "SUB_CONT",
+                "label": "제목"
+              },
+              {
+                "value": "CLOB_CONT",
+                "label": "내용"
+              },
+              {
+                "value": "CD_SUBJECT",
+                "label": "담당부서"
+              },
+              {
+                "value": "NAME_CONT",
+                "label": "작성자"
+              }
+            ],
+            "default_value": "SUB_CONT"
+          },
+          {
+            "type": "text",
+            "name": "regSdt",
+            "label": "기간선택 시작날짜(YYYYMMDD)",
+            "selector": "#regSdt",
+            "placeholder": "YYYYMMDD"
+          },
+          {
+            "type": "text",
+            "name": "regEdt",
+            "label": "기간선택 종료날짜(YYYYMMDD)",
+            "selector": "#regEdt",
+            "placeholder": "YYYYMMDD"
+          },
+          {
+            "type": "text",
+            "name": "searchKey",
+            "label": "검색어를 입력하세요.",
+            "selector": "#searchKey",
+            "placeholder": "검색어를 입력하세요."
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "keco_board1",
+      "org_id": "keco",
+      "board_name": "보도자료",
+      "access_mode": "dynamic_js",
+      "list_url": "https://www.keco.or.kr/web/lay1/bbs/S1T109C111/A/20/list.do",
+      "doc_type": "보도자료",
+      "domain_tags": [
+        "대기",
+        "수질",
+        "폐기물",
+        "기후",
+        "에너지",
+        "기타"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "0 4 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "startDate": "2026-01-17",
+        "endDate": "2026-01-17",
+        "cycleType": "interval",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "4",
+        "minute": "0"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table.board_list1 tbody tr td.none",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "2026-01-01",
+        "period_end": "2026-01-17",
+        "relative_days": 90,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "dynamic_js",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table.board_list1",
+          "pagination": {
+            "type": "page_param",
+            "param": "page",
+            "start": 1,
+            "detected_method": "페이지네이션 영역 발견, 기본 page 파라미터 사용 (수동 확인 필요)"
+          }
+        },
+        "parse_rules": {
+          "title": "td.tit_new a",
+          "date": "td.none",
+          "link": "td.tit_new a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 90
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#totalSearchFrm",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "total_keyword",
+            "label": "검색어를 입력해주세요",
+            "selector": "#total_keyword",
+            "placeholder": "검색어를 입력해주세요"
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "keiti_board1",
+      "org_id": "keiti",
+      "board_name": "보도자료",
+      "access_mode": "dynamic_js",
+      "list_url": "https://www.keiti.re.kr/site/keiti/ex/board/List.do?cbIdx=237",
+      "doc_type": "보도자료",
+      "domain_tags": [
+        "대기",
+        "폐기물",
+        "기후",
+        "에너지",
+        "기타",
+        "수질"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "30 7 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "interval",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "7",
+        "minute": "30"
+      },
+      "dedup_key": "id",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table.list tbody tr td:nth-child(3)",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 90,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "dynamic_js",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table.list",
+          "pagination": {
+            "type": "offset_param",
+            "param": "pageIndex",
+            "start": 1,
+            "step": 14,
+            "max_pages": 13,
+            "detected_method": "오프셋 파라미터 \"pageIndex\" 감지 (증가값: 14)"
+          }
+        },
+        "parse_rules": {
+          "title": "td.left a",
+          "date": "td:nth-child(3)",
+          "link": "td.left a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 90
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#frm",
+        "submit_selector": "input",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "query",
+            "label": "검색어",
+            "selector": "#query",
+            "placeholder": ""
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "kepco_board1",
+      "org_id": "kepco",
+      "board_name": "보도설명자료",
+      "access_mode": "dynamic_js",
+      "list_url": "https://www.kepco.co.kr/home/media/newsroom/pr/boardList.do",
+      "doc_type": "보도자료",
+      "domain_tags": [
+        "에너지",
+        "전력",
+        "기타"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "55 20 * * *",
+      "schedule_timezone": "Asia/Seoul",
+      "schedule_config": {
+        "scheduleMode": "period",
+        "startDate": "2026-01-16",
+        "cycleType": "weekly",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "20",
+        "minute": "55"
+      },
+      "dedup_key": "boardNo",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "div.media-list-item .date, div.media-list-item span",
+        "format": "YYYY. MM. DD."
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 30,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "dynamic_js",
+        "list": {
+          "item_selector": "div.media-list-item",
+          "container_selector": "div.media-list-col-3",
+          "pagination": {
+            "type": "javascript",
+            "start": 1,
+            "onclick_pattern": "G_MovePagingAjax",
+            "detected_method": "다음 버튼 onclick 기반 페이지네이션 감지"
+          }
+        },
+        "parse_rules": {
+          "title": "a",
+          "date": "span, .date",
+          "link": "a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 30
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "kepco_specific": {
+        "board_mng_no": "15",
+        "requires_csrf": true,
+        "post_based_navigation": true,
+        "download_method": "post_form",
+        "notes": "KEPCO는 게시글 조회와 다운로드가 모두 POST 방식입니다. Playwright 클릭 기반 스크래핑 필요."
+      },
+      "site_search_config": {
+        "form_selector": "#topTotalSearchFrm",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "date",
+            "name": "startDate",
+            "label": "날짜",
+            "selector": "input",
+            "placeholder": ""
+          },
+          {
+            "type": "date",
+            "name": "endDate",
+            "label": "날짜",
+            "selector": "input",
+            "placeholder": ""
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "mcee_board4",
+      "org_id": "mcee",
+      "board_name": "한강보도",
+      "access_mode": "static_html",
+      "list_url": "https://mcee.go.kr/hg/web/index.do?menuId=1261",
+      "doc_type": "보도자료",
+      "domain_tags": [
+        "대기",
+        "수질",
+        "폐기물",
+        "기후",
+        "기타",
+        "에너지"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "0 9 * * 1",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "weekly",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "9",
+        "minute": "0"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "div.board_list .brd_body ul li",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 30,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "static_html",
+        "list": {
+          "item_selector": "ul",
+          "container_selector": "div.board_list .brd_body",
+          "pagination": {
+            "type": "page_param",
+            "param": "page",
+            "start": 1,
+            "detected_method": "페이지네이션 영역 발견, 기본 page 파라미터 사용 (수동 확인 필요)"
+          }
+        },
+        "parse_rules": {
+          "title": "li a, li.title a",
+          "date": "li",
+          "link": "li a, li.title a",
+          "author": "li"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 30
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#totalSearchForm",
+        "submit_selector": "#search_btn_1",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "sckeyword",
+            "label": "검색어를 입력하세요.",
+            "selector": "#sckeyword",
+            "placeholder": "검색어를 입력하세요."
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "gir_board1",
+      "org_id": "gir",
+      "board_name": "보도자료",
+      "access_mode": "dynamic_js",
+      "list_url": "https://www.gir.go.kr/home/index.do;jsessionid=M0laTIGSBbW6j7xh6a98ztatMsCqjlx2w3cl53EvK2OlTHjFtb10n3lxtXbKSVaF.og_was1_servlet_engine1?menuId=11",
+      "doc_type": "보도자료",
+      "domain_tags": [
+        "대기",
+        "기후",
+        "에너지",
+        "기타"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "5 8 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "interval",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "8",
+        "minute": "5"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table tbody tr td:nth-child(4)",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 90,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "dynamic_js",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table",
+          "pagination": {
+            "type": "next_button",
+            "selector": "a.next",
+            "detected_method": "다음 버튼 기반 페이지네이션 감지"
+          }
+        },
+        "parse_rules": {
+          "title": "td.tit a",
+          "date": "td:nth-child(4)",
+          "link": "td.tit a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 90
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#topSearchForm",
+        "submit_selector": "button",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "condition.searchKeyword",
+            "label": "찾으시는 키워드를 입력하세요",
+            "selector": "#searchBox",
+            "placeholder": ""
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "nier_board1",
+      "org_id": "nier",
+      "board_name": "보도·해명자료",
+      "access_mode": "dynamic_js",
+      "list_url": "https://www.nier.go.kr/common/kor/board/comBbsList.do?menuNo=14003&bbsNo=22",
+      "doc_type": "보도자료",
+      "domain_tags": [
+        "대기",
+        "수질",
+        "폐기물",
+        "기후",
+        "에너지",
+        "기타"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "45 7 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "interval",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "7",
+        "minute": "45"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table.tbl tbody tr td.mobileHidden",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 90,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "dynamic_js",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table.tbl",
+          "pagination": {
+            "type": "page_param",
+            "param": "page",
+            "start": 1,
+            "detected_method": "페이지네이션 영역 발견, 기본 page 파라미터 사용 (수동 확인 필요)"
+          }
+        },
+        "parse_rules": {
+          "title": "td.mobileHidden a",
+          "date": "td.mobileHidden",
+          "link": "td.mobileHidden a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 90
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#search-form",
+        "submit_selector": "button.krds-btn",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "searchWrd",
+            "label": "검색어를 입력해주세요",
+            "selector": "#search-total-input-id",
+            "placeholder": ""
+          }
+        ]
+      }
+    },
+    {
+      "board_id": "gir_board2",
+      "org_id": "gir",
+      "board_name": "국가·지역 온실가스 통계",
+      "access_mode": "dynamic_js",
+      "list_url": "https://www.gir.go.kr/home/index.do?menuId=36",
+      "doc_type": "통계자료",
+      "domain_tags": [
+        "대기",
+        "기후",
+        "에너지"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "30 8 * * *",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "interval",
+        "monthlyDay": "1",
+        "weeklyDay": "mon",
+        "intervalDays": "1",
+        "hour": "8",
+        "minute": "30"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table tbody tr td:nth-child(4)",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "relative",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 365,
+        "years": []
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "dynamic_js",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table",
+          "pagination": {
+            "type": "next_button",
+            "selector": "a.next",
+            "detected_method": "다음 버튼 기반 페이지네이션 감지"
+          }
+        },
+        "parse_rules": {
+          "title": "td.tit a",
+          "date": "td:nth-child(4)",
+          "link": "td.tit a"
+        },
+        "detail": {
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 365
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true,
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#topSearchForm",
+        "submit_selector": "button",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "condition.searchKeyword",
+            "label": "찾으시는 키워드를 입력하세요",
+            "selector": "#searchBox",
+            "placeholder": ""
+          }
+        ]
+      }
+    }
+  ],
+  "updated_at": "2026-01-28T10:47:28.260Z"
+}

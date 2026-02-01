@@ -1,0 +1,97 @@
+{
+  "metadata": {
+    "source_file": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData\\산업통상자원부\\보도참고자료\\2026-01\\(참고자료)중남미대양주통상팀, 멕시코 수입관세 인상조치 등 경제·통상 현안 논의.hwpx",
+    "file_format": "hwp",
+    "status": "completed",
+    "page_count": 1,
+    "char_count": 997,
+    "token_count": 498,
+    "quality_score": 1.0,
+    "extraction_method": "text_layer",
+    "processing_time_ms": 768,
+    "extracted_at": "2026-01-29T10:05:56.413451",
+    "corrections": [
+      {
+        "type": "utf16le_garbage_cleanup",
+        "description": "UTF-16 LE 오인식 한자 문자 제거",
+        "removed_chars": 12
+      },
+      {
+        "type": "hwp_space_garbage_cleanup",
+        "description": "HWP 공백 인코딩 오류 문자 제거",
+        "removed_chars": 8,
+        "patterns": [
+          "시퀀스 '漠杳' x2",
+          "시퀀스 '氠瑢' x2"
+        ]
+      }
+    ],
+    "tables_extracted": 1,
+    "tables_normalized": 1,
+    "normalization_applied": true,
+    "quality_details": {
+      "korean_ratio": 0.7754569190600522,
+      "broken_char_ratio": 0.0,
+      "sentence_structure": 1.0,
+      "repetition_anomaly": 0.0,
+      "overall_score": 1.0
+    }
+  },
+  "content": {
+    "text": "보도참고자료\n\n보도시점\n배포 즉시\n배포\n2025. 12. 19(금)\n\n멕시코 수입관세 인상조치 등\n경제･통상 현안 논의\n- 통상차관보-주한멕시코대사 면담(12.19)\n산업통상부(장관 김정관) 박정성 통상차관보는 12.19(금) 카를로스 페냐삐엘 소토(Carlos Peñafiel Soto) 주한멕시코대사와 면담을 갖고, 내년 1월 시행 예정인 멕시코 수입관세 인상조치를 포함한 양국 통상현안에 대해 논의하였다.\n동 면담에서 박 차관보는 지난 12.10(수) 멕시코 의회에서 통과된 수정안에 그간 우리측이 제기한 의견이 일부 반영되었으나, 추가 보완이 필요한 사항도 있다는 점을 지적하고, 향후 시행 과정에서 우리 기업에 미치는 영향이 최소화되도록 조치해 줄 것을 요구하였다. 앞서 산업부는 12.12(금) 박 차관보 주재로 업계 간담회를 개최하여 멕시코 수입관세 인상에 따른 영향을 점검하고, 대응방안을 논의한 바 있다.\n박 차관보는 그간 우리 기업들이 멕시코 현지 투자를 통해 멕시코 경제에 기여해 왔다는 점을 강조하고, 금번 조치가 향후 우리 기업의 멕시코 투자와 양국 교역에 영향이 없도록 멕시코 정부의 각별한 관심을 요청하는 한편, 양국 간 안정적 교역･투자환경 조성과 첨단산업 협력 강화를 위해서는 FTA 협상도 조속히 재개되어야 한다고 강조하였다.\n한편, 박 차관보는 내년 7월 예정된 USMCA 재검토 진행상황에 대해 논의하고, 향후에도 USMCA가 북미 지역 자유무역협정의 틀로서의 기능을 지속 유지해야 한다고 강조하였다. 또한, 멕시코에 진출한 우리 기업의 애로 해결을 위해서 멕시코 정부가 적극 지원해 줄 것도 요청하였다.\n\n(044-203-5634)\n\n\n<!-- 표 1 -->[표 데이터]\n\n[담당부서]\n- 부서: 통상정책국\n- 이름: 책임자\n- 직함: 팀 장\n- 이름: 안응수\n- 전화번호: (044-203-5630)\n\n항목 2:\n- 부서: 중남미대양주통상팀\n- 이름: 담당자\n- 직함: 사 무 관\n- 이름: 김하은\n- 전화번호: (044-203-5634)",
+    "text_length": 995
+  },
+  "tables": [
+    {
+      "page_num": 1,
+      "table_index": 0,
+      "row_count": 2,
+      "col_count": 6,
+      "confidence": 0.7,
+      "extraction_method": "hwp_olefile",
+      "semantic_text": "[표 데이터]\n\n[담당부서]\n- 부서: 통상정책국\n- 이름: 책임자\n- 직함: 팀    장\n- 이름: 안응수\n- 전화번호: (044-203-5630)\n\n항목 2:\n- 부서: 중남미대양주통상팀\n- 이름: 담당자\n- 직함: 사 무 관\n- 이름: 김하은\n- 전화번호: (044-203-5634)",
+      "structured_data": {
+        "title": null,
+        "structure_type": "row_header",
+        "has_header": false,
+        "headers": [
+          "이름",
+          "부서",
+          "이름",
+          "직함",
+          "이름",
+          "전화번호"
+        ],
+        "column_semantics": [
+          "이름",
+          "부서",
+          "이름",
+          "직함",
+          "이름",
+          "전화번호"
+        ],
+        "rows": [
+          {
+            "이름": "안응수",
+            "부서": "통상정책국",
+            "직함": "팀    장",
+            "전화번호": "(044-203-5630)"
+          },
+          {
+            "이름": "김하은",
+            "부서": "중남미대양주통상팀",
+            "직함": "사 무 관",
+            "전화번호": "(044-203-5634)"
+          }
+        ],
+        "metadata": {
+          "row_count": 2,
+          "col_count": 6,
+          "data_row_count": 2,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    }
+  ]
+}

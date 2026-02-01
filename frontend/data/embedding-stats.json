@@ -1,0 +1,19 @@
+{
+  "total_embeddings": 271,
+  "total_failed": 0,
+  "total_tokens": 143601,
+  "total_cost": 0.0028720200000000003,
+  "records": [
+    {
+      "id": "emb_1769679244941_f33n8348h",
+      "timestamp": "2026-01-29T09:34:04.941Z",
+      "model": "openai-small",
+      "chunks_processed": 271,
+      "chunks_failed": 0,
+      "tokens_used": 143601,
+      "estimated_cost": 0.0028720200000000003,
+      "duration_ms": 0
+    }
+  ],
+  "last_updated": "2026-01-29T09:34:04.941Z"
+}

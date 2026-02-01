@@ -1,0 +1,216 @@
+{
+  "metadata": {
+    "source_file": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData\\기후에너지환경부\\보도·설명\\2026-01\\우리 주변에서 쉽게 볼 수 있는 곤충들 이야기(보도자료)(자원관 12.26).pdf",
+    "file_format": "pdf",
+    "status": "completed",
+    "page_count": 4,
+    "char_count": 1346,
+    "token_count": 673,
+    "quality_score": 1.0,
+    "extraction_method": "text_layer",
+    "processing_time_ms": 3108,
+    "extracted_at": "2026-01-28T14:37:49.099529",
+    "corrections": [],
+    "tables_extracted": 4,
+    "tables_normalized": 0,
+    "normalization_applied": false,
+    "quality_details": {
+      "korean_ratio": 0.7297297297297297,
+      "broken_char_ratio": 0.0,
+      "sentence_structure": 1.0,
+      "repetition_anomaly": 0.0,
+      "overall_score": 1.0
+    }
+  },
+  "content": {
+    "text": "보도자료\n보도시점2025. 12. 26.(금) 06:00 (금요일 석간)\n배포\n2025. 12. 24.(수) \n우리 주변에서 쉽게 볼 수 있는 \n곤충들의 이야기\n- 국립생물자원관, 12월 26일 ‘우리 주변 생활 속 곤충도감’ 발간 및 누리집 공개\n국립생물자원관(관장 유호)은 12월 26일 우리 생활 주변에서 쉽게 볼 수 \n있는 곤충들의 정보를 누구나 한눈에 확인할 수 있도록 ‘우리 주변 생활 \n속 곤충도감’을 발간한다고 밝혔다.\n국립생물자원관은 2009년부터 매년 한반도 자생생물의 다양한 최신 정보를 \n담은 학술도서인 ‘생물지’를 발간 중이다. \n올해는 온 국민이 실생활에서 흔히 접하는 곤충의 정보를 확인할 수 있도록 \n그간 생물지에 수록되었던 종들을 선별해 국민 친화형 도감으로 발간한다.\n이번 도감에는 집 안팎에서 흔히 볼 수 있는 △참매미, △호랑나비부터 최근 \n여름철에 대발생한 △붉은등우단털파리(러브버그), △동양하루살이까지 주변에서 \n자주 관찰되는 곤충 300종의 생태정보를 담았다.\n도감에는 △표본 사진은 물론 △형태학적 특징, △생태, △주요 발생 시기 \n등 종합적인 정보도 같이 제공했다.\n‘우리 주변 생활 속 곤충도감’은 발간과 동시에 국립생물자원관 누리집\n(www.nibr.go.kr)에도 공개된다.\n유호 국립생물자원관장은 “이번에 발간하는 곤충도감이 우리 주변에서 흔히 \n접할 수 있는 곤충에 대한 정확한 정보를 제공하는 것은 물론 교육 자료 등으로도 \n널리 활용될 수 있기를 기대한다”라고 밝혔다.\n[표 데이터]\n항목 1:\n- 보도자료: 보도시점2025. 12. 26.(금) 06:00 (금요일 석간) 배포 2025. 12. 24.(수)\n항목 2:\n- 보도자료: 우리 주변에서 쉽게 볼 수 있는 곤충들의 이야기 - 국립생물자원관, 12월 26일 ‘우리 주변 생활 속 곤충도감’ 발간 및 누리집 공개\n붙임 우리 주변 생활 속 곤충도감 구성. 끝.\n담당 부서\n국립생물자원관\n책임자\n과 장 \n김창무(032-590-7261)\n생물종다양성연구과\n담당자\n연구관\n염진화(032-590-7374)\n연구사\n안능호(032-590-7374)\n[표 데이터]\n[담당 부서]\n항목 1:\n- 부서: 국립생물자원관 생물종다양성연구과\n- 이름: 책임자\n- 전화번호: 과 장 김창무(032-590-7261)\n항목 2:\n- 부서: 국립생물자원관 생물종다양성연구과\n- 이름: 담당자\n- 전화번호: 연구관 염진화(032-590-7374)\n항목 3:\n- 부서: 국립생물자원관 생물종다양성연구과\n- 전화번호: 연구사 안능호(032-590-7374)\n항목 4:\n항목 5:\n붙임\n우리 주변 생활 속 곤충도감 도감 구성\n□ 표 지\n[표 데이터]\n항목 1:\n□ 수록내용 예시\n[표 데이터]\n항목 1:\n항목 2:\n항목 3:",
+    "text_length": 1346
+  },
+  "tables": [
+    {
+      "page_num": 1,
+      "table_index": 0,
+      "row_count": 3,
+      "col_count": 1,
+      "confidence": 1.0,
+      "extraction_method": "cached",
+      "semantic_text": "[표 데이터]\n\n항목 1:\n- 보도자료: 보도시점2025. 12. 26.(금) 06:00 (금요일 석간) 배포 2025. 12. 24.(수)\n\n항목 2:\n- 보도자료: 우리 주변에서 쉽게 볼 수 있는 곤충들의 이야기 - 국립생물자원관, 12월 26일 ‘우리 주변 생활 속 곤충도감’ 발간 및 누리집 공개",
+      "structured_data": {
+        "title": null,
+        "structure_type": "standard",
+        "has_header": true,
+        "headers": [
+          "보도자료"
+        ],
+        "column_semantics": [
+          "이름"
+        ],
+        "rows": [
+          {
+            "보도자료": "보도시점2025. 12. 26.(금) 06:00 (금요일 석간) 배포 2025. 12. 24.(수)"
+          },
+          {
+            "보도자료": "우리 주변에서 쉽게 볼 수 있는 곤충들의 이야기 - 국립생물자원관, 12월 26일 ‘우리 주변 생활 속 곤충도감’ 발간 및 누리집 공개"
+          }
+        ],
+        "metadata": {
+          "row_count": 3,
+          "col_count": 1,
+          "data_row_count": 2,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    },
+    {
+      "page_num": 2,
+      "table_index": 0,
+      "row_count": 5,
+      "col_count": 5,
+      "confidence": 1.0,
+      "extraction_method": "cached",
+      "semantic_text": "[표 데이터]\n\n[담당 부서]\n\n항목 1:\n- 부서: 국립생물자원관 생물종다양성연구과\n- 이름: 책임자\n- 전화번호: 과  장 김창무(032-590-7261)\n\n항목 2:\n- 부서: 국립생물자원관 생물종다양성연구과\n- 이름: 담당자\n- 전화번호: 연구관 염진화(032-590-7374)\n\n항목 3:\n- 부서: 국립생물자원관 생물종다양성연구과\n- 전화번호: 연구사 안능호(032-590-7374)\n\n항목 4:\n\n항목 5:",
+      "structured_data": {
+        "title": null,
+        "structure_type": "hierarchical",
+        "has_header": false,
+        "headers": [
+          "직함",
+          "부서",
+          "열3",
+          "이름",
+          "전화번호"
+        ],
+        "column_semantics": [
+          "직함",
+          "부서",
+          "열3",
+          "이름",
+          "전화번호"
+        ],
+        "groups": [
+          {
+            "label": "담당 부서",
+            "items": [
+              {
+                "부서": "국립생물자원관 생물종다양성연구과",
+                "이름": "책임자",
+                "전화번호": "과  장 김창무(032-590-7261)"
+              },
+              {
+                "부서": "국립생물자원관 생물종다양성연구과",
+                "이름": "담당자",
+                "전화번호": "연구관 염진화(032-590-7374)"
+              },
+              {
+                "부서": "국립생물자원관 생물종다양성연구과",
+                "전화번호": "연구사 안능호(032-590-7374)"
+              }
+            ]
+          },
+          {
+            "label": null,
+            "items": []
+          }
+        ],
+        "rows": [
+          {
+            "부서": "국립생물자원관 생물종다양성연구과",
+            "이름": "책임자",
+            "전화번호": "과  장 김창무(032-590-7261)",
+            "_group": "담당 부서"
+          },
+          {
+            "부서": "국립생물자원관 생물종다양성연구과",
+            "이름": "담당자",
+            "전화번호": "연구관 염진화(032-590-7374)",
+            "_group": "담당 부서"
+          },
+          {
+            "부서": "국립생물자원관 생물종다양성연구과",
+            "전화번호": "연구사 안능호(032-590-7374)",
+            "_group": "담당 부서"
+          }
+        ],
+        "metadata": {
+          "row_count": 5,
+          "col_count": 5,
+          "group_count": 2,
+          "data_row_count": 3,
+          "has_merged_cells": true,
+          "merged_cell_count": 5
+        }
+      }
+    },
+    {
+      "page_num": 3,
+      "table_index": 0,
+      "row_count": 1,
+      "col_count": 1,
+      "confidence": 1.0,
+      "extraction_method": "cached",
+      "semantic_text": "[표 데이터]\n\n항목 1:",
+      "structured_data": {
+        "title": null,
+        "structure_type": "no_header",
+        "has_header": false,
+        "headers": [
+          "열1"
+        ],
+        "column_semantics": [
+          "열1"
+        ],
+        "rows": [
+          {
+            "열1": ""
+          }
+        ],
+        "metadata": {
+          "row_count": 1,
+          "col_count": 1,
+          "data_row_count": 1,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    },
+    {
+      "page_num": 4,
+      "table_index": 0,
+      "row_count": 3,
+      "col_count": 1,
+      "confidence": 1.0,
+      "extraction_method": "cached",
+      "semantic_text": "[표 데이터]\n\n항목 1:\n\n항목 2:\n\n항목 3:",
+      "structured_data": {
+        "title": null,
+        "structure_type": "no_header",
+        "has_header": false,
+        "headers": [
+          "열1"
+        ],
+        "column_semantics": [
+          "열1"
+        ],
+        "rows": [
+          {
+            "열1": ""
+          },
+          {
+            "열1": ""
+          },
+          {
+            "열1": ""
+          }
+        ],
+        "metadata": {
+          "row_count": 3,
+          "col_count": 1,
+          "data_row_count": 3,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    }
+  ]
+}

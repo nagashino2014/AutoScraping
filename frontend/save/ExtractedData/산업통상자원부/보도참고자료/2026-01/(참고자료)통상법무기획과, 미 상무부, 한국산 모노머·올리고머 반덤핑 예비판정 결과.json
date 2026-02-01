@@ -1,0 +1,97 @@
+{
+  "metadata": {
+    "source_file": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData\\산업통상자원부\\보도참고자료\\2026-01\\(참고자료)통상법무기획과, 미 상무부, 한국산 모노머·올리고머 반덤핑 예비판정 결과.hwpx",
+    "file_format": "hwp",
+    "status": "completed",
+    "page_count": 1,
+    "char_count": 1017,
+    "token_count": 508,
+    "quality_score": 1.0,
+    "extraction_method": "text_layer",
+    "processing_time_ms": 611,
+    "extracted_at": "2026-01-29T10:05:57.026719",
+    "corrections": [
+      {
+        "type": "utf16le_garbage_cleanup",
+        "description": "UTF-16 LE 오인식 한자 문자 제거",
+        "removed_chars": 6
+      },
+      {
+        "type": "hwp_space_garbage_cleanup",
+        "description": "HWP 공백 인코딩 오류 문자 제거",
+        "removed_chars": 16,
+        "patterns": [
+          "시퀀스 '漠杳' x5",
+          "시퀀스 '氠瑢' x3"
+        ]
+      }
+    ],
+    "tables_extracted": 1,
+    "tables_normalized": 1,
+    "normalization_applied": true,
+    "quality_details": {
+      "korean_ratio": 0.7487373737373737,
+      "broken_char_ratio": 0.0,
+      "sentence_structure": 1.0,
+      "repetition_anomaly": 0.0,
+      "overall_score": 1.0
+    }
+  },
+  "content": {
+    "text": "보도참고자료\n\n보도시점\n배포즉시\n배포\n2026.1.2.(금)\n\n미(美) 상무부, 한국산 모노머·올리고머\n반덤핑 예비판정 결과\n미국 상무부는 12.31일(현지시간) 한국산 모노머·올리고머에 대한 반덤핑 조사 예비판정 결과를 발표하였다. 상무부는 이번 판정에서 한국 의무답변기업(2개사)에 대해 10~65% 수준의 덤핑마진율을 예비 산정하였다. 금번 예비 판정 마진율은 제소자가 당초 주장했던 137~188%대의 고율 마진율과 비교하면 상당히 감소한 수준이다.\n* (업체별 예비판정 마진율) A사 10.94%, B사 65.72%\n산업통상부(장관 김정관)는 이번 조사 개시 전부터 업계간담회(4.10), 유선 협의 및 이메일 등을 통해 제소 동향을 관련 협회 및 업계에 신속히 전파하여 기업들이 조사 초기부터 대응할수 있도록 적극 지원하였다. 특히, 미 상무부의 의무답변기업 선정을 위한 질의서에 미응답시 AFA 적용 가능성을 설명하며, 우리 조사대상기업들이 질의서를 최대한 제출하도록 여러차례 안내하였다.\n* AFA(Adverse Facts Available) : 조사대상 기업이 자료 제출 등에 비협조적이라고 판단될 경우, 상무부가 이용 가능한 정보 중 가장 불리한 정보를 적용하여 고율 관세를 부과하는 조치\n※ (참고) 정부 안내에도 불구하고, 경영상 판단에 따라 의무답변선정 목적의 질의서(Q&V)를 제출하지 않은 일부 기업에는 고율 마진 부과\n산업통상부는 금번 예비판정 결과를 토대로, 향후 예정된 미 상무부의 최종판정(‘26. 5월) 단계에서 우리 기업들이 부당한 판정을 받지 않도록 업계와 소통하며 대응 전략을 점검해 나갈 계획이다.\n\n담당 부서\n다자통상법무관\n통상법무기획과\n양서진\n(044-203-5945)\n\n\n\n<!-- 표 1 -->[표 데이터]\n\n[담당 부서]\n- 부서: 다자통상법무관 통상법무기획과\n- 이름: 책임자\n- 이름: 과 장\n- 이름: 이원희\n- 전화번호: (044-203-5940)\n\n항목 2:\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 양서진\n- 전화번호: (044-203-5945)",
+    "text_length": 1015
+  },
+  "tables": [
+    {
+      "page_num": 1,
+      "table_index": 0,
+      "row_count": 2,
+      "col_count": 6,
+      "confidence": 0.7,
+      "extraction_method": "hwp_olefile",
+      "semantic_text": "[표 데이터]\n\n[담당 부서]\n- 부서: 다자통상법무관 통상법무기획과\n- 이름: 책임자\n- 이름: 과  장\n- 이름: 이원희\n- 전화번호: (044-203-5940)\n\n항목 2:\n- 이름: 담당자\n- 이름: 사무관\n- 이름: 양서진\n- 전화번호: (044-203-5945) 漠杳",
+      "structured_data": {
+        "title": null,
+        "structure_type": "row_header",
+        "has_header": false,
+        "headers": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "column_semantics": [
+          "직함",
+          "부서",
+          "이름",
+          "이름",
+          "이름",
+          "전화번호"
+        ],
+        "rows": [
+          {
+            "직함": "담당 부서",
+            "부서": "다자통상법무관 통상법무기획과",
+            "이름": "이원희",
+            "전화번호": "(044-203-5940)"
+          },
+          {
+            "직함": "",
+            "부서": "",
+            "이름": "양서진",
+            "전화번호": "(044-203-5945) 漠杳"
+          }
+        ],
+        "metadata": {
+          "row_count": 2,
+          "col_count": 6,
+          "data_row_count": 2,
+          "has_merged_cells": false,
+          "merged_cell_count": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,211 @@
+# GitHub Actions 스케줄 스크래핑 워크플로우
+# 
+# 설정된 스케줄에 따라 자동으로 스크래핑을 실행하고
+# 결과를 Artifact로 저장합니다.
+
+name: Scheduled Scraping
+
+on:
+  # 스케줄 트리거 (UTC 시간 기준, KST = UTC + 9)
+  schedule:
+    # 아침 그룹 (KST 06:50) - 국가법령정보센터
+    - cron: '50 21 * * *'  # UTC 21:50 = KST 06:50
+    # 아침 그룹 (KST 07:00-08:00)
+    - cron: '0 22 * * *'   # UTC 22:00 = KST 07:00
+    - cron: '30 22 * * *'  # UTC 22:30 = KST 07:30
+    - cron: '0 23 * * *'   # UTC 23:00 = KST 08:00
+    # 낮 그룹 (KST 13:00, 15:50)
+    - cron: '0 4 * * *'    # UTC 04:00 = KST 13:00
+    - cron: '50 6 * * *'   # UTC 06:50 = KST 15:50
+    # 저녁 그룹 (KST 20:55, 22:22)
+    - cron: '55 11 * * *'  # UTC 11:55 = KST 20:55
+    - cron: '22 13 * * *'  # UTC 13:22 = KST 22:22
+
+  # 수동 트리거
+  workflow_dispatch:
+    inputs:
+      board_ids:
+        description: '스크래핑할 보드 ID (쉼표 구분, 빈칸=스케줄 기반)'
+        required: false
+        default: ''
+      max_pages:
+        description: '최대 페이지 수'
+        required: false
+        default: '10'
+      download_attachments:
+        description: '첨부파일 다운로드'
+        required: false
+        default: 'true'
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # 스케줄 시간에 따라 실행할 보드 결정
+  determine-boards:
+    runs-on: ubuntu-latest
+    outputs:
+      boards: ${{ steps.set-boards.outputs.boards }}
+      should_run: ${{ steps.set-boards.outputs.should_run }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine boards to scrape
+        id: set-boards
+        run: |
+          # 수동 실행인 경우
+          if [ -n "${{ github.event.inputs.board_ids }}" ]; then
+            echo "boards=${{ github.event.inputs.board_ids }}" >> $GITHUB_OUTPUT
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # 현재 KST 시간 계산
+          KST_HOUR=$(TZ='Asia/Seoul' date +%H)
+          KST_MIN=$(TZ='Asia/Seoul' date +%M)
+          KST_DOW=$(TZ='Asia/Seoul' date +%u)  # 1=Monday, 7=Sunday
+          
+          echo "Current KST: ${KST_HOUR}:${KST_MIN}, Day of week: ${KST_DOW}"
+          
+          BOARDS=""
+          
+          # 시간대별 보드 매핑 (scraper-schedules.json 기준)
+          case "${KST_HOUR}" in
+            06)
+              if [ "${KST_MIN}" -ge 45 ] && [ "${KST_MIN}" -le 55 ]; then
+                BOARDS="law_board1"
+              fi
+              ;;
+            07)
+              if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
+                BOARDS="moleg_board1"
+                # 월요일에만 실행
+                if [ "${KST_DOW}" -eq 1 ]; then
+                  BOARDS="${BOARDS},mcee_board2,mcee_board3,mcee_board4"
+                fi
+              elif [ "${KST_MIN}" -ge 25 ] && [ "${KST_MIN}" -le 35 ]; then
+                BOARDS="keiti_board1"
+              elif [ "${KST_MIN}" -ge 40 ] && [ "${KST_MIN}" -le 50 ]; then
+                BOARDS="nier_board1"
+              fi
+              ;;
+            08)
+              if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
+                BOARDS="gir_board1"
+              elif [ "${KST_MIN}" -ge 25 ] && [ "${KST_MIN}" -le 35 ]; then
+                BOARDS="gir_board2"
+              fi
+              ;;
+            09)
+              if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
+                BOARDS="motie_board2"
+                # 월요일에만 실행
+                if [ "${KST_DOW}" -eq 1 ]; then
+                  BOARDS="${BOARDS},mcee_board5"
+                fi
+              fi
+              ;;
+            13)
+              if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
+                BOARDS="keco_board1"
+              fi
+              ;;
+            15)
+              if [ "${KST_MIN}" -ge 45 ] && [ "${KST_MIN}" -le 55 ]; then
+                BOARDS="motie_board1"
+              fi
+              ;;
+            20)
+              if [ "${KST_MIN}" -ge 50 ] && [ "${KST_MIN}" -le 59 ]; then
+                BOARDS="kepco_board1"
+              fi
+              ;;
+            22)
+              if [ "${KST_MIN}" -ge 17 ] && [ "${KST_MIN}" -le 27 ]; then
+                BOARDS="mcee_board1"
+              fi
+              ;;
+          esac
+          
+          if [ -n "$BOARDS" ]; then
+            echo "boards=${BOARDS}" >> $GITHUB_OUTPUT
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "Will scrape: ${BOARDS}"
+          else
+            echo "boards=" >> $GITHUB_OUTPUT
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "No boards to scrape at this time"
+          fi
+
+  # 스크래핑 실행
+  scrape:
+    needs: determine-boards
+    if: needs.determine-boards.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install chromium --with-deps
+
+      - name: Run scraper
+        working-directory: frontend
+        env:
+          BOARDS: ${{ needs.determine-boards.outputs.boards }}
+          MAX_PAGES: ${{ github.event.inputs.max_pages || '10' }}
+          DOWNLOAD_ATTACHMENTS: ${{ github.event.inputs.download_attachments || 'true' }}
+        run: |
+          SCRAPE_ARGS="--boards=${BOARDS} --output=./results --max-pages=${MAX_PAGES}"
+          
+          if [ "${DOWNLOAD_ATTACHMENTS}" = "false" ]; then
+            SCRAPE_ARGS="${SCRAPE_ARGS} --no-attachments"
+          fi
+          
+          echo "Running: npm run scrape -- ${SCRAPE_ARGS}"
+          npm run scrape -- ${SCRAPE_ARGS}
+
+      - name: Generate artifact name
+        id: artifact-name
+        run: |
+          DATE=$(TZ='Asia/Seoul' date +%Y%m%d_%H%M)
+          echo "name=scrape-results-${DATE}" >> $GITHUB_OUTPUT
+
+      - name: Upload results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact-name.outputs.name }}
+          path: frontend/results/
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Summary
+        run: |
+          echo "## 스크래핑 완료" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- 대상 보드: ${{ needs.determine-boards.outputs.boards }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 실행 시간: $(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M:%S KST')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f frontend/results/summary.json ]; then
+            echo "### 결과 요약" >> $GITHUB_STEP_SUMMARY
+            cat frontend/results/summary.json | jq -r '"- 총 수집: \(.totalArticles)건"' >> $GITHUB_STEP_SUMMARY
+            cat frontend/results/summary.json | jq -r '"- 첨부파일: \(.totalAttachments)개"' >> $GITHUB_STEP_SUMMARY
+            cat frontend/results/summary.json | jq -r '"- 성공: \(.successBoards)/\(.totalBoards) 보드"' >> $GITHUB_STEP_SUMMARY
+          fi

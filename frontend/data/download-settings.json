@@ -1,0 +1,38 @@
+{
+  "path": {
+    "basePath": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\ScrapingData",
+    "folderStructure": "by_org_board_date",
+    "docFileNameRule": "simple",
+    "attachmentFileNameRule": "date_prefix"
+  },
+  "testPath": {
+    "documentsPath": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\Test\\Documents",
+    "attachmentsPath": "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\Test\\Attachment"
+  },
+  "retry": {
+    "maxRetries": 3,
+    "retryIntervalSec": 5,
+    "useExponentialBackoff": true,
+    "timeoutSec": 60,
+    "failureAction": "skip"
+  },
+  "fileManagement": {
+    "maxFileSizeMb": 100,
+    "duplicateHandling": "skip",
+    "allowedExtensions": [],
+    "concurrentDownloads": 2
+  },
+  "network": {
+    "skipSslVerification": false,
+    "customUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 EcoMonitorBot/1.0",
+    "proxyUrl": "",
+    "autoReferer": true
+  },
+  "storage": {
+    "warningThresholdGb": 100,
+    "autoCleanupEnabled": false,
+    "autoCleanupDays": 365,
+    "maxStorageGb": 0
+  },
+  "updatedAt": "2026-01-15T09:55:20.407Z"
+}

@@ -1,0 +1,92 @@
+{
+  "pdf_hash": "test123abc",
+  "page_num": 1,
+  "table_index": 0,
+  "detection_info": {
+    "method": "test",
+    "created_at": "2026-01-27T21:16:06.352861",
+    "version": "1.0"
+  },
+  "structure": {
+    "rows": 2,
+    "cols": 2,
+    "row_heights": [
+      50,
+      50
+    ],
+    "col_widths": [
+      100,
+      100
+    ]
+  },
+  "cells": [
+    {
+      "row_span": [
+        0,
+        0
+      ],
+      "col_span": [
+        0,
+        0
+      ],
+      "bbox": [
+        0,
+        0,
+        100,
+        50
+      ],
+      "is_merged": false
+    },
+    {
+      "row_span": [
+        0,
+        0
+      ],
+      "col_span": [
+        1,
+        1
+      ],
+      "bbox": [
+        100,
+        0,
+        200,
+        50
+      ],
+      "is_merged": false
+    },
+    {
+      "row_span": [
+        1,
+        1
+      ],
+      "col_span": [
+        0,
+        0
+      ],
+      "bbox": [
+        0,
+        50,
+        100,
+        100
+      ],
+      "is_merged": false
+    },
+    {
+      "row_span": [
+        1,
+        1
+      ],
+      "col_span": [
+        1,
+        1
+      ],
+      "bbox": [
+        100,
+        50,
+        200,
+        100
+      ],
+      "is_merged": false
+    }
+  ]
+}
