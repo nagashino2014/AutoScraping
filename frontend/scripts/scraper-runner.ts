@@ -270,6 +270,7 @@ function parseListPage(
     if (!link || link === "#" || link.startsWith("javascript:")) {
       const onclick = $linkEl.attr("onclick") || $item.attr("onclick") || "";
       
+      // 1) article.view('id') 패턴 (산업통상자원부)
       const articleViewMatch = onclick.match(/article\.view\s*\(\s*['"]?(\d+)['"]?\s*\)/i);
       if (articleViewMatch) {
         try {
@@ -280,6 +281,22 @@ function parseListPage(
         }
       }
       
+      // 2) doBbsFView 패턴 (중소벤처기업부)
+      if (!link || link === "#" || link.startsWith("javascript:")) {
+        const bbsFViewMatch = onclick.match(/doBbsFView\s*\(\s*['"](\d+)['"]\s*,\s*['"](\d+)['"]/i);
+        if (bbsFViewMatch) {
+          try {
+            const urlObj = new URL(baseUrl);
+            let basePath = urlObj.pathname.replace(/List\.do$/i, "View.do").replace(/list\.do$/i, "View.do");
+            urlObj.pathname = basePath;
+            urlObj.searchParams.set("cbIdx", bbsFViewMatch[1]);
+            urlObj.searchParams.set("bcIdx", bbsFViewMatch[2]);
+            link = urlObj.pathname + urlObj.search;
+          } catch {}
+        }
+      }
+      
+      // 3) 일반 URL 패턴
       if (!link || link === "#" || link.startsWith("javascript:")) {
         const urlMatch = onclick.match(/['"]([^'"]*(?:https?:\/\/|\/)[^'"]*)['"]/i);
         if (urlMatch) link = urlMatch[1];
@@ -602,9 +619,9 @@ async function parseDetailPage(
   if (config.collect_body) {
     const contentSelectors = [
       config.detail?.content_selector,
-      ".view_con", ".view_cont", ".view_content",
-      ".board_view_content", ".bbs_content",
-      ".article_content", ".article_body",
+      ".view_con", ".view_cont", ".view_content", ".viewContent",
+      ".board_view_content", ".bbs_content", ".bbsContent",
+      ".article_content", ".article_body", ".articleBody",
       ".post_content", ".post_body",
       "article .content", "article .body",
       ".content_area", "#content .text",
@@ -614,13 +631,25 @@ async function parseDetailPage(
     for (const selector of contentSelectors) {
       const $content = $(selector as string).first();
       if ($content.length > 0) {
-        $content.find("script, style, nav, header, footer").remove();
+        $content.find("script, style, nav, header, footer, .skip, .blind").remove();
         const text = cleanText($content.text());
-        if (text.length > 50) {
+        if (text.length > 50 && !text.startsWith("주메뉴") && !text.startsWith("바로가기")) {
           content = text;
           break;
         }
       }
+    }
+    
+    // fallback: 본문을 찾지 못한 경우 body에서 추출
+    if (!content) {
+      $("script, style, nav, header, footer, .gnb, .lnb, .skip, .blind, #header, #footer").remove();
+      let bodyText = cleanText($("body").text());
+      // 앞부분 메뉴 텍스트 제거
+      const mainIdx = bodyText.indexOf("본문내용");
+      if (mainIdx > 0 && mainIdx < 200) {
+        bodyText = bodyText.slice(mainIdx + 4).trim();
+      }
+      content = bodyText.slice(0, 5000);
     }
   }
   
