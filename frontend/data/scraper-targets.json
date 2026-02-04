@@ -4734,15 +4734,15 @@
       ],
       "enabled": true,
       "board_mode": "web_scraping",
-      "schedule_cron": "30 8 * * *",
+      "schedule_cron": "30 5 28 * *",
       "schedule_timezone": "Asia/Tokyo",
       "schedule_config": {
         "scheduleMode": "cycle",
-        "cycleType": "interval",
-        "monthlyDay": "1",
+        "cycleType": "monthly",
+        "monthlyDay": "28",
         "weeklyDay": "mon",
         "intervalDays": "1",
-        "hour": "8",
+        "hour": "5",
         "minute": "30"
       },
       "dedup_key": "url",
@@ -4752,11 +4752,18 @@
         "format": "YYYY-MM-DD"
       },
       "collection_range": {
-        "type": "relative",
+        "type": "yearly",
         "period_start": "",
         "period_end": "",
         "relative_days": 365,
-        "years": []
+        "years": [
+          2021,
+          2022,
+          2023,
+          2024,
+          2025,
+          2026
+        ]
       },
       "collection_targets": {
         "title_body": true,
@@ -4791,8 +4798,15 @@
         },
         "collect_body": true,
         "collection_range": {
-          "type": "relative",
-          "days_before": 365
+          "type": "yearly",
+          "years": [
+            2021,
+            2022,
+            2023,
+            2024,
+            2025,
+            2026
+          ]
         },
         "attachments": {
           "enabled": true,
@@ -4816,5 +4830,5 @@
       }
     }
   ],
-  "updated_at": "2026-01-28T10:47:28.260Z"
+  "updated_at": "2026-02-04T00:30:43.116Z"
 }
