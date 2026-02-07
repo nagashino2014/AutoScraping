@@ -4426,106 +4426,6 @@
       }
     },
     {
-      "board_id": "mcee_board4",
-      "org_id": "mcee",
-      "board_name": "한강보도",
-      "access_mode": "static_html",
-      "list_url": "https://mcee.go.kr/hg/web/index.do?menuId=1261",
-      "doc_type": "보도자료",
-      "domain_tags": [
-        "대기",
-        "수질",
-        "폐기물",
-        "기후",
-        "기타",
-        "에너지"
-      ],
-      "enabled": true,
-      "board_mode": "web_scraping",
-      "schedule_cron": "0 9 * * 1",
-      "schedule_timezone": "Asia/Tokyo",
-      "schedule_config": {
-        "scheduleMode": "cycle",
-        "cycleType": "weekly",
-        "monthlyDay": "1",
-        "weeklyDay": "mon",
-        "intervalDays": "1",
-        "hour": "9",
-        "minute": "0"
-      },
-      "dedup_key": "url",
-      "published_date_rule": {
-        "source": "list",
-        "selector": "div.board_list .brd_body ul li",
-        "format": "YYYY-MM-DD"
-      },
-      "collection_range": {
-        "type": "relative",
-        "period_start": "",
-        "period_end": "",
-        "relative_days": 30,
-        "years": []
-      },
-      "collection_targets": {
-        "title_body": true,
-        "attachments": {
-          "enabled": true,
-          "all": true,
-          "hwpx": false,
-          "docx": false,
-          "xlsx": false,
-          "pdf": false
-        }
-      },
-      "web_config": {
-        "rendering": "static_html",
-        "list": {
-          "item_selector": "ul",
-          "container_selector": "div.board_list .brd_body",
-          "pagination": {
-            "type": "page_param",
-            "param": "page",
-            "start": 1,
-            "detected_method": "페이지네이션 영역 발견, 기본 page 파라미터 사용 (수동 확인 필요)"
-          }
-        },
-        "parse_rules": {
-          "title": "li a, li.title a",
-          "date": "li",
-          "link": "li a, li.title a",
-          "author": "li"
-        },
-        "detail": {
-          "content_selector": "article, .content, .view_content, #content",
-          "title_selector": "h1, .title, .view_title"
-        },
-        "collect_body": true,
-        "collection_range": {
-          "type": "relative",
-          "days_before": 30
-        },
-        "attachments": {
-          "enabled": true,
-          "collect_all": true,
-          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
-        }
-      },
-      "site_search_config": {
-        "form_selector": "#totalSearchForm",
-        "submit_selector": "#search_btn_1",
-        "submit_type": "form",
-        "options": [
-          {
-            "type": "text",
-            "name": "sckeyword",
-            "label": "검색어를 입력하세요.",
-            "selector": "#sckeyword",
-            "placeholder": "검색어를 입력하세요."
-          }
-        ]
-      }
-    },
-    {
       "board_id": "gir_board1",
       "org_id": "gir",
       "board_name": "보도자료",
@@ -4830,5 +4730,5 @@
       }
     }
   ],
-  "updated_at": "2026-02-04T00:30:43.116Z"
+  "updated_at": "2026-02-07T05:05:52.083Z"
 }
