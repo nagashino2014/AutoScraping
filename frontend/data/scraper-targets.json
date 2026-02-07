@@ -3880,7 +3880,7 @@
       "board_id": "mcee_board4",
       "org_id": "mcee",
       "board_name": "고시·훈령·예규",
-      "access_mode": "dynamic_js",
+      "access_mode": "static_html",
       "list_url": "https://mcee.go.kr/home/web/index.do?menuId=71",
       "doc_type": "법령",
       "domain_tags": [
@@ -3929,11 +3929,11 @@
         "title_body": true,
         "attachments": {
           "enabled": true,
-          "all": true,
+          "all": false,
           "hwpx": false,
           "docx": false,
           "xlsx": false,
-          "pdf": false
+          "pdf": true
         }
       },
       "web_config": {
@@ -3942,11 +3942,9 @@
           "item_selector": "tbody tr",
           "container_selector": "table.table_case01",
           "pagination": {
-            "type": "page_param",
-            "param": "pagerOffset",
-            "start": 0,
-            "step": 10,
-            "max_pages": 20
+            "type": "next_button",
+            "selector": "a.next",
+            "detected_method": "다음 버튼 기반 페이지네이션 감지"
           }
         },
         "parse_rules": {
@@ -3955,34 +3953,34 @@
           "link": "td.al a"
         },
         "detail": {
-          "content_selector": ".view_con"
+          "content_selector": "article, .content, .view_content, #content",
+          "title_selector": "h1, .title, .view_title"
         },
         "collect_body": true,
         "collection_range": {
-          "type": "relative",
-          "days_before": 90
+          "type": "yearly",
+          "years": [
+            2025,
+            2026
+          ]
         },
         "attachments": {
           "enabled": true,
-          "collect_all": true
+          "collect_all": false,
+          "file_types": [
+            "pdf"
+          ],
+          "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
         },
         "external_detail": {
           "enabled": true,
           "url_selector": "a[href*='law.go.kr/DRF']",
-          "url_pattern": "law\\.go\\.kr/DRF",
-          "label_selector": "dt:contains('법령상세링크')",
-          "url_transform": {
-            "extract_param": "ID",
-            "template": "https://www.law.go.kr/LSW/admRulInfoR.do?admRulSeq={ID}"
-          },
           "mode": "html",
           "content_selector": "body",
           "attachments_selector": "a[href*='flDownload']",
-          "metadata_selectors": {
-            "행정규칙일련번호": "dt:contains('행정규칙일련번호') + dd",
-            "행정규칙종류": "dt:contains('행정규칙종류') + dd",
-            "발령번호": "dt:contains('발령번호') + dd",
-            "소관부서명": "dt:contains('소관부서명') + dd"
+          "url_transform": {
+            "extract_param": "ID",
+            "template": "https://www.law.go.kr/LSW/admRulInfoR.do?admRulSeq={ID}"
           }
         }
       },
@@ -4855,5 +4853,5 @@
       }
     }
   ],
-  "updated_at": "2026-02-07T08:57:59.134Z"
+  "updated_at": "2026-02-07T11:06:42.706Z"
 }
