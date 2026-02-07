@@ -3877,6 +3877,141 @@
       }
     },
     {
+      "board_id": "mcee_board4",
+      "org_id": "mcee",
+      "board_name": "고시·훈령·예규",
+      "access_mode": "dynamic_js",
+      "list_url": "https://mcee.go.kr/home/web/index.do?menuId=71",
+      "doc_type": "법령",
+      "domain_tags": [
+        "법령",
+        "고시",
+        "훈령",
+        "예규",
+        "기후",
+        "에너지",
+        "환경",
+        "대기",
+        "수질",
+        "폐기물",
+        "기타"
+      ],
+      "enabled": true,
+      "board_mode": "web_scraping",
+      "schedule_cron": "0 4 * * 0",
+      "schedule_timezone": "Asia/Tokyo",
+      "schedule_config": {
+        "scheduleMode": "cycle",
+        "cycleType": "weekly",
+        "monthlyDay": "1",
+        "weeklyDay": "sun",
+        "intervalDays": "1",
+        "hour": "4",
+        "minute": "0"
+      },
+      "dedup_key": "url",
+      "published_date_rule": {
+        "source": "list",
+        "selector": "table.table_case01 tbody tr td:nth-child(3)",
+        "format": "YYYY-MM-DD"
+      },
+      "collection_range": {
+        "type": "yearly",
+        "period_start": "",
+        "period_end": "",
+        "relative_days": 90,
+        "years": [
+          2025,
+          2026
+        ]
+      },
+      "collection_targets": {
+        "title_body": true,
+        "attachments": {
+          "enabled": true,
+          "all": true,
+          "hwpx": false,
+          "docx": false,
+          "xlsx": false,
+          "pdf": false
+        }
+      },
+      "web_config": {
+        "rendering": "static_html",
+        "list": {
+          "item_selector": "tbody tr",
+          "container_selector": "table.table_case01",
+          "pagination": {
+            "type": "page_param",
+            "param": "pagerOffset",
+            "start": 0,
+            "step": 10,
+            "max_pages": 20
+          }
+        },
+        "parse_rules": {
+          "title": "td.al a",
+          "date": "td:nth-child(3)",
+          "link": "td.al a"
+        },
+        "detail": {
+          "content_selector": ".view_con"
+        },
+        "collect_body": true,
+        "collection_range": {
+          "type": "relative",
+          "days_before": 90
+        },
+        "attachments": {
+          "enabled": true,
+          "collect_all": true
+        },
+        "external_detail": {
+          "enabled": true,
+          "url_selector": "a[href*='law.go.kr/DRF']",
+          "url_pattern": "law\\.go\\.kr/DRF",
+          "label_selector": "dt:contains('법령상세링크')",
+          "mode": "api_xml",
+          "api_xml": {
+            "type_param": "XML",
+            "content_fields": [
+              "조문내용"
+            ],
+            "attachment_fields": [
+              {
+                "url_field": "별표서식파일링크",
+                "name_field": "별표HWP파일명"
+              },
+              {
+                "url_field": "별표서식PDF파일링크",
+                "name_field": "별표PDF파일명"
+              }
+            ]
+          },
+          "metadata_selectors": {
+            "행정규칙일련번호": "dt:contains('행정규칙일련번호') + dd",
+            "행정규칙종류": "dt:contains('행정규칙종류') + dd",
+            "발령번호": "dt:contains('발령번호') + dd",
+            "소관부서명": "dt:contains('소관부서명') + dd"
+          }
+        }
+      },
+      "site_search_config": {
+        "form_selector": "#totalSearchForm",
+        "submit_selector": "#search_btn",
+        "submit_type": "form",
+        "options": [
+          {
+            "type": "text",
+            "name": "sckeyword",
+            "label": "검색어를 입력하세요.",
+            "selector": "#sckeyword",
+            "placeholder": "검색어를 입력하세요."
+          }
+        ]
+      }
+    },
+    {
       "board_id": "motie_board1",
       "org_id": "motie",
       "board_name": "보도참고자료",
@@ -4730,5 +4865,5 @@
       }
     }
   ],
-  "updated_at": "2026-02-07T05:05:52.083Z"
+  "updated_at": "2026-02-07T06:11:52.822Z"
 }
