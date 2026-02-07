@@ -3971,23 +3971,13 @@
           "url_selector": "a[href*='law.go.kr/DRF']",
           "url_pattern": "law\\.go\\.kr/DRF",
           "label_selector": "dt:contains('법령상세링크')",
-          "mode": "api_xml",
-          "api_xml": {
-            "type_param": "XML",
-            "content_fields": [
-              "조문내용"
-            ],
-            "attachment_fields": [
-              {
-                "url_field": "별표서식파일링크",
-                "name_field": "별표HWP파일명"
-              },
-              {
-                "url_field": "별표서식PDF파일링크",
-                "name_field": "별표PDF파일명"
-              }
-            ]
+          "url_transform": {
+            "extract_param": "ID",
+            "template": "https://www.law.go.kr/LSW/admRulInfoR.do?admRulSeq={ID}"
           },
+          "mode": "html",
+          "content_selector": "body",
+          "attachments_selector": "a[href*='flDownload']",
           "metadata_selectors": {
             "행정규칙일련번호": "dt:contains('행정규칙일련번호') + dd",
             "행정규칙종류": "dt:contains('행정규칙종류') + dd",
@@ -4865,5 +4855,5 @@
       }
     }
   ],
-  "updated_at": "2026-02-07T06:11:52.822Z"
+  "updated_at": "2026-02-07T08:57:59.134Z"
 }
