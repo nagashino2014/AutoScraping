@@ -29,5 +29,5 @@ if [ -d "/app/data-defaults" ]; then
   echo "[Init] 데이터 초기화 완료"
 fi
 
-# nextjs 사용자로 서버 시작
-exec su -s /bin/sh nextjs -c "node server.js"
+# nextjs 사용자로 서버 시작 (-m: 환경 변수 보존 - Railway 환경 변수 전달 필수)
+exec su -m -s /bin/sh nextjs -c "node server.js"
