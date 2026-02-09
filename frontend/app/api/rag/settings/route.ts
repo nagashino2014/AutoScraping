@@ -15,13 +15,33 @@ import {
 } from "@/lib/rag/rag-settings";
 
 /**
+ * 환경 변수에서 API 키 마스킹 (앞 8자 + ... + 뒤 4자)
+ */
+function maskEnvApiKey(key: string): string {
+  if (!key || key.length < 16) {
+    return key ? "****" : "";
+  }
+  return `${key.slice(0, 8)}...${key.slice(-4)}`;
+}
+
+/**
  * GET: RAG 설정 조회
  */
 export async function GET(req: NextRequest) {
   try {
     const settings = loadRAGSettings();
     
-    // API 키 마스킹 (보안)
+    // 환경 변수(process.env)에서 API 키 상태 확인
+    const envOpenai = process.env.OPENAI_API_KEY || "";
+    const envAnthropic = process.env.ANTHROPIC_API_KEY || "";
+    const envGoogle = process.env.GEMINI_API_KEY || "";
+    
+    // 설정 파일 또는 환경 변수 중 하나라도 설정되어 있으면 "configured"
+    const openaiConfigured = !!(settings.llm.apiKeys.openai || envOpenai);
+    const anthropicConfigured = !!(settings.llm.apiKeys.anthropic || envAnthropic);
+    const googleConfigured = !!(settings.llm.apiKeys.google || envGoogle);
+
+    // API 키 마스킹 (보안) - 설정 파일 기반
     const maskedSettings = {
       ...settings,
       llm: {
@@ -31,11 +51,26 @@ export async function GET(req: NextRequest) {
           anthropic: maskAPIKey(settings.llm.apiKeys.anthropic),
           google: maskAPIKey(settings.llm.apiKeys.google),
         },
-        // 검증 상태 추가
+        // 검증 상태 (설정 파일 + 환경 변수 통합)
         apiKeyStatus: {
-          openai: settings.llm.apiKeys.openai ? "configured" : "not_configured",
-          anthropic: settings.llm.apiKeys.anthropic ? "configured" : "not_configured",
-          google: settings.llm.apiKeys.google ? "configured" : "not_configured",
+          openai: openaiConfigured ? "configured" : "not_configured",
+          anthropic: anthropicConfigured ? "configured" : "not_configured",
+          google: googleConfigured ? "configured" : "not_configured",
+        },
+        // 환경 변수 기반 API 키 정보 (프론트엔드 envApiKeys 대체용)
+        envApiKeys: {
+          openai: {
+            configured: !!envOpenai,
+            maskedKey: maskEnvApiKey(envOpenai),
+          },
+          anthropic: {
+            configured: !!envAnthropic,
+            maskedKey: maskEnvApiKey(envAnthropic),
+          },
+          google: {
+            configured: !!envGoogle,
+            maskedKey: maskEnvApiKey(envGoogle),
+          },
         },
       },
     };
