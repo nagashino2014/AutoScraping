@@ -45,7 +45,7 @@ export async function GET() {
     const embeddedCount = Object.keys(embeddingData.embeddings).length;
     
     // 청킹 데이터에서 총 청크 수
-    const allChunks = getChunks();
+    const allChunks = await getChunks();
 
     return NextResponse.json({
       success: true,
@@ -65,7 +65,7 @@ export async function GET() {
     // 백엔드 연결 실패 시에도 로컬 임베딩 데이터는 표시
     const embeddingData = loadEmbeddingData();
     const embeddedCount = Object.keys(embeddingData.embeddings).length;
-    const allChunks = getChunks();
+    const allChunks = await getChunks();
 
     return NextResponse.json({
       success: false,
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     
     for (const [chunkId, embeddingInfo] of embeddingEntries) {
       // 청킹 데이터에서 원본 청크 찾기 (있으면 메타데이터 포함)
-      const originalChunk = getChunkById(chunkId);
+      const originalChunk = await getChunkById(chunkId);
       
       // chunk_id에서 메타데이터 파싱 (형식: org_board_date_docname_type_index)
       const idParts = chunkId.split("_");

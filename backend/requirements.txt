@@ -30,7 +30,7 @@ pytesseract==0.3.10
 
 # Image processing
 opencv-python>=4.8.0
-numpy>=1.24.0
+numpy>=1.24.0,<2.0.0
 Pillow
 
 # Table structure recovery (PDF OCR)
@@ -47,6 +47,16 @@ httpx==0.26.0
 # Embedding models (HuggingFace)
 sentence-transformers>=2.2.2
 torch>=2.0.0
+transformers>=4.30.0
 
 # Vector Database
 chromadb>=0.4.0
+
+# Advanced RAG (Retrieval Quality Enhancement)
+rank_bm25>=0.2.2
+
+# Machine Learning
+scikit-learn>=1.3.0
+
+# Cloudflare R2 Storage (S3 호환)
+boto3>=1.28.0

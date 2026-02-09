@@ -36,11 +36,11 @@ export async function GET(request: NextRequest) {
     if (docIds && docIds.length > 0) {
       // 특정 문서들만
       for (const docId of docIds) {
-        chunks.push(...getChunks(docId));
+        chunks.push(...(await getChunks(docId)));
       }
     } else {
       // 모든 청크
-      chunks = getChunks();
+      chunks = await getChunks();
     }
 
     if (chunks.length === 0) {
@@ -191,10 +191,10 @@ export async function POST(request: NextRequest) {
     
     if (doc_ids && doc_ids.length > 0) {
       for (const docId of doc_ids) {
-        chunks.push(...getChunks(docId));
+        chunks.push(...(await getChunks(docId)));
       }
     } else {
-      chunks = getChunks();
+      chunks = await getChunks();
     }
 
     // 임베딩 정보 수집

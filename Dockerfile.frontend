@@ -1,0 +1,110 @@
+# ============================================================
+# Web Scraper Frontend - Next.js 15 + Playwright
+# ============================================================
+FROM node:20-slim AS base
+
+# 시스템 의존성 설치 (Playwright 및 한글 폰트)
+RUN apt-get update && apt-get install -y \
+    # Playwright 의존성
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libatspi2.0-0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    # 한글 폰트
+    fonts-nanum \
+    # 기타 유틸리티
+    ca-certificates \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ============================================================
+# Dependencies Stage
+# ============================================================
+FROM base AS deps
+
+# package.json 복사
+COPY frontend/package.json frontend/package-lock.json ./
+
+# 의존성 설치
+RUN npm ci
+
+# Playwright 브라우저 설치 (Chromium만)
+RUN npx playwright install chromium
+
+# ============================================================
+# Builder Stage
+# ============================================================
+FROM base AS builder
+
+WORKDIR /app
+
+# 의존성 복사
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /root/.cache/ms-playwright /root/.cache/ms-playwright
+
+# 소스 코드 복사
+COPY frontend/ ./
+
+# 환경 변수 (빌드 시)
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+
+# Next.js 빌드
+RUN npm run build
+
+# ============================================================
+# Production Stage
+# ============================================================
+FROM base AS runner
+
+WORKDIR /app
+
+# 환경 변수
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# 비root 사용자 생성
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# 필요한 파일 복사
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+# Playwright 브라우저 복사
+COPY --from=deps /root/.cache/ms-playwright /root/.cache/ms-playwright
+
+# 데이터 디렉토리 생성 및 권한 설정
+RUN mkdir -p /app/data /app/save /app/chunk && \
+    chown -R nextjs:nodejs /app
+
+# 사용자 전환
+USER nextjs
+
+# 포트 노출
+EXPOSE 3000
+
+# 헬스체크
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+
+# 서버 시작
+CMD ["node", "server.js"]

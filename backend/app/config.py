@@ -8,12 +8,29 @@ from typing import Optional
 
 # 기본 경로 설정
 BASE_DIR = Path(__file__).parent.parent
-FRONTEND_DIR = BASE_DIR.parent / "frontend"
-SCRAPING_DATA_DIR = FRONTEND_DIR / "save" / "ScrapingData"
-EXTRACTED_DATA_DIR = FRONTEND_DIR / "save" / "ExtractedData"
+IS_DOCKER = os.environ.get("DOCKER_ENV") == "true"
 
-# 디렉토리 생성
-EXTRACTED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+if IS_DOCKER:
+    # Docker 환경: 볼륨 마운트 경로 사용
+    FRONTEND_DIR = Path("/app")
+    SCRAPING_DATA_DIR = Path("/app/save/ScrapingData")
+    EXTRACTED_DATA_DIR = Path("/app/save/ExtractedData")
+else:
+    # 로컬 환경: 상대 경로 사용
+    FRONTEND_DIR = BASE_DIR.parent / "frontend"
+    SCRAPING_DATA_DIR = FRONTEND_DIR / "save" / "ScrapingData"
+    EXTRACTED_DATA_DIR = FRONTEND_DIR / "save" / "ExtractedData"
+
+# 디렉토리 생성 (R2 모드가 아닌 경우에만 로컬 디렉토리 생성)
+USE_R2 = bool(os.environ.get("R2_ENDPOINT"))
+if not USE_R2:
+    EXTRACTED_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── Cloudflare R2 설정 ─────────────────────────────────────
+R2_ENDPOINT = os.environ.get("R2_ENDPOINT")
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
+R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME", "webscraper-data")
 
 
 class OCRSettings(BaseModel):

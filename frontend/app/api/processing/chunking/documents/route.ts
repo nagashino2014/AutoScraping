@@ -354,8 +354,8 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // 선택된 폴더의 문서 로드
-    const documents = getExtractedDocumentsFromPaths(date_folder_paths);
+    // 선택된 폴더의 문서 로드 (async)
+    const documents = await getExtractedDocumentsFromPaths(date_folder_paths);
     
     // 통계 계산
     const totalFiles = documents.length;

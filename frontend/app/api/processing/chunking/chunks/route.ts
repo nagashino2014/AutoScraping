@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     
     // 단일 청크 조회
     if (chunkId) {
-      const chunk = getChunkById(chunkId);
+      const chunk = await getChunkById(chunkId);
       if (!chunk) {
         return NextResponse.json(
           { success: false, error: "청크를 찾을 수 없습니다." },
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     }
     
     // 청크 목록 조회
-    let chunks = getChunks(docId || undefined);
+    let chunks = await getChunks(docId || undefined);
     
     // 타입 필터
     if (chunkType) {
@@ -94,7 +94,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
     
-    deleteChunksByDocId(docId);
+    await deleteChunksByDocId(docId);
     
     return NextResponse.json({ success: true });
     

@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import https from "node:https";
 import http from "node:http";
+import { storage } from "@/lib/storage";
 import {
   readDownloadSettings,
   buildFilePath,
@@ -359,6 +360,25 @@ export async function downloadAttachment(
         success: false,
         error: `파일 크기 초과: ${fileSizeMb.toFixed(1)}MB > ${settings.fileManagement.maxFileSizeMb}MB`,
       };
+    }
+    
+    // R2 모드: 다운로드된 파일을 R2에 업로드
+    if (storage.backend === "r2") {
+      try {
+        // 로컬 경로에서 R2 키 생성 (save/ScrapingData/... → ScrapingData/...)
+        const cwd = process.cwd();
+        let r2Key = path.relative(cwd, finalPath).replace(/\\/g, "/");
+        if (r2Key.startsWith("save/")) {
+          r2Key = r2Key.slice(5); // "save/" 제거
+        }
+        const fileBuffer = fs.readFileSync(finalPath);
+        await storage.upload(r2Key, fileBuffer);
+        // 로컬 임시 파일 삭제 (R2에 저장 완료)
+        fs.unlinkSync(finalPath);
+      } catch (r2Err) {
+        console.error(`[R2 Upload] 실패, 로컬 파일 유지: ${r2Err}`);
+        // R2 업로드 실패해도 로컬 파일은 유지
+      }
     }
     
     // 성공

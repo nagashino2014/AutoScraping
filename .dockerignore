@@ -1,0 +1,65 @@
+# ============================================================
+# Docker 빌드 제외 파일
+# ============================================================
+
+# Git
+.git
+.gitignore
+
+# Node.js
+frontend/node_modules
+frontend/.next
+frontend/.env.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Python
+backend/venv*
+backend/__pycache__
+backend/*.pyc
+backend/*.pyo
+backend/*.egg-info
+backend/.pytest_cache
+backend/.mypy_cache
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# 문서
+docs/
+*.md
+!frontend/README.md
+
+# 테스트
+frontend/scripts/test-*.js
+backend/tests/
+
+# 임시 파일
+*.log
+*.tmp
+.temp-*
+
+# 환경 변수 (보안)
+.env
+.env.local
+.env.*.local
+.env.docker
+
+# 민감 데이터 제외 (선택적 - 필요시 주석 해제)
+# frontend/data/chromadb/
+# frontend/data/*.db
+# frontend/save/

@@ -19,7 +19,7 @@ import {
 import { getChunks, Chunk } from "@/lib/chunking/chunking-store";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5분 타임아웃
+export const maxDuration = 600; // 10분 타임아웃 (SSE는 더 오래 유지 가능)
 
 // 백엔드 URL
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
@@ -167,17 +167,17 @@ export async function POST(request: NextRequest) {
 
     if (chunk_ids && chunk_ids.length > 0) {
       // 특정 청크 ID로 조회
-      const allChunks = getChunks();
+      const allChunks = await getChunks();
       chunks = allChunks.filter((c) => chunk_ids.includes(c.chunk_id));
     } else if (doc_ids && doc_ids.length > 0) {
       // 특정 문서의 모든 청크 조회
       for (const docId of doc_ids) {
-        const docChunks = getChunks(docId);
+        const docChunks = await getChunks(docId);
         chunks.push(...docChunks);
       }
     } else {
       // 모든 청크 조회
-      chunks = getChunks();
+      chunks = await getChunks();
     }
 
     if (chunks.length === 0) {
@@ -421,7 +421,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 전체 임베딩 통계
-    const allChunks = getChunks();
+    const allChunks = await getChunks();
     let embeddedCount = 0;
     for (const chunk of allChunks) {
       if (getEmbedding(chunk.chunk_id)) {

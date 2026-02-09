@@ -1,0 +1,75 @@
+# ============================================================
+# Web Scraper Backend - FastAPI + OCR + Embedding
+# ============================================================
+FROM python:3.11-slim AS base
+
+# 시스템 의존성 설치
+RUN apt-get update && apt-get install -y \
+    # Tesseract OCR
+    tesseract-ocr \
+    tesseract-ocr-kor \
+    tesseract-ocr-eng \
+    # OpenCV 의존성
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    # 이미지 처리
+    libgomp1 \
+    # 한글 폰트
+    fonts-nanum \
+    # HWP 처리
+    libxml2-dev \
+    libxslt1-dev \
+    # 기타
+    wget \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ============================================================
+# Dependencies Stage
+# ============================================================
+FROM base AS deps
+
+# requirements.txt 복사
+COPY backend/requirements.txt ./
+
+# pip 업그레이드
+RUN pip install --upgrade pip
+
+# Python 패키지 설치 (캐싱 활용)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ============================================================
+# Production Stage
+# ============================================================
+FROM base AS runner
+
+WORKDIR /app
+
+# 의존성 복사
+COPY --from=deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=deps /usr/local/bin /usr/local/bin
+
+# 소스 코드 복사
+COPY backend/ ./
+
+# 캐시 디렉토리 생성
+RUN mkdir -p /app/table_cache /app/test_cache
+
+# 환경 변수
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# 포트 노출
+EXPOSE 8000
+
+# 헬스체크
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# 서버 시작 (reload 비활성화 - 프로덕션)
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -19,8 +19,9 @@ from ..extractors.hwp_extractor import HWPExtractor, HWPXExtractor
 from ..extractors.docx_extractor import DOCXExtractor
 from ..extractors.xlsx_extractor import XLSXExtractor
 from ..extractors.html_extractor import HTMLExtractor
-from ..config import ExtractionConfig, default_config, EXTRACTED_DATA_DIR, SCRAPING_DATA_DIR
+from ..config import ExtractionConfig, default_config, EXTRACTED_DATA_DIR, SCRAPING_DATA_DIR, USE_R2
 from ..utils.table_normalizer import TableNormalizer, create_normalizer_from_config
+from ..table_merge import CrossPageTableMerger, CrossPageMergeConfig
 
 
 # 파일 시그니처 (매직 넘버) 정의
@@ -107,6 +108,7 @@ class ExtractionService:
         self.config = config or default_config
         self._init_extractors()
         self._init_executor()
+        self._init_cross_page_merger()
     
     def _init_extractors(self):
         """추출기 초기화"""
@@ -125,6 +127,50 @@ class ExtractionService:
         self.executor = ThreadPoolExecutor(
             max_workers=self.config.processing.concurrent_files
         )
+    
+    def _init_cross_page_merger(self):
+        """Cross-page 표 병합기 초기화"""
+        # 설정에서 Cross-page 병합 설정 로드
+        merge_config = CrossPageMergeConfig()
+        
+        # ExtractionConfig에 cross_page_merge 설정이 있으면 사용
+        if hasattr(self.config, 'cross_page_merge'):
+            cfg = self.config.cross_page_merge
+            merge_config = CrossPageMergeConfig(
+                enabled=getattr(cfg, 'enabled', True),
+                min_column_match_threshold=getattr(cfg, 'min_column_match_threshold', 0.85),
+                header_similarity_threshold=getattr(cfg, 'header_similarity_threshold', 0.90),
+                merge_confidence_threshold=getattr(cfg, 'merge_confidence_threshold', 0.70),
+                enable_header_dedup=getattr(cfg, 'enable_header_dedup', True),
+                pdf_use_bbox_analysis=getattr(cfg, 'pdf_use_bbox_analysis', True),
+            )
+        
+        self.cross_page_merger = CrossPageTableMerger(merge_config)
+    
+    def _apply_cross_page_merge(
+        self, 
+        result: ExtractionResult,
+        page_height: float = None
+    ) -> ExtractionResult:
+        """
+        추출 결과에 Cross-page 표 병합 적용
+        
+        Args:
+            result: 추출 결과
+            page_height: 페이지 높이 (PDF 위치 분석용)
+            
+        Returns:
+            ExtractionResult: 병합 적용된 결과
+        """
+        if not hasattr(self, 'cross_page_merger'):
+            return result
+        
+        try:
+            merged_result = self.cross_page_merger.process(result, page_height)
+            return merged_result
+        except Exception as e:
+            print(f"[CROSS-PAGE MERGE ERROR] {e}")
+            return result
     
     def _apply_progressive_settings(self, level: int) -> None:
         """단계적 재시도 설정 적용"""
@@ -264,16 +310,9 @@ class ExtractionService:
             result = self._extract_with_multi_engine(str(file_path), actual_format, progress_callback)
             if result:
                 if result.status != ExtractionStatus.FAILED:
-                    # 성공한 경우
-                    if result.quality_score >= self.config.quality_validation.pass_threshold:
-                        self._save_result(result)
-                        return result
-                    else:
-                        # 품질 미달 - 저장하고 FAILED로 반환
-                        result.status = ExtractionStatus.FAILED
-                        result.error_message = f"Quality score ({result.quality_score:.2%}) below threshold after multi-engine comparison"
-                        self._save_result(result)
-                        return result
+                    # 성공한 경우: 추출기 판단을 우선 존중
+                    self._save_result(result)
+                    return result
                 else:
                     # 모든 엔진이 실패한 경우 - 추가 재시도 없이 바로 종료
                     print(f"[MULTI-ENGINE] 모든 엔진 실패, 재시도 건너뜀: {Path(file_path).name}")
@@ -320,9 +359,10 @@ class ExtractionService:
                 
                 # 성공하면 결과 저장 후 반환
                 if result.status != ExtractionStatus.FAILED:
-                    if result.quality_score >= self.config.quality_validation.pass_threshold:
-                        self._save_result(result)
-                        return result
+                    # Cross-page 표 병합 적용
+                    result = self._apply_cross_page_merge(result)
+                    self._save_result(result)
+                    return result
                 
                 # 실패했지만 재시도 가능한 경우
                 last_error = result.error_message
@@ -338,7 +378,12 @@ class ExtractionService:
         # 모든 재시도 후에도 임계값 미달
         # best_result가 있으면 품질 점수를 유지하면서 FAILED 상태로 반환
         if best_result and best_result.quality_score > 0:
-            # 품질 점수가 있지만 임계값 미달인 경우
+            # 추출기 결과가 실패가 아닌 경우 그대로 반환
+            if best_result.status != ExtractionStatus.FAILED:
+                best_result = self._apply_cross_page_merge(best_result)
+                self._save_result(best_result)
+                return best_result
+            # 품질 점수가 있지만 임계값 미달로 실패 처리된 경우
             best_result.status = ExtractionStatus.FAILED
             best_result.error_message = f"Quality score ({best_result.quality_score:.2%}) below threshold ({self.config.quality_validation.pass_threshold:.2%})"
             print(f"[QUALITY FAILED] {Path(file_path).name}: score={best_result.quality_score:.3f}, threshold={self.config.quality_validation.pass_threshold}")
@@ -542,7 +587,8 @@ class ExtractionService:
             output_dir = EXTRACTED_DATA_DIR / org_name / board_name / date_folder
         else:
             output_dir = EXTRACTED_DATA_DIR / date_folder
-        output_dir.mkdir(parents=True, exist_ok=True)
+        if not USE_R2:
+            output_dir.mkdir(parents=True, exist_ok=True)
         
         # 표 정규화 적용
         text_to_save = result.text
@@ -617,11 +663,33 @@ class ExtractionService:
             "tables": structured_tables,
         }
         
-        output_file.write_text(
-            json.dumps(output_data, ensure_ascii=False, indent=2), 
-            encoding="utf-8"
-        )
-        print(f"[SAVE] JSON 저장 완료: {output_file}")
+        # R2 모드: Cloudflare R2에 업로드 / 로컬 모드: 파일 시스템에 저장
+        if USE_R2:
+            try:
+                from ..r2_storage import upload_json_to_r2
+                # R2 키 생성: ExtractedData/{기관}/{보드}/{연도월}/{파일명}.json
+                if org_name and board_name:
+                    r2_key = f"ExtractedData/{org_name}/{board_name}/{date_folder}/{file_path.stem}.json"
+                else:
+                    r2_key = f"ExtractedData/{date_folder}/{file_path.stem}.json"
+                upload_json_to_r2(r2_key, output_data)
+                print(f"[SAVE] R2 업로드 완료: {r2_key}")
+            except Exception as e:
+                print(f"[SAVE] R2 업로드 실패, 로컬 저장으로 폴백: {e}")
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_file = output_dir / f"{file_path.stem}.json"
+                output_file.write_text(
+                    json.dumps(output_data, ensure_ascii=False, indent=2),
+                    encoding="utf-8"
+                )
+                print(f"[SAVE] JSON 로컬 저장 완료: {output_file}")
+        else:
+            output_file = output_dir / f"{file_path.stem}.json"
+            output_file.write_text(
+                json.dumps(output_data, ensure_ascii=False, indent=2), 
+                encoding="utf-8"
+            )
+            print(f"[SAVE] JSON 저장 완료: {output_file}")
     
     def get_supported_formats(self) -> List[str]:
         """지원되는 파일 형식 목록"""
@@ -633,6 +701,7 @@ class ExtractionService:
         
         - 모든 추출기에 새 설정 전파
         - concurrent_files 변경 시 스레드풀 재생성
+        - Cross-page 병합기 설정 업데이트
         """
         old_concurrent = self.config.processing.concurrent_files
         self.config = config
@@ -648,6 +717,9 @@ class ExtractionService:
         if old_concurrent != config.processing.concurrent_files:
             self.executor.shutdown(wait=False)
             self._init_executor()
+        
+        # Cross-page 병합기 재초기화
+        self._init_cross_page_merger()
     
     def get_current_config(self) -> Dict[str, Any]:
         """현재 설정 반환"""

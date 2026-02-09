@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { storage, downloadJson } from "@/lib/storage";
 
 // ============================================================================
 // 타입 정의
@@ -36,6 +37,13 @@ export interface ChunkMetadata {
   row_end?: number;
   is_first_chunk?: boolean;
   is_last_chunk?: boolean;
+  // Cross-page 표 병합 메타데이터
+  is_merged_table?: boolean;           // 병합된 표 여부
+  merge_source_pages?: number[];       // 원본 페이지 목록 (예: [1, 2, 3, 4, 5])
+  merge_source_count?: number;         // 병합된 원본 표 개수
+  merge_confidence?: number;           // 병합 신뢰도 (0.0~1.0)
+  original_table_indices?: string;     // 원본 표 인덱스 (JSON 문자열)
+  header_signature?: string;           // 헤더 시그니처 해시
   // 문서 메타데이터
   doc_id: string;
   org_id: string;
@@ -122,7 +130,7 @@ const DEFAULT_INDEX: ChunkingIndex = {
 };
 
 // ============================================================================
-// 파일 경로
+// 파일 경로 (로컬 전용 - 인덱스, 설정)
 // ============================================================================
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -142,14 +150,6 @@ function ensureDir(dirPath: string): void {
 }
 
 /**
- * 청크 폴더 경로 생성
- * chunk/{기관명}/{보드명}/{연도월}
- */
-function getChunkFolderPath(orgName: string, boardName: string, dateFolder: string): string {
-  return path.join(CHUNK_DATA_PATH, orgName, boardName, dateFolder);
-}
-
-/**
  * 청크 파일명 생성
  * {기관명}_{보드명}_{연도월}_chunks.json
  */
@@ -162,7 +162,35 @@ function getChunkFileName(orgName: string, boardName: string, dateFolder: string
 }
 
 /**
- * 청크 파일 경로 생성
+ * 청크 폴더 경로 생성 (로컬 전용)
+ * chunk/{기관명}/{보드명}/{연도월}
+ */
+function getChunkFolderPath(orgName: string, boardName: string, dateFolder: string): string {
+  return path.join(CHUNK_DATA_PATH, orgName, boardName, dateFolder);
+}
+
+/**
+ * 청크 파일의 스토리지 키 생성 (R2 / 로컬 공통)
+ * chunk/{기관명}/{보드명}/{연도월}/{파일명}
+ */
+function getChunkStorageKey(orgName: string, boardName: string, dateFolder: string): string {
+  return `chunk/${orgName}/${boardName}/${dateFolder}/${getChunkFileName(orgName, boardName, dateFolder)}`;
+}
+
+/**
+ * 추출 데이터의 스토리지 키 prefix 생성
+ * ExtractedData/{기관명}/{보드명}/{연도월}/
+ */
+function getExtractedDataPrefix(orgName?: string, boardName?: string, dateFolder?: string): string {
+  let prefix = "ExtractedData/";
+  if (orgName) prefix += `${orgName}/`;
+  if (boardName) prefix += `${boardName}/`;
+  if (dateFolder) prefix += `${dateFolder}/`;
+  return prefix;
+}
+
+/**
+ * 청크 파일 경로 생성 (로컬 파일 시스템)
  * chunk/{기관명}/{보드명}/{연도월}/{기관명}_{보드명}_{연도월}_chunks.json
  */
 export function getChunkFilePath(orgName: string, boardName: string, dateFolder: string): string {
@@ -173,7 +201,7 @@ export function getChunkFilePath(orgName: string, boardName: string, dateFolder:
 }
 
 // ============================================================================
-// 인덱스 로드/저장
+// 인덱스 로드/저장 (로컬 - Railway 볼륨)
 // ============================================================================
 
 export function loadChunkingIndex(): ChunkingIndex {
@@ -204,27 +232,25 @@ export function saveChunkingIndex(index: ChunkingIndex): void {
 }
 
 // ============================================================================
-// 청크 파일 로드/저장
+// 청크 파일 로드/저장 (스토리지 추상화 - R2 또는 로컬)
 // ============================================================================
 
-export function loadChunkFile(orgName: string, boardName: string, dateFolder: string): ChunkFile | null {
-  const filePath = getChunkFilePath(orgName, boardName, dateFolder);
-  
-  if (!fs.existsSync(filePath)) {
-    return null;
-  }
+export async function loadChunkFile(orgName: string, boardName: string, dateFolder: string): Promise<ChunkFile | null> {
+  const key = getChunkStorageKey(orgName, boardName, dateFolder);
   
   try {
-    const content = fs.readFileSync(filePath, "utf-8");
-    return JSON.parse(content) as ChunkFile;
+    const exists = await storage.exists(key);
+    if (!exists) return null;
+    
+    const data = await downloadJson<ChunkFile>(key);
+    return data;
   } catch {
     return null;
   }
 }
 
-export function saveChunkFile(orgName: string, boardName: string, dateFolder: string, chunks: Chunk[]): void {
-  const folderPath = getChunkFolderPath(orgName, boardName, dateFolder);
-  ensureDir(folderPath);
+export async function saveChunkFile(orgName: string, boardName: string, dateFolder: string, chunks: Chunk[]): Promise<void> {
+  const key = getChunkStorageKey(orgName, boardName, dateFolder);
   
   const chunkFile: ChunkFile = {
     org_name: orgName,
@@ -235,20 +261,21 @@ export function saveChunkFile(orgName: string, boardName: string, dateFolder: st
     updated_at: new Date().toISOString(),
   };
   
-  const filePath = getChunkFilePath(orgName, boardName, dateFolder);
-  fs.writeFileSync(filePath, JSON.stringify(chunkFile, null, 2), "utf-8");
+  await storage.upload(key, JSON.stringify(chunkFile, null, 2), "application/json");
 }
 
-export function deleteChunkFile(orgName: string, boardName: string, dateFolder: string): void {
-  const filePath = getChunkFilePath(orgName, boardName, dateFolder);
+export async function deleteChunkFile(orgName: string, boardName: string, dateFolder: string): Promise<void> {
+  const key = getChunkStorageKey(orgName, boardName, dateFolder);
   
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+  try {
+    await storage.delete(key);
+  } catch {
+    // 파일이 없어도 무시
   }
 }
 
 // ============================================================================
-// 설정 관리
+// 설정 관리 (동기 - 로컬)
 // ============================================================================
 
 export function getChunkingSettings(): ChunkingSettings {
@@ -264,7 +291,7 @@ export function updateChunkingSettings(settings: Partial<ChunkingSettings>): Chu
 }
 
 // ============================================================================
-// 문서 관리
+// 문서 관리 (동기 - 인덱스 조작만)
 // ============================================================================
 
 export function getChunkedDocuments(): ChunkedDocument[] {
@@ -290,42 +317,42 @@ export function addOrUpdateDocument(doc: ChunkedDocument): void {
   saveChunkingIndex(index);
 }
 
-export function deleteDocument(docId: string): void {
+export async function deleteDocument(docId: string): Promise<void> {
   const index = loadChunkingIndex();
   const doc = index.documents.find(d => d.doc_id === docId);
   
   if (doc) {
     // 해당 문서의 청크도 삭제
-    deleteChunksForDocument(doc);
+    await deleteChunksForDocument(doc);
     index.documents = index.documents.filter(d => d.doc_id !== docId);
     saveChunkingIndex(index);
   }
 }
 
-function deleteChunksForDocument(doc: ChunkedDocument): void {
-  const chunkFile = loadChunkFile(doc.org_name, doc.board_name, doc.date_folder);
+async function deleteChunksForDocument(doc: ChunkedDocument): Promise<void> {
+  const chunkFile = await loadChunkFile(doc.org_name, doc.board_name, doc.date_folder);
   if (chunkFile) {
     const remainingChunks = chunkFile.chunks.filter(c => c.metadata.doc_id !== doc.doc_id);
     if (remainingChunks.length > 0) {
-      saveChunkFile(doc.org_name, doc.board_name, doc.date_folder, remainingChunks);
+      await saveChunkFile(doc.org_name, doc.board_name, doc.date_folder, remainingChunks);
     } else {
-      deleteChunkFile(doc.org_name, doc.board_name, doc.date_folder);
+      await deleteChunkFile(doc.org_name, doc.board_name, doc.date_folder);
     }
   }
 }
 
 // ============================================================================
-// 청크 관리
+// 청크 관리 (비동기 - 스토리지 추상화)
 // ============================================================================
 
 /**
  * 특정 문서의 청크 조회
  */
-export function getChunksForDocument(docId: string): Chunk[] {
+export async function getChunksForDocument(docId: string): Promise<Chunk[]> {
   const doc = getDocumentById(docId);
   if (!doc) return [];
   
-  const chunkFile = loadChunkFile(doc.org_name, doc.board_name, doc.date_folder);
+  const chunkFile = await loadChunkFile(doc.org_name, doc.board_name, doc.date_folder);
   if (!chunkFile) return [];
   
   return chunkFile.chunks.filter(c => c.metadata.doc_id === docId);
@@ -334,15 +361,15 @@ export function getChunksForDocument(docId: string): Chunk[] {
 /**
  * 특정 폴더의 모든 청크 조회
  */
-export function getChunksForFolder(orgName: string, boardName: string, dateFolder: string): Chunk[] {
-  const chunkFile = loadChunkFile(orgName, boardName, dateFolder);
+export async function getChunksForFolder(orgName: string, boardName: string, dateFolder: string): Promise<Chunk[]> {
+  const chunkFile = await loadChunkFile(orgName, boardName, dateFolder);
   return chunkFile?.chunks || [];
 }
 
 /**
  * 전체 청크 조회 (모든 폴더 순회)
  */
-export function getChunks(docId?: string): Chunk[] {
+export async function getChunks(docId?: string): Promise<Chunk[]> {
   if (docId) {
     return getChunksForDocument(docId);
   }
@@ -359,20 +386,20 @@ export function getChunks(docId?: string): Chunk[] {
   // 각 폴더의 청크 로드
   for (const folderKey of folderPaths) {
     const [orgName, boardName, dateFolder] = folderKey.split("|");
-    const chunks = getChunksForFolder(orgName, boardName, dateFolder);
+    const chunks = await getChunksForFolder(orgName, boardName, dateFolder);
     allChunks.push(...chunks);
   }
   
   return allChunks;
 }
 
-export function getChunkById(chunkId: string): Chunk | undefined {
+export async function getChunkById(chunkId: string): Promise<Chunk | undefined> {
   // chunk_id 형식: {org}_{board}_{date}_{docId}_{index}
   // 효율적인 검색을 위해 인덱스에서 문서를 먼저 찾음
   const index = loadChunkingIndex();
   
   for (const doc of index.documents) {
-    const chunkFile = loadChunkFile(doc.org_name, doc.board_name, doc.date_folder);
+    const chunkFile = await loadChunkFile(doc.org_name, doc.board_name, doc.date_folder);
     if (chunkFile) {
       const chunk = chunkFile.chunks.find(c => c.chunk_id === chunkId);
       if (chunk) return chunk;
@@ -385,12 +412,12 @@ export function getChunkById(chunkId: string): Chunk | undefined {
 /**
  * 문서에 청크 추가 (분리 저장)
  */
-export function addChunksForDocument(
+export async function addChunksForDocument(
   doc: ChunkedDocument,
   chunks: Chunk[]
-): void {
+): Promise<void> {
   // 기존 청크 파일 로드
-  const existingChunkFile = loadChunkFile(doc.org_name, doc.board_name, doc.date_folder);
+  const existingChunkFile = await loadChunkFile(doc.org_name, doc.board_name, doc.date_folder);
   
   let allChunks: Chunk[];
   if (existingChunkFile) {
@@ -402,7 +429,7 @@ export function addChunksForDocument(
   }
   
   // 청크 파일 저장
-  saveChunkFile(doc.org_name, doc.board_name, doc.date_folder, allChunks);
+  await saveChunkFile(doc.org_name, doc.board_name, doc.date_folder, allChunks);
   
   // 문서 정보 업데이트
   doc.chunk_file_path = getChunkFilePath(doc.org_name, doc.board_name, doc.date_folder);
@@ -418,7 +445,7 @@ export function addChunksForDocument(
 }
 
 // Legacy compatibility
-export function addChunks(chunks: Chunk[]): void {
+export async function addChunks(chunks: Chunk[]): Promise<void> {
   // 청크를 문서별로 그룹화
   const chunksByDoc = new Map<string, Chunk[]>();
   
@@ -434,36 +461,36 @@ export function addChunks(chunks: Chunk[]): void {
   for (const [docId, docChunks] of chunksByDoc) {
     const doc = getDocumentById(docId);
     if (doc) {
-      addChunksForDocument(doc, docChunks);
+      await addChunksForDocument(doc, docChunks);
     }
   }
 }
 
-export function updateChunk(chunkId: string, updates: Partial<Chunk>): void {
-  const chunk = getChunkById(chunkId);
+export async function updateChunk(chunkId: string, updates: Partial<Chunk>): Promise<void> {
+  const chunk = await getChunkById(chunkId);
   if (!chunk) return;
   
   const { org_name, board_name, date_folder } = chunk.metadata;
-  const chunkFile = loadChunkFile(org_name, board_name, date_folder);
+  const chunkFile = await loadChunkFile(org_name, board_name, date_folder);
   
   if (chunkFile) {
     const index = chunkFile.chunks.findIndex(c => c.chunk_id === chunkId);
     if (index >= 0) {
       chunkFile.chunks[index] = { ...chunkFile.chunks[index], ...updates };
-      saveChunkFile(org_name, board_name, date_folder, chunkFile.chunks);
+      await saveChunkFile(org_name, board_name, date_folder, chunkFile.chunks);
     }
   }
 }
 
-export function deleteChunksByDocId(docId: string): void {
+export async function deleteChunksByDocId(docId: string): Promise<void> {
   const doc = getDocumentById(docId);
   if (doc) {
-    deleteChunksForDocument(doc);
+    await deleteChunksForDocument(doc);
   }
 }
 
 // ============================================================================
-// 통계
+// 통계 (동기 - 인덱스 기반)
 // ============================================================================
 
 export interface ChunkingStats {
@@ -524,8 +551,6 @@ export function getChunkingStats(): ChunkingStats {
     : 0;
   
   // 임베딩 성공률: 임베딩된 청크가 있을 때만 계산, 없으면 0%
-  // 임베딩 통계 파일에서 실패 정보를 가져와야 하지만, 여기서는 간단히 계산
-  // embedded_chunks가 0이면 아직 시도하지 않은 것으로 0% 표시
   let embeddingSuccessRate = 0;
   let embeddingFailedChunks = 0;
   
@@ -576,7 +601,7 @@ export function getChunkingStats(): ChunkingStats {
 }
 
 // ============================================================================
-// 추출된 문서 스캔 (ExtractedData 폴더)
+// 추출된 문서 스캔 (ExtractedData - 스토리지 추상화)
 // ============================================================================
 
 export interface ExtractedDocument {
@@ -618,84 +643,82 @@ export interface OrgFolderInfo {
 
 /**
  * ExtractedData 폴더 구조 스캔
- * 경로: save/ExtractedData/{기관}/{보드}/{연도-월}/*.json
+ * R2 모드: storage.list("ExtractedData/") 로 키를 조회하여 구조 재구성
+ * 로컬 모드: 기존 디렉토리 워킹
  */
-export function scanExtractedDataFolder(): OrgFolderInfo[] {
+export async function scanExtractedDataFolder(): Promise<OrgFolderInfo[]> {
   const result: OrgFolderInfo[] = [];
-  
-  if (!fs.existsSync(EXTRACTED_TEXT_PATH)) {
-    fs.mkdirSync(EXTRACTED_TEXT_PATH, { recursive: true });
-    return result;
-  }
-  
+
   try {
-    const orgFolders = fs.readdirSync(EXTRACTED_TEXT_PATH);
-    
-    for (const orgFolder of orgFolders) {
-      const orgPath = path.join(EXTRACTED_TEXT_PATH, orgFolder);
-      if (!fs.statSync(orgPath).isDirectory()) continue;
-      
+    const objects = await storage.list("ExtractedData/");
+
+    // 오브젝트 키에서 폴더 구조 재구성
+    // 키 형식: ExtractedData/{기관}/{보드}/{연도-월}/{파일}.json
+    const orgMap = new Map<string, Map<string, Map<string, { files: string[]; totalSize: number }>>>();
+
+    for (const obj of objects) {
+      if (!obj.Key || !obj.Key.endsWith(".json")) continue;
+      const parts = obj.Key.split("/");
+      // parts: ["ExtractedData", orgName, boardName, dateFolder, "file.json"]
+      if (parts.length < 5) continue;
+
+      const orgName = parts[1];
+      const boardName = parts[2];
+      const dateFolder = parts[3];
+      const fileName = parts[4];
+
+      if (!orgMap.has(orgName)) orgMap.set(orgName, new Map());
+      const boardMap = orgMap.get(orgName)!;
+      if (!boardMap.has(boardName)) boardMap.set(boardName, new Map());
+      const dateMap = boardMap.get(boardName)!;
+      if (!dateMap.has(dateFolder)) dateMap.set(dateFolder, { files: [], totalSize: 0 });
+      const entry = dateMap.get(dateFolder)!;
+      entry.files.push(fileName);
+      entry.totalSize += obj.Size || 0;
+    }
+
+    // Map → OrgFolderInfo 변환
+    for (const [orgName, boardMap] of orgMap) {
       const orgInfo: OrgFolderInfo = {
-        org_id: orgFolder,
-        org_name: orgFolder,
+        org_id: orgName,
+        org_name: orgName,
         total_files: 0,
         total_size: 0,
         boards: [],
       };
-      
-      const boardFolders = fs.readdirSync(orgPath);
-      
-      for (const boardFolder of boardFolders) {
-        const boardPath = path.join(orgPath, boardFolder);
-        if (!fs.statSync(boardPath).isDirectory()) continue;
-        
+
+      for (const [boardName, dateMap] of boardMap) {
         const boardInfo: BoardFolderInfo = {
-          board_id: boardFolder,
-          board_name: boardFolder,
+          board_id: boardName,
+          board_name: boardName,
           total_files: 0,
           total_size: 0,
           date_folders: [],
         };
-        
-        const dateFolders = fs.readdirSync(boardPath);
-        
-        for (const dateFolder of dateFolders) {
-          const datePath = path.join(boardPath, dateFolder);
-          if (!fs.statSync(datePath).isDirectory()) continue;
-          
-          const files = fs.readdirSync(datePath);
-          const jsonFiles = files.filter(f => f.endsWith(".json"));
-          
-          let folderSize = 0;
-          for (const file of jsonFiles) {
-            const filePath = path.join(datePath, file);
-            try {
-              const stats = fs.statSync(filePath);
-              folderSize += stats.size;
-            } catch {
-              // 무시
-            }
-          }
-          
+
+        for (const [dateFolder, entry] of dateMap) {
           const dateInfo: DateFolderInfo = {
             folder_name: dateFolder,
-            folder_path: datePath,
-            total_files: jsonFiles.length,
-            total_size: folderSize,
+            // R2 모드: prefix 키, 로컬 모드: 절대 경로
+            folder_path: storage.backend === "r2"
+              ? `ExtractedData/${orgName}/${boardName}/${dateFolder}`
+              : path.join(EXTRACTED_TEXT_PATH, orgName, boardName, dateFolder),
+            total_files: entry.files.length,
+            total_size: entry.totalSize,
           };
-          
+
           boardInfo.date_folders.push(dateInfo);
-          boardInfo.total_files += jsonFiles.length;
-          boardInfo.total_size += folderSize;
+          boardInfo.total_files += entry.files.length;
+          boardInfo.total_size += entry.totalSize;
         }
-        
+
         if (boardInfo.total_files > 0) {
           orgInfo.boards.push(boardInfo);
           orgInfo.total_files += boardInfo.total_files;
           orgInfo.total_size += boardInfo.total_size;
         }
       }
-      
+
       if (orgInfo.total_files > 0) {
         result.push(orgInfo);
       }
@@ -703,90 +726,99 @@ export function scanExtractedDataFolder(): OrgFolderInfo[] {
   } catch (error) {
     console.error("Error scanning ExtractedData folder:", error);
   }
-  
+
   return result;
 }
 
 /**
- * 특정 경로의 추출된 문서 목록 반환
+ * 특정 경로(또는 prefix)의 추출된 문서 목록 반환
+ *
+ * R2 모드: folderPath를 prefix로 사용하여 오브젝트 목록 조회
+ * 로컬 모드: folderPath 디렉토리의 JSON 파일 목록 조회
  */
-export function getExtractedDocumentsFromPath(folderPath: string): ExtractedDocument[] {
+export async function getExtractedDocumentsFromPath(folderPath: string): Promise<ExtractedDocument[]> {
   const documents: ExtractedDocument[] = [];
-  
-  if (!fs.existsSync(folderPath)) {
-    return documents;
-  }
-  
+
   try {
-    const files = fs.readdirSync(folderPath);
-    
-    // 경로에서 기관/보드/날짜 정보 추출
-    const pathParts = folderPath.split(path.sep);
-    const extractedDataIdx = pathParts.findIndex(p => p === "ExtractedData" || p === "ExtractedText");
-    const orgName = pathParts[extractedDataIdx + 1] || "";
-    const boardName = pathParts[extractedDataIdx + 2] || "";
-    const dateFolder = pathParts[extractedDataIdx + 3] || "";
-    
-    for (const file of files) {
-      if (!file.endsWith(".json")) continue;
-      
-      const filePath = path.join(folderPath, file);
-      const stats = fs.statSync(filePath);
-      
-      // JSON 파일 내용에서 메타데이터 읽기
-      let metadata: Record<string, unknown> = {};
-      try {
-        const content = fs.readFileSync(filePath, "utf-8");
-        metadata = JSON.parse(content);
-      } catch {
-        // 무시
+    // folderPath에서 기관/보드/날짜 정보 추출
+    let orgName = "";
+    let boardName = "";
+    let dateFolder = "";
+
+    if (storage.backend === "r2") {
+      // R2: prefix 형식 "ExtractedData/org/board/date"
+      const parts = folderPath.replace(/\/$/, "").split("/");
+      const idx = parts.indexOf("ExtractedData");
+      if (idx >= 0) {
+        orgName = parts[idx + 1] || "";
+        boardName = parts[idx + 2] || "";
+        dateFolder = parts[idx + 3] || "";
       }
-      
-      const fileBaseName = file.replace(".json", "");
-      
+    } else {
+      // 로컬: 절대 경로
+      const pathParts = folderPath.split(path.sep);
+      const idx = pathParts.findIndex(p => p === "ExtractedData" || p === "ExtractedText");
+      orgName = pathParts[idx + 1] || "";
+      boardName = pathParts[idx + 2] || "";
+      dateFolder = pathParts[idx + 3] || "";
+    }
+
+    // prefix 보정 (끝에 / 붙이기)
+    const prefix = storage.backend === "r2"
+      ? (folderPath.endsWith("/") ? folderPath : folderPath + "/")
+      : `ExtractedData/${orgName}/${boardName}/${dateFolder}/`;
+
+    const objects = await storage.list(prefix);
+
+    for (const obj of objects) {
+      if (!obj.Key || !obj.Key.endsWith(".json")) continue;
+
+      const fileName = obj.Key.split("/").pop() || "";
+      const fileBaseName = fileName.replace(".json", "");
+
       documents.push({
         doc_id: `${orgName}_${boardName}_${dateFolder}_${fileBaseName}`,
         org_id: orgName,
         board_id: boardName,
-        org_name: (metadata.org_name as string) || orgName,
-        board_name: (metadata.board_name as string) || boardName,
-        source_file: file,
-        file_path: filePath,
-        file_size: stats.size,
+        org_name: orgName,
+        board_name: boardName,
+        source_file: fileName,
+        file_path: storage.backend === "r2" ? obj.Key : path.join(folderPath, fileName),
+        file_size: obj.Size || 0,
         date_folder: dateFolder,
-        extracted_at: (metadata.extracted_at as string) || stats.mtime.toISOString(),
-        token_count: (metadata.token_count as number) || 0,
+        extracted_at: obj.LastModified?.toISOString(),
+        token_count: 0,
       });
     }
   } catch (error) {
     console.error("Error getting documents from path:", error);
   }
-  
+
   return documents;
 }
 
 /**
  * 여러 경로의 추출된 문서 목록 반환
  */
-export function getExtractedDocumentsFromPaths(folderPaths: string[]): ExtractedDocument[] {
+export async function getExtractedDocumentsFromPaths(folderPaths: string[]): Promise<ExtractedDocument[]> {
   const documents: ExtractedDocument[] = [];
   
   for (const folderPath of folderPaths) {
-    documents.push(...getExtractedDocumentsFromPath(folderPath));
+    documents.push(...(await getExtractedDocumentsFromPath(folderPath)));
   }
   
   return documents;
 }
 
 // Legacy function for backward compatibility
-export function scanExtractedDocuments(): ExtractedDocument[] {
+export async function scanExtractedDocuments(): Promise<ExtractedDocument[]> {
   const documents: ExtractedDocument[] = [];
-  const orgInfos = scanExtractedDataFolder();
+  const orgInfos = await scanExtractedDataFolder();
   
   for (const org of orgInfos) {
     for (const board of org.boards) {
       for (const dateFolder of board.date_folders) {
-        documents.push(...getExtractedDocumentsFromPath(dateFolder.folder_path));
+        documents.push(...(await getExtractedDocumentsFromPath(dateFolder.folder_path)));
       }
     }
   }
@@ -795,7 +827,7 @@ export function scanExtractedDocuments(): ExtractedDocument[] {
 }
 
 // ============================================================================
-// 청크 폴더 스캔
+// 청크 폴더 스캔 (스토리지 추상화)
 // ============================================================================
 
 export interface ChunkFolderInfo {
@@ -810,64 +842,67 @@ export interface ChunkFolderInfo {
 /**
  * chunk 폴더 구조 스캔
  */
-export function scanChunkDataFolder(): ChunkFolderInfo[] {
+export async function scanChunkDataFolder(): Promise<ChunkFolderInfo[]> {
   const result: ChunkFolderInfo[] = [];
-  
-  if (!fs.existsSync(CHUNK_DATA_PATH)) {
-    fs.mkdirSync(CHUNK_DATA_PATH, { recursive: true });
-    return result;
-  }
-  
+
   try {
-    const orgFolders = fs.readdirSync(CHUNK_DATA_PATH);
-    
-    for (const orgFolder of orgFolders) {
-      const orgPath = path.join(CHUNK_DATA_PATH, orgFolder);
-      if (!fs.statSync(orgPath).isDirectory()) continue;
-      
-      const boardFolders = fs.readdirSync(orgPath);
-      
-      for (const boardFolder of boardFolders) {
-        const boardPath = path.join(orgPath, boardFolder);
-        if (!fs.statSync(boardPath).isDirectory()) continue;
-        
-        const dateFolders = fs.readdirSync(boardPath);
-        
-        for (const dateFolder of dateFolders) {
-          const datePath = path.join(boardPath, dateFolder);
-          if (!fs.statSync(datePath).isDirectory()) continue;
-          
-          // *_chunks.json 패턴 파일 찾기
-          const files = fs.readdirSync(datePath);
-          const chunkFile = files.find(f => f.endsWith("_chunks.json"));
-          
-          if (chunkFile) {
-            const chunkFilePath = path.join(datePath, chunkFile);
-            try {
-              const stats = fs.statSync(chunkFilePath);
-              const content = fs.readFileSync(chunkFilePath, "utf-8");
-              const chunkData = JSON.parse(content) as ChunkFile;
-              
-              result.push({
-                org_name: orgFolder,
-                board_name: boardFolder,
-                date_folder: dateFolder,
-                folder_path: datePath,
-                chunk_count: chunkData.chunks.length,
-                file_size: stats.size,
-              });
-            } catch {
-              // 무시
-            }
-          }
-        }
+    const objects = await storage.list("chunk/");
+
+    for (const obj of objects) {
+      if (!obj.Key || !obj.Key.endsWith("_chunks.json")) continue;
+      const parts = obj.Key.split("/");
+      // parts: ["chunk", orgName, boardName, dateFolder, "file_chunks.json"]
+      if (parts.length < 5) continue;
+
+      const orgName = parts[1];
+      const boardName = parts[2];
+      const dateFolder = parts[3];
+
+      // 청크 수를 확인하기 위해 파일 다운로드
+      let chunkCount = 0;
+      try {
+        const data = await downloadJson<ChunkFile>(obj.Key);
+        chunkCount = data.chunks?.length || 0;
+      } catch {
+        // 다운로드 실패 시 0으로 유지
       }
+
+      result.push({
+        org_name: orgName,
+        board_name: boardName,
+        date_folder: dateFolder,
+        folder_path: storage.backend === "r2"
+          ? `chunk/${orgName}/${boardName}/${dateFolder}`
+          : path.join(CHUNK_DATA_PATH, orgName, boardName, dateFolder),
+        chunk_count: chunkCount,
+        file_size: obj.Size || 0,
+      });
     }
   } catch (error) {
     console.error("Error scanning chunk folder:", error);
   }
-  
+
   return result;
+}
+
+/**
+ * 추출된 문서의 텍스트 내용 읽기 (스토리지 추상화)
+ *
+ * R2 모드: storage.download(key) 로 파일 다운로드
+ * 로컬 모드: fs.readFileSync(path) 와 동일
+ */
+export async function readExtractedDocumentContent(filePath: string): Promise<string> {
+  if (storage.backend === "r2") {
+    // R2: filePath가 R2 key (예: "ExtractedData/org/board/date/file.json")
+    const buf = await storage.download(filePath);
+    return buf.toString("utf-8");
+  } else {
+    // 로컬: 절대 경로에서 직접 읽기
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`파일을 찾을 수 없습니다: ${filePath}`);
+    }
+    return fs.readFileSync(filePath, "utf-8");
+  }
 }
 
 // ============================================================================
