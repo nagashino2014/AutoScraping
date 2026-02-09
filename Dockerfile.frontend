@@ -92,8 +92,16 @@ COPY --from=builder /app/.next/static ./.next/static
 # Playwright 브라우저 복사
 COPY --from=deps /root/.cache/ms-playwright /root/.cache/ms-playwright
 
+# 기본 데이터 파일을 별도 위치에 백업 (볼륨 마운트 시 복원용)
+COPY --from=builder /app/data ./data-defaults
+
+# Entrypoint 스크립트 복사 (Windows CRLF → LF 변환)
+COPY frontend/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh
+
 # 데이터 디렉토리 생성 및 권한 설정
 RUN mkdir -p /app/data /app/save /app/chunk && \
+    chmod +x /app/docker-entrypoint.sh && \
     chown -R nextjs:nodejs /app
 
 # 사용자 전환
@@ -106,5 +114,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
-# 서버 시작
-CMD ["node", "server.js"]
+# Entrypoint를 통해 서버 시작 (볼륨 초기화 후 실행)
+CMD ["/bin/sh", "/app/docker-entrypoint.sh"]
