@@ -104,9 +104,6 @@ RUN mkdir -p /app/data /app/save /app/chunk && \
     chmod +x /app/docker-entrypoint.sh && \
     chown -R nextjs:nodejs /app
 
-# 사용자 전환
-USER nextjs
-
 # 포트 노출
 EXPOSE 3000
 
@@ -114,5 +111,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
-# Entrypoint를 통해 서버 시작 (볼륨 초기화 후 실행)
+# root로 entrypoint 실행 (볼륨 권한 수정 후 nextjs 사용자로 서버 시작)
 CMD ["/bin/sh", "/app/docker-entrypoint.sh"]
