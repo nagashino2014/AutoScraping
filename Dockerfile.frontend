@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y \
     # 기타 유틸리티
     ca-certificates \
     wget \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
