@@ -6,9 +6,11 @@
  */
 
 import * as cheerio from "cheerio";
+import { parseStringPromise } from "xml2js";
 import fs from "node:fs";
 import path from "node:path";
 import { chromium, Browser, Page } from "playwright";
+import { syncInstantScrapeToDB } from "../lib/scraper/scraper-db";
 
 // ============================================================
 // 타입 정의
@@ -53,6 +55,27 @@ export interface WebConfig {
     years?: number[];
   };
   collect_body?: boolean;
+
+  // 외부 상세 링크 추적
+  external_detail?: {
+    enabled: boolean;
+    url_selector?: string;
+    url_pattern?: string;
+    label_selector?: string;
+    mode: "html" | "api_xml";
+    content_selector?: string;
+    attachments_selector?: string;
+    api_xml?: {
+      type_param?: string;
+      content_fields?: string[];
+      attachment_fields?: { url_field: string; name_field: string }[];
+    };
+    url_transform?: {
+      extract_param: string;
+      template: string;
+    };
+    metadata_selectors?: { [key: string]: string };
+  };
 }
 
 export interface Board {
@@ -101,6 +124,7 @@ export interface ScrapedArticle {
     downloadUrl: string;
     localPath?: string;
   }>;
+  metadata?: { [key: string]: string };
 }
 
 export interface ScrapingResult {
@@ -213,12 +237,12 @@ function checkCollectionRange(
       
       const itemYear = itemDate.getFullYear();
       
-      if (range.years.includes(itemYear)) return true;
-      
       const minYear = Math.min(...range.years);
       if (itemYear < minYear) return "stop";
       
-      return false;
+      if (!range.years.includes(itemYear)) return false;
+
+      return true;
     }
     
     default:
@@ -596,6 +620,190 @@ function extractAttachmentsFromHtml(
 }
 
 // ============================================================
+// 외부 상세 링크 추적 함수 (CLI용)
+// ============================================================
+
+function stripJsessionId(url: string): string {
+  return url.replace(/;jsessionid=[^?&]*/gi, "");
+}
+
+function extractExternalDetailUrl(
+  $: cheerio.CheerioAPI,
+  baseUrl: string,
+  config: NonNullable<WebConfig["external_detail"]>
+): string | null {
+  // 방법 1: CSS 선택자로 직접 추출
+  if (config.url_selector) {
+    const href = $(config.url_selector).first().attr("href");
+    if (href) {
+      console.log(`[extractExternalDetailUrl] url_selector 매칭: ${href.slice(0, 80)}...`);
+      return stripJsessionId(resolveUrl(baseUrl, href));
+    }
+  }
+  // 방법 2: 라벨 주변에서 링크 추출 (<dt>/<dd> 및 <th>/<td> 구조)
+  if (config.label_selector) {
+    const $label = $(config.label_selector).first();
+    if ($label.length > 0) {
+      const $link = $label.next("dd").find("a[href]")
+        .add($label.closest("tr").find("td a[href]"))
+        .add($label.parent().find("a[href]"));
+      const href = $link.first().attr("href");
+      if (href) {
+        console.log(`[extractExternalDetailUrl] label_selector 매칭: ${href.slice(0, 80)}...`);
+        return stripJsessionId(resolveUrl(baseUrl, href));
+      }
+    }
+  }
+  // 방법 3: URL 패턴 매칭
+  if (config.url_pattern) {
+    const re = new RegExp(config.url_pattern);
+    let found: string | null = null;
+    $("a[href]").each((_, el) => {
+      const href = $(el).attr("href") || "";
+      if (re.test(href)) {
+        console.log(`[extractExternalDetailUrl] url_pattern 매칭: ${href.slice(0, 80)}...`);
+        found = stripJsessionId(resolveUrl(baseUrl, href));
+        return false;
+      }
+    });
+    if (found) return found;
+  }
+  return null;
+}
+
+async function fetchExternalDetailAsXml(
+  url: string,
+  config: NonNullable<WebConfig["external_detail"]>
+): Promise<{ content: string; attachments: AttachmentInfo[] }> {
+  let xmlUrl = url;
+  if (config.api_xml?.type_param) {
+    xmlUrl = url.replace(/([?&])type=[^&]*/i, `$1type=${config.api_xml.type_param}`);
+    if (xmlUrl === url && !url.includes("type=")) {
+      xmlUrl += (url.includes("?") ? "&" : "?") + `type=${config.api_xml.type_param}`;
+    }
+  }
+  console.log(`[fetchExternalDetailAsXml] XML 요청: ${xmlUrl.slice(0, 100)}...`);
+  const xmlText = await fetchStaticHtml(xmlUrl);
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = await parseStringPromise(xmlText, {
+      explicitArray: false, ignoreAttrs: false, mergeAttrs: true,
+      trim: true, normalize: true, normalizeTags: false,
+    });
+  } catch (err) {
+    console.log(`[fetchExternalDetailAsXml] XML 파싱 실패: ${err instanceof Error ? err.message : String(err)}`);
+    return { content: "", attachments: [] };
+  }
+
+  const rootCandidates = ["행정규칙", "법령", "자치법규", "판례", "헌재결정례"];
+  let root: Record<string, unknown> | null = null;
+  for (const key of rootCandidates) {
+    if (parsed[key] && typeof parsed[key] === "object") {
+      root = parsed[key] as Record<string, unknown>;
+      break;
+    }
+  }
+  if (!root) {
+    const keys = Object.keys(parsed);
+    if (keys.length === 1 && typeof parsed[keys[0]] === "object") {
+      root = parsed[keys[0]] as Record<string, unknown>;
+    }
+  }
+  if (!root) return { content: "", attachments: [] };
+
+  const contentFields = config.api_xml?.content_fields || ["조문내용"];
+  let content = "";
+  for (const field of contentFields) {
+    const value = root[field];
+    if (value && typeof value === "string") content += value + "\n";
+    else if (value && typeof value === "object") content += JSON.stringify(value, null, 2) + "\n";
+  }
+  content = content.trim();
+
+  const attachments: AttachmentInfo[] = [];
+  for (const mapping of config.api_xml?.attachment_fields || []) {
+    const fileUrl = root[mapping.url_field];
+    const fileName = root[mapping.name_field];
+    if (fileUrl && typeof fileUrl === "string" && fileUrl.trim()) {
+      const urls = fileUrl.split(/[,;|\n]/).map(u => u.trim()).filter(Boolean);
+      const names = (typeof fileName === "string" ? fileName : "").split(/[,;|\n]/).map(n => n.trim()).filter(Boolean);
+      for (let i = 0; i < urls.length; i++) {
+        attachments.push({ fileName: names[i] || `attachment_${i + 1}`, downloadUrl: urls[i] });
+      }
+    }
+  }
+  console.log(`[fetchExternalDetailAsXml] 본문 ${content.length}자, 첨부 ${attachments.length}개`);
+  return { content, attachments };
+}
+
+async function fetchExternalDetailAsHtml(
+  url: string,
+  config: NonNullable<WebConfig["external_detail"]>
+): Promise<{ content: string; attachments: AttachmentInfo[] }> {
+  console.log(`[fetchExternalDetailAsHtml] HTML 요청: ${url.slice(0, 100)}...`);
+  const html = await fetchStaticHtml(url);
+  const $ = cheerio.load(html);
+
+  let content = "";
+  if (config.content_selector) {
+    const $content = $(config.content_selector).first();
+    if ($content.length > 0) {
+      $content.find("script, style, nav, header, footer").remove();
+      content = cleanText($content.text());
+    }
+  }
+  if (!content) {
+    $("script, style, nav, header, footer").remove();
+    content = cleanText($("body").text()).slice(0, 10000);
+  }
+
+  const attachments: AttachmentInfo[] = [];
+  const seenUrls = new Set<string>();
+  const attachSelector = config.attachments_selector ||
+    "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.docx'], a[href*='.xls'], a[href*='.xlsx'], a[href*='download'], a[href*='fileDown']";
+  $(attachSelector).each((_, el) => {
+    const $a = $(el);
+    const href = $a.attr("href") || "";
+    if (!href) return;
+    const downloadUrl = resolveUrl(url, href);
+    if (seenUrls.has(downloadUrl)) return;
+    seenUrls.add(downloadUrl);
+    let fileName = cleanText($a.text());
+    if (!fileName) {
+      const imgAlt = $a.find("img").first().attr("alt") || "";
+      try {
+        const urlParams = new URLSearchParams(href.split("?")[1] || "");
+        const flNm = urlParams.get("flNm");
+        if (flNm) {
+          const ext = imgAlt.match(/HWP/i) ? ".hwp" : imgAlt.match(/PDF/i) ? ".pdf" : imgAlt.match(/DOC/i) ? ".doc" : "";
+          fileName = flNm + ext;
+        } else {
+          fileName = imgAlt || href.split("/").pop()?.split("?")[0] || "unknown";
+        }
+      } catch {
+        fileName = imgAlt || href.split("/").pop()?.split("?")[0] || "unknown";
+      }
+    }
+    attachments.push({ fileName, downloadUrl });
+  });
+
+  return { content, attachments };
+}
+
+function extractMetadataFromDetailPage(
+  $: cheerio.CheerioAPI,
+  selectors: { [key: string]: string }
+): { [key: string]: string } {
+  const metadata: { [key: string]: string } = {};
+  for (const [key, selector] of Object.entries(selectors)) {
+    const text = cleanText($(selector).first().text());
+    if (text) metadata[key] = text;
+  }
+  return metadata;
+}
+
+// ============================================================
 // 상세 페이지 처리
 // ============================================================
 
@@ -603,7 +811,7 @@ async function parseDetailPage(
   url: string,
   config: WebConfig,
   useBrowser: boolean = false
-): Promise<{ content: string; attachments: AttachmentInfo[] }> {
+): Promise<{ content: string; attachments: AttachmentInfo[]; metadata?: { [key: string]: string } }> {
   let html: string;
   
   if (useBrowser) {
@@ -656,7 +864,56 @@ async function parseDetailPage(
   // 첨부파일 추출 (개선된 4가지 전략 사용)
   const attachments = extractAttachmentsFromHtml(html, url, config);
   
-  return { content, attachments };
+  // 외부 상세 링크 추적
+  let metadata: { [key: string]: string } | undefined;
+  
+  if (config.external_detail?.enabled) {
+    console.log(`[parseDetailPage] 외부 상세 링크 추적 활성화됨 (mode: ${config.external_detail.mode})`);
+    
+    if (config.external_detail.metadata_selectors) {
+      metadata = extractMetadataFromDetailPage($, config.external_detail.metadata_selectors);
+      if (Object.keys(metadata).length > 0) {
+        console.log(`[parseDetailPage] 메타데이터 추출: ${JSON.stringify(metadata)}`);
+      }
+    }
+    
+    let externalUrl = extractExternalDetailUrl($, url, config.external_detail);
+    
+    // URL 변환 (DRF API URL → 공개 페이지 URL 등)
+    if (externalUrl && config.external_detail.url_transform) {
+      try {
+        const urlObj = new URL(externalUrl);
+        const paramValue = urlObj.searchParams.get(config.external_detail.url_transform.extract_param);
+        if (paramValue) {
+          externalUrl = config.external_detail.url_transform.template.replace(
+            `{${config.external_detail.url_transform.extract_param}}`, paramValue
+          );
+          console.log(`[parseDetailPage] URL 변환됨: ${externalUrl.slice(0, 120)}...`);
+        }
+      } catch (e) {
+        console.log(`[parseDetailPage] URL 변환 실패: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    
+    if (externalUrl) {
+      try {
+        if (config.external_detail.mode === "api_xml") {
+          const xmlResult = await fetchExternalDetailAsXml(externalUrl, config.external_detail);
+          if (xmlResult.content) content = xmlResult.content;
+          if (xmlResult.attachments.length > 0) attachments.push(...xmlResult.attachments);
+        } else {
+          const htmlResult = await fetchExternalDetailAsHtml(externalUrl, config.external_detail);
+          if (htmlResult.content) content = htmlResult.content;
+          if (htmlResult.attachments.length > 0) attachments.push(...htmlResult.attachments);
+        }
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.log(`[parseDetailPage] 외부 상세 링크 처리 실패: ${errorMessage}`);
+      }
+    }
+  }
+  
+  return { content, attachments, metadata };
 }
 
 // ============================================================
@@ -868,6 +1125,7 @@ export async function runScraper(options: ScraperOptions): Promise<ScrapingResul
         // 상세 페이지 처리
         let content = "";
         let attachments: AttachmentInfo[] = [];
+        let detailMetadata: { [key: string]: string } | undefined;
         
         if (webConfig.collect_body || webConfig.attachments?.enabled) {
           try {
@@ -875,6 +1133,7 @@ export async function runScraper(options: ScraperOptions): Promise<ScrapingResul
             const detail = await parseDetailPage(item.link, webConfig, useBrowser);
             content = detail.content;
             attachments = detail.attachments;
+            detailMetadata = detail.metadata;
             console.log(`  본문: ${content.length}자, 첨부: ${attachments.length}개`);
           } catch (err: any) {
             result.errors.push(`상세 페이지 실패 (${item.title}): ${err.message}`);
@@ -910,6 +1169,7 @@ export async function runScraper(options: ScraperOptions): Promise<ScrapingResul
           link: item.link,
           content,
           attachments: downloadedAttachments,
+          ...(detailMetadata ? { metadata: detailMetadata } : {}),
         });
         
         result.articlesCount++;
@@ -964,6 +1224,37 @@ export async function runScraper(options: ScraperOptions): Promise<ScrapingResul
   };
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2), "utf8");
   
+  // 수집 현황 DB 동기화 (SQLite)
+  if (result.articles.length > 0) {
+    try {
+      const downloadedFiles = result.articles
+        .flatMap(a => a.attachments)
+        .map(att => att.localPath)
+        .filter((p): p is string => !!p);
+
+      const dbSyncResult = await syncInstantScrapeToDB({
+        boardId: result.boardId,
+        orgId: result.orgId,
+        articles: result.articles.map(a => ({
+          title: a.title,
+          link: a.link,
+          date: a.date,
+          content: a.content || "",
+          attachments: a.attachments?.map(att => ({
+            fileName: att.fileName,
+            downloadUrl: att.downloadUrl,
+          })),
+        })),
+        downloadedFiles,
+        dedupKey: "url",
+      });
+      console.log(`[DB-SYNC] 수집 현황 DB 동기화 완료: ${dbSyncResult.docsAdded}건 추가, ${dbSyncResult.attachmentsAdded}건 첨부`);
+    } catch (dbError) {
+      console.error("[DB-SYNC] 수집 현황 DB 동기화 실패:", dbError);
+      // DB 동기화 실패해도 스크래핑 결과에는 영향 없음
+    }
+  }
+
   console.log(`\n========================================`);
   console.log(`스크래핑 완료: ${result.articlesCount}건, 첨부파일 ${result.attachmentsCount}개`);
   console.log(`소요 시간: ${(result.durationMs / 1000).toFixed(1)}초`);
