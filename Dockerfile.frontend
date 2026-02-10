@@ -80,6 +80,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV PLAYWRIGHT_BROWSERS_PATH="/root/.cache/ms-playwright"
 
 # 비root 사용자 생성
 RUN addgroup --system --gid 1001 nodejs && \
@@ -93,8 +94,9 @@ COPY --from=builder /app/.next/static ./.next/static
 # sql.js WASM 파일 복사 (standalone 빌드에 포함되지 않는 문제 해결)
 COPY --from=deps /app/node_modules/sql.js/dist/sql-wasm.wasm ./node_modules/sql.js/dist/sql-wasm.wasm
 
-# Playwright 브라우저 복사
+# Playwright 브라우저 복사 및 nextjs 사용자 접근 권한 설정
 COPY --from=deps /root/.cache/ms-playwright /root/.cache/ms-playwright
+RUN chmod -R o+rx /root/.cache/ms-playwright
 
 # 기본 데이터 파일을 별도 위치에 백업 (볼륨 마운트 시 복원용)
 COPY --from=builder /app/data ./data-defaults
