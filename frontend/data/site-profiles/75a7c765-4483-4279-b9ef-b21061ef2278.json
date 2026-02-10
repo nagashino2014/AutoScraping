@@ -1,0 +1,31 @@
+{
+  "id": "75a7c765-4483-4279-b9ef-b21061ef2278",
+  "name": "에이에스이코리아(주)",
+  "basicInfo": {
+    "industry": "semiconductor",
+    "scale": "large",
+    "employees": 0,
+    "location": {
+      "address": "",
+      "region": "경기도 파주시",
+      "district": ""
+    },
+    "establishment": ""
+  },
+  "environmental": {
+    "permits": [],
+    "substances": [],
+    "processes": []
+  },
+  "regulations": {
+    "applicableLaws": [],
+    "certifications": [],
+    "targetRegimes": []
+  },
+  "analysisConfig": {
+    "prioritySectors": [],
+    "excludeKeywords": []
+  },
+  "createdAt": "2026-02-01T08:38:39.221Z",
+  "updatedAt": "2026-02-01T08:38:39.221Z"
+}

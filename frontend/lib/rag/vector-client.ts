@@ -157,6 +157,37 @@ export async function getMetadataStats(): Promise<MetadataStats> {
 }
 
 // ============================================================
+// 날짜 범위에서 모든 YYYY-MM 값 생성
+// ============================================================
+
+function generateDateFolderValues(start: string, end: string): string[] {
+  const values: string[] = [];
+  
+  // start와 end에서 연도와 월 추출
+  const startMatch = start.match(/^(\d{4})-?(\d{2})?/);
+  const endMatch = end.match(/^(\d{4})-?(\d{2})?/);
+  
+  if (!startMatch || !endMatch) return values;
+  
+  const startYear = parseInt(startMatch[1]);
+  const startMonth = startMatch[2] ? parseInt(startMatch[2]) : 1;
+  const endYear = parseInt(endMatch[1]);
+  const endMonth = endMatch[2] ? parseInt(endMatch[2]) : 12;
+  
+  // 시작일부터 종료일까지 모든 YYYY-MM 생성
+  for (let year = startYear; year <= endYear; year++) {
+    const monthStart = (year === startYear) ? startMonth : 1;
+    const monthEnd = (year === endYear) ? endMonth : 12;
+    
+    for (let month = monthStart; month <= monthEnd; month++) {
+      values.push(`${year}-${String(month).padStart(2, "0")}`);
+    }
+  }
+  
+  return values;
+}
+
+// ============================================================
 // 필터 조건으로 ChromaDB where 절 생성
 // ============================================================
 
@@ -191,15 +222,18 @@ export function buildWhereClause(filter: FilterOptions): Record<string, any> | u
   }
   
   // 날짜 필터 (date_folder 메타데이터 사용)
-  if (filter.dateRange) {
-    // date_folder는 "YYYY-MM" 형식이므로 범위 비교
-    if (filter.dateRange.start) {
-      const startMonth = filter.dateRange.start.slice(0, 7);
-      conditions.push({ date_folder: { "$gte": startMonth } });
-    }
-    if (filter.dateRange.end) {
-      const endMonth = filter.dateRange.end.slice(0, 7);
-      conditions.push({ date_folder: { "$lte": endMonth } });
+  // ChromaDB의 $gte/$lte가 문자열에서 불안정할 수 있으므로 $in으로 변환
+  if (filter.dateRange && (filter.dateRange.start || filter.dateRange.end)) {
+    const start = filter.dateRange.start || "2020-01";
+    const end = filter.dateRange.end || "2030-12";
+    const dateFolders = generateDateFolderValues(start, end);
+    
+    if (dateFolders.length > 0) {
+      if (dateFolders.length === 1) {
+        conditions.push({ date_folder: dateFolders[0] });
+      } else {
+        conditions.push({ date_folder: { "$in": dateFolders } });
+      }
     }
   }
   

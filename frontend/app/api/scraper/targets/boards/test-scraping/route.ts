@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import * as cheerio from "cheerio";
+import { parseStringPromise } from "xml2js";
 import {
   fetchRenderedHtml,
   extractAttachmentsWithBrowser,
@@ -48,6 +49,26 @@ interface WebConfig {
   attachments?: {
     enabled?: boolean;
     selector?: string;
+  };
+  // 외부 상세 링크 추적
+  external_detail?: {
+    enabled: boolean;
+    url_selector?: string;
+    url_pattern?: string;
+    label_selector?: string;
+    mode: "html" | "api_xml";
+    content_selector?: string;
+    attachments_selector?: string;
+    api_xml?: {
+      type_param?: string;
+      content_fields?: string[];
+      attachment_fields?: { url_field: string; name_field: string }[];
+    };
+    url_transform?: {
+      extract_param: string;
+      template: string;
+    };
+    metadata_selectors?: { [key: string]: string };
   };
 }
 
@@ -657,7 +678,7 @@ async function scrapeDetailPage(
       }
     }
     
-    const body_summary = truncateText(bodyText, 50);
+    let body_summary = truncateText(bodyText, 50);
     
     // 첨부파일 추출 - 패턴별 감지
     const attachments: AttachmentInfo[] = [];
@@ -1181,6 +1202,192 @@ async function scrapeDetailPage(
       if (!mergedUrls.has(att.downloadUrl)) {
         allAttachments.push(att);
         mergedUrls.add(att.downloadUrl);
+      }
+    }
+    
+    // ============================================================
+    // 외부 상세 링크 추적 (external_detail)
+    // ============================================================
+    if (config.external_detail?.enabled) {
+      logs.push(`[EXTERNAL] 외부 상세 링크 추적 (mode: ${config.external_detail.mode})`);
+      
+      // jsessionid 제거 (다른 사이트의 세션 ID가 외부 요청에 포함되지 않도록)
+      const stripJsessionId = (url: string) => url.replace(/;jsessionid=[^?&]*/gi, "");
+      
+      // 외부 URL 추출
+      let externalUrl: string | null = null;
+      const extConfig = config.external_detail;
+      
+      if (extConfig.url_selector) {
+        const href = $(extConfig.url_selector).first().attr("href");
+        if (href) {
+          logs.push(`[EXTERNAL] url_selector 매칭: ${href.slice(0, 80)}...`);
+          externalUrl = stripJsessionId(resolveUrl(item.link, href));
+        }
+      }
+      if (!externalUrl && extConfig.label_selector) {
+        const $label = $(extConfig.label_selector).first();
+        if ($label.length > 0) {
+          const $link = $label.next("dd").find("a[href]")
+            .add($label.closest("tr").find("td a[href]"))
+            .add($label.parent().find("a[href]"));
+          const href = $link.first().attr("href");
+          if (href) {
+            logs.push(`[EXTERNAL] label_selector 매칭: ${href.slice(0, 80)}...`);
+            externalUrl = stripJsessionId(resolveUrl(item.link, href));
+          }
+        }
+      }
+      if (!externalUrl && extConfig.url_pattern) {
+        const re = new RegExp(extConfig.url_pattern);
+        $("a[href]").each((_, el) => {
+          const href = $(el).attr("href") || "";
+          if (re.test(href)) {
+            logs.push(`[EXTERNAL] url_pattern 매칭: ${href.slice(0, 80)}...`);
+            externalUrl = stripJsessionId(resolveUrl(item.link, href));
+            return false;
+          }
+        });
+      }
+      
+      // URL 변환 (DRF API URL → 공개 페이지 URL 등)
+      if (externalUrl && extConfig.url_transform) {
+        try {
+          const urlObj = new URL(externalUrl);
+          const paramValue = urlObj.searchParams.get(extConfig.url_transform.extract_param);
+          if (paramValue) {
+            externalUrl = extConfig.url_transform.template.replace(
+              `{${extConfig.url_transform.extract_param}}`, paramValue
+            );
+            logs.push(`[EXTERNAL] URL 변환됨: ${externalUrl.slice(0, 120)}...`);
+          }
+        } catch (e) {
+          logs.push(`[EXTERNAL] URL 변환 실패: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      
+      if (externalUrl) {
+        try {
+          if (extConfig.mode === "api_xml") {
+            let xmlUrl = externalUrl;
+            if (extConfig.api_xml?.type_param) {
+              xmlUrl = externalUrl.replace(/([?&])type=[^&]*/i, `$1type=${extConfig.api_xml.type_param}`);
+              if (xmlUrl === externalUrl && !externalUrl.includes("type=")) {
+                xmlUrl += (externalUrl.includes("?") ? "&" : "?") + `type=${extConfig.api_xml.type_param}`;
+              }
+            }
+            logs.push(`[EXTERNAL] XML 요청: ${xmlUrl.slice(0, 120)}...`);
+            
+            const xmlText = await fetchHtml(xmlUrl);
+            let parsed: Record<string, unknown>;
+            try {
+              parsed = await parseStringPromise(xmlText, {
+                explicitArray: false, ignoreAttrs: false, mergeAttrs: true,
+                trim: true, normalize: true, normalizeTags: false,
+              });
+            } catch (parseErr) {
+              logs.push(`[EXTERNAL] XML 파싱 실패: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
+              return { body_summary, attachments: allAttachments };
+            }
+            
+            const rootCandidates = ["행정규칙", "법령", "자치법규", "판례", "헌재결정례"];
+            let root: Record<string, unknown> | null = null;
+            for (const key of rootCandidates) {
+              if (parsed[key] && typeof parsed[key] === "object") {
+                root = parsed[key] as Record<string, unknown>;
+                break;
+              }
+            }
+            if (!root) {
+              const keys = Object.keys(parsed);
+              if (keys.length === 1 && typeof parsed[keys[0]] === "object") {
+                root = parsed[keys[0]] as Record<string, unknown>;
+              }
+            }
+            
+            if (root) {
+              // 본문 추출
+              const contentFields = extConfig.api_xml?.content_fields || ["조문내용"];
+              let extContent = "";
+              for (const field of contentFields) {
+                const value = root[field];
+                if (value && typeof value === "string") extContent += value + "\n";
+                else if (value && typeof value === "object") extContent += JSON.stringify(value, null, 2) + "\n";
+              }
+              extContent = extContent.trim();
+              if (extContent) {
+                body_summary = extContent.slice(0, 500) + (extContent.length > 500 ? "..." : "");
+                logs.push(`[EXTERNAL] 본문 추출: ${extContent.length}자`);
+              }
+              
+              // 첨부파일 추출
+              for (const mapping of extConfig.api_xml?.attachment_fields || []) {
+                const fileUrl = root[mapping.url_field];
+                const fileName = root[mapping.name_field];
+                if (fileUrl && typeof fileUrl === "string" && fileUrl.trim()) {
+                  const urls = fileUrl.split(/[,;|\n]/).map(u => u.trim()).filter(Boolean);
+                  const names = (typeof fileName === "string" ? fileName : "").split(/[,;|\n]/).map(n => n.trim()).filter(Boolean);
+                  for (let i = 0; i < urls.length; i++) {
+                    const att = { fileName: names[i] || `attachment_${i + 1}`, downloadUrl: urls[i] };
+                    if (!mergedUrls.has(att.downloadUrl)) {
+                      allAttachments.push(att);
+                      mergedUrls.add(att.downloadUrl);
+                    }
+                  }
+                }
+              }
+              logs.push(`[EXTERNAL] 첨부파일 총 ${allAttachments.length}개`);
+            } else {
+              logs.push(`[EXTERNAL] XML 루트 요소 미발견`);
+            }
+          } else {
+            // HTML 모드
+            logs.push(`[EXTERNAL] HTML 요청: ${externalUrl.slice(0, 120)}...`);
+            const extHtml = await fetchHtml(externalUrl);
+            const ext$ = cheerio.load(extHtml);
+            
+            if (extConfig.content_selector) {
+              const $c = ext$(extConfig.content_selector).first();
+              if ($c.length > 0) {
+                $c.find("script, style, nav, header, footer").remove();
+                body_summary = $c.text().replace(/\s+/g, " ").trim().slice(0, 500);
+              }
+            }
+            
+            const attachSel = extConfig.attachments_selector ||
+              "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.docx'], a[href*='.xls'], a[href*='.xlsx'], a[href*='download'], a[href*='fileDown']";
+            ext$(attachSel).each((_, el) => {
+              const href = ext$(el).attr("href") || "";
+              if (!href) return;
+              const downloadUrl = resolveUrl(externalUrl!, href);
+              if (!mergedUrls.has(downloadUrl)) {
+                let fileName = ext$(el).text().replace(/\s+/g, " ").trim();
+                if (!fileName) {
+                  const imgAlt = ext$(el).find("img").first().attr("alt") || "";
+                  try {
+                    const urlParams = new URLSearchParams(href.split("?")[1] || "");
+                    const flNm = urlParams.get("flNm");
+                    if (flNm) {
+                      const ext = imgAlt.match(/HWP/i) ? ".hwp" : imgAlt.match(/PDF/i) ? ".pdf" : imgAlt.match(/DOC/i) ? ".doc" : "";
+                      fileName = flNm + ext;
+                    } else {
+                      fileName = imgAlt || href.split("/").pop()?.split("?")[0] || "unknown";
+                    }
+                  } catch {
+                    fileName = imgAlt || href.split("/").pop()?.split("?")[0] || "unknown";
+                  }
+                }
+                allAttachments.push({ fileName, downloadUrl });
+                mergedUrls.add(downloadUrl);
+              }
+            });
+            logs.push(`[EXTERNAL] 첨부파일 총 ${allAttachments.length}개`);
+          }
+        } catch (extErr: any) {
+          logs.push(`[EXTERNAL] 외부 처리 실패: ${extErr.message}`);
+        }
+      } else {
+        logs.push(`[EXTERNAL] 외부 링크 미발견`);
       }
     }
     

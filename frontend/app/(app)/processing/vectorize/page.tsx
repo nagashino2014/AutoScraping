@@ -464,9 +464,7 @@ export default function VectorizePage() {
   // 상태
   const [vectorDBStatus, setVectorDBStatus] = useState<VectorDBStatus | null>(null);
   const [localStatus, setLocalStatus] = useState<LocalStatus | null>(null);
-  const [canSync, setCanSync] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
   
   // 검색 상태
   const [searchQuery, setSearchQuery] = useState("");
@@ -546,7 +544,6 @@ export default function VectorizePage() {
       
       setVectorDBStatus(data.vectordb);
       setLocalStatus(data.local);
-      setCanSync(data.canSync);
       
       // 필터 옵션 추출
       if (data.vectordb?.org_distribution) {
@@ -735,35 +732,6 @@ export default function VectorizePage() {
   }, [treeData]);
 
   // ============================================================================
-  // 동기화
-  // ============================================================================
-
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      const res = await fetch("/api/processing/vectorize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      
-      if (data.success) {
-        alert(`벡터 DB 동기화 완료: ${data.synced}개 청크 저장됨`);
-        loadStatus();
-        loadCollections();
-      } else {
-        alert(`오류: ${data.error}`);
-      }
-    } catch (error) {
-      console.error("Error syncing:", error);
-      alert("동기화 중 오류가 발생했습니다.");
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  // ============================================================================
   // 인덱스 관리
   // ============================================================================
 
@@ -892,11 +860,8 @@ export default function VectorizePage() {
   const isOpenAIModel = embeddingModel.startsWith("openai");
 
   const handleSearchClick = () => {
-    if (isOpenAIModel && !apiKey) {
-      setShowApiKeyModal(true);
-    } else {
-      executeSearch();
-    }
+    // API 키는 서버에서 .env.local에서 자동 로드하므로 바로 검색 실행
+    executeSearch();
   };
 
   const executeSearch = async (queryOverride?: string) => {
@@ -1271,50 +1236,27 @@ export default function VectorizePage() {
                       <p className="text-xs text-stone-500">총 청크</p>
                     </div>
                     <div className="p-2 rounded-xl bg-stone-50 text-center">
-                      <p className="text-base font-bold text-stone-800">{formatNumber(localStatus.embeddedChunks)}</p>
+                      <p className="text-base font-bold text-stone-800">{formatNumber(localStatus.syncedToVectorDB)}</p>
                       <p className="text-xs text-stone-500">임베딩됨</p>
                     </div>
                   </div>
 
                   <div className="p-2 rounded-xl bg-stone-50">
                     <div className="flex justify-between text-xs text-stone-500 mb-1">
-                      <span>동기화</span>
-                      <span>{localStatus.syncedToVectorDB}/{localStatus.embeddedChunks}</span>
+                      <span>임베딩 진행률</span>
+                      <span>{Math.round((localStatus.syncedToVectorDB / localStatus.totalChunks) * 100)}%</span>
                     </div>
                     <div className="h-1.5 bg-stone-200 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-500"
                         style={{
-                          width: localStatus.embeddedChunks > 0
-                            ? `${(localStatus.syncedToVectorDB / localStatus.embeddedChunks) * 100}%`
+                          width: localStatus.totalChunks > 0
+                            ? `${(localStatus.syncedToVectorDB / localStatus.totalChunks) * 100}%`
                             : "0%"
                         }}
                       />
                     </div>
                   </div>
-
-                  <button
-                    onClick={handleSync}
-                    disabled={syncing || !canSync}
-                    className={cn(
-                      "w-full flex items-center justify-center gap-2 py-2 rounded-xl font-medium text-sm transition-all",
-                      canSync
-                        ? "bg-primary text-white hover:bg-primary/90"
-                        : "bg-stone-200 text-stone-400 cursor-not-allowed"
-                    )}
-                  >
-                    {syncing ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        동기화 중...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4" />
-                        동기화
-                      </>
-                    )}
-                  </button>
                 </div>
               ) : (
                 <div className="flex items-center justify-center py-6">
@@ -1653,7 +1595,7 @@ export default function VectorizePage() {
                     const tableId = result.metadata?.table_id as string;
                     const hasReconstructed = tableId && reconstructedTables.has(tableId);
                     const isExpanded = tableId && expandedTables.has(tableId);
-                    const isReconstructingThis = tableId && reconstructing.has(tableId);
+                    const isReconstructingThis = !!(tableId && reconstructing.has(tableId));
                     const sourceFile = result.metadata?.source_file as string;
                     const orgName = result.metadata?.org_name as string;
                     const boardName = result.metadata?.board_name as string;
@@ -1709,7 +1651,7 @@ export default function VectorizePage() {
                         
                         {/* 메타데이터 태그 */}
                         <div className="flex gap-2 mb-2 flex-wrap">
-                          {result.metadata?.published_date && (
+                          {!!result.metadata?.published_date && (
                             <span className="text-xs bg-stone-200 text-stone-600 px-2 py-0.5 rounded">
                               📅 {String(result.metadata.published_date).substring(0, 10)}
                             </span>
@@ -1724,14 +1666,14 @@ export default function VectorizePage() {
                               {boardName}
                             </span>
                           )}
-                          {result.metadata?.chunk_type && (
+                          {!!result.metadata?.chunk_type && (
                             <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
                               {result.metadata.chunk_type as string}
                             </span>
                           )}
                           {result.metadata?.chunk_index !== undefined && (
                             <span className="text-xs bg-stone-200 text-stone-600 px-2 py-0.5 rounded">
-                              청크 #{result.metadata.chunk_index as number}
+                              청크 #{Number(result.metadata.chunk_index)}
                             </span>
                           )}
                         </div>
@@ -1881,7 +1823,7 @@ export default function VectorizePage() {
                   취소
                 </button>
                 <button
-                  onClick={executeSearch}
+                  onClick={() => executeSearch()}
                   disabled={!apiKey.trim()}
                   className={cn(
                     "flex-1 py-3 rounded-xl font-medium transition-colors",

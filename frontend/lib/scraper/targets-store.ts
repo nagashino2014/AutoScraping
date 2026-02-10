@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { exec } from "node:child_process";
 
 export type OrgStatus = "active" | "inactive";
 export type CollectionMode = "web_scraping" | "api_only" | "hybrid";
@@ -189,4 +190,119 @@ export function writeScraperTargets(next: Omit<ScraperTargetsFile, "updated_at">
   fs.writeFileSync(p, JSON.stringify(payload, null, 2), "utf8");
 }
 
+// ============================================================
+// GitHub 자동 동기화
+// ============================================================
+
+export interface GitSyncResult {
+  success: boolean;
+  message: string;
+  details?: string;
+}
+
+/**
+ * 프로젝트 루트 디렉토리 찾기
+ */
+function getProjectRoot(): string {
+  const cwd = process.cwd();
+  const isFrontendCwd = path.basename(cwd).toLowerCase() === "frontend";
+  
+  if (isFrontendCwd) {
+    return path.dirname(cwd);
+  }
+  
+  const frontendDir = path.join(cwd, "frontend");
+  if (fs.existsSync(frontendDir)) {
+    return cwd;
+  }
+  
+  return cwd;
+}
+
+/**
+ * Git 명령 실행 헬퍼
+ */
+function execGitCommand(command: string, cwd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    exec(command, { cwd, encoding: "utf8" }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr || error.message));
+      } else {
+        resolve(stdout.trim());
+      }
+    });
+  });
+}
+
+/**
+ * scraper-targets.json 변경사항을 GitHub에 동기화
+ * 
+ * @param commitMessage - 커밋 메시지 (기본: "update: scraper targets settings")
+ * @returns GitSyncResult
+ */
+export async function syncTargetsToGitHub(
+  commitMessage: string = "update: scraper targets settings"
+): Promise<GitSyncResult> {
+  const projectRoot = getProjectRoot();
+  const targetsFile = "frontend/data/scraper-targets.json";
+  
+  try {
+    // 1. Git 상태 확인
+    const status = await execGitCommand("git status --porcelain", projectRoot);
+    
+    // scraper-targets.json이 변경되었는지 확인
+    if (!status.includes("scraper-targets.json")) {
+      return {
+        success: true,
+        message: "변경사항 없음 - 동기화 불필요",
+      };
+    }
+    
+    // 2. 파일 스테이징
+    await execGitCommand(`git add "${targetsFile}"`, projectRoot);
+    
+    // 3. 커밋
+    const timestamp = new Date().toISOString().slice(0, 19).replace("T", " ");
+    const fullMessage = `${commitMessage} (${timestamp})`;
+    await execGitCommand(`git commit -m "${fullMessage}"`, projectRoot);
+    
+    // 4. 푸시
+    const pushResult = await execGitCommand("git push", projectRoot);
+    
+    return {
+      success: true,
+      message: "GitHub 동기화 완료",
+      details: pushResult || "푸시 성공",
+    };
+    
+  } catch (error: any) {
+    // 커밋할 변경사항이 없는 경우
+    if (error.message?.includes("nothing to commit")) {
+      return {
+        success: true,
+        message: "변경사항 없음 - 동기화 불필요",
+      };
+    }
+    
+    return {
+      success: false,
+      message: "GitHub 동기화 실패",
+      details: error.message,
+    };
+  }
+}
+
+/**
+ * 설정 저장 및 GitHub 동기화를 한 번에 수행
+ */
+export async function writeAndSyncScraperTargets(
+  next: Omit<ScraperTargetsFile, "updated_at">,
+  commitMessage?: string
+): Promise<GitSyncResult> {
+  // 1. 로컬 파일 저장
+  writeScraperTargets(next);
+  
+  // 2. GitHub 동기화
+  return syncTargetsToGitHub(commitMessage);
+}
 

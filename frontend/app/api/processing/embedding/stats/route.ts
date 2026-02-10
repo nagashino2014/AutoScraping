@@ -75,6 +75,9 @@ export async function GET() {
   try {
     const stats = loadStats();
     
+    // records 배열이 없는 경우 빈 배열로 처리 (백엔드에서 저장한 파일 호환)
+    const records = stats.records || [];
+    
     // 기간별 비용 집계
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -84,7 +87,7 @@ export async function GET() {
     let monthCost = 0;
     const modelCosts: Record<string, number> = {};
     
-    for (const record of stats.records) {
+    for (const record of records) {
       const recordDate = new Date(record.timestamp);
       
       if (recordDate >= weekAgo) {
@@ -104,14 +107,14 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       stats: {
-        total_embeddings: stats.total_embeddings,
-        total_failed: stats.total_failed,
-        total_tokens: stats.total_tokens,
-        total_cost: stats.total_cost,
+        total_embeddings: stats.total_embeddings || 0,
+        total_failed: stats.total_failed || 0,
+        total_tokens: stats.total_tokens || 0,
+        total_cost: stats.total_cost || 0,
         week_cost: weekCost,
         month_cost: monthCost,
         model_costs: modelCosts,
-        records_count: stats.records.length,
+        records_count: records.length,
         last_updated: stats.last_updated,
       }
     });

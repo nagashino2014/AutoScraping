@@ -510,7 +510,8 @@ class DOCXExtractor(BaseExtractor):
                         structured_data=table_obj.to_structured_dict(),
                         markdown=table_obj.to_markdown(),  # 호환성용
                         row_count=table_obj.rows,
-                        col_count=table_obj.cols
+                        col_count=table_obj.cols,
+                        page_num=1  # DOCX는 페이지 경계가 명확하지 않아 기본값 사용
                     ))
             
             except Exception as e:

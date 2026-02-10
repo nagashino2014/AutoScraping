@@ -82,12 +82,7 @@ export interface DiscoveryConfig {
   clusteringAlgorithm: "kmeans" | "hdbscan";
   numClusters: number;
   minClusterSize: number;
-  scoreWeights: {
-    legalMandatory: number;
-    novelty: number;
-    impact: number;
-    international: number;
-  };
+  scoreWeights: Record<string, number>;  // 동적 평가 기준 (RAG 설정 연동)
 }
 
 /** 분석 세션 */

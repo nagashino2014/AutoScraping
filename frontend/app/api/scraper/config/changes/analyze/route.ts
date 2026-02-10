@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { llmChatJson } from "@/lib/llm/client";
 import { readScraperTargets } from "@/lib/scraper/targets-store";
-import { CHANGE_TYPE_LABELS, type ChangeType } from "../route";
+import { CHANGE_TYPE_LABELS, type ChangeType } from "../types";
 
 interface AnalysisResult {
   summary: string;

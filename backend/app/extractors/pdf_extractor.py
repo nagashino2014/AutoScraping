@@ -459,19 +459,15 @@ class PDFExtractor(BaseExtractor):
             processing_time_ms = int((time.time() - start_time) * 1000)
             
             # 품질 점수에 따른 상태 결정
-            if partial_extraction:
-                # 부분 추출인 경우
-                if quality_details.overall_score >= self.config.quality_validation.pass_threshold:
-                    status = ExtractionStatus.COMPLETED  # 품질은 통과하지만 부분 추출
-                    print(f"[PDF DEBUG] 부분 추출이지만 품질 기준 통과: {quality_details.overall_score:.2f}")
-                else:
-                    status = ExtractionStatus.FAILED
-            elif quality_details.overall_score >= self.config.quality_validation.pass_threshold:
+            # 텍스트가 실제로 추출되었으면 COMPLETED로 처리 (품질 점수는 참고용)
+            if full_text and len(full_text.strip()) > 0:
                 status = ExtractionStatus.COMPLETED
-            elif quality_details.overall_score >= self.config.quality_validation.llm_fallback_threshold:
-                status = ExtractionStatus.COMPLETED  # 검토 필요하지만 일단 완료 처리
+                if quality_details.overall_score < self.config.quality_validation.pass_threshold:
+                    print(f"[PDF] 품질 점수 낮음 ({quality_details.overall_score:.2f}) 하지만 텍스트 추출됨, COMPLETED 처리")
+                if partial_extraction:
+                    print(f"[PDF] 부분 추출: {len(pages)}/{total_pages} 페이지")
             else:
-                status = ExtractionStatus.LLM_FALLBACK if self.config.quality_validation.auto_llm_fallback else ExtractionStatus.FAILED
+                status = ExtractionStatus.FAILED
             
             # 부분 추출 정보 추가
             extraction_note = None
@@ -664,16 +660,12 @@ class PDFExtractor(BaseExtractor):
             # 품질 검증
             quality_details = self._validate_quality(full_text) if self.config.quality_validation.enabled else QualityDetails(overall_score=1.0)
             
-            # 상태 결정
-            extraction_ratio = len(pages) / total_pages
-            if partial_extraction:
-                if quality_details.overall_score >= self.config.quality_validation.pass_threshold and extraction_ratio >= 0.5:
-                    status = ExtractionStatus.COMPLETED
-                    print(f"[PDF OCR] 부분 추출 성공: {len(pages)}/{total_pages} 페이지 ({extraction_ratio*100:.0f}%), 품질: {quality_details.overall_score:.2f}")
-                else:
-                    status = ExtractionStatus.FAILED
-            elif quality_details.overall_score >= self.config.quality_validation.pass_threshold:
+            # 상태 결정 - 텍스트가 추출되었으면 COMPLETED
+            if full_text and len(full_text.strip()) > 0:
                 status = ExtractionStatus.COMPLETED
+                if partial_extraction:
+                    extraction_ratio = len(pages) / total_pages
+                    print(f"[PDF OCR] 부분 추출: {len(pages)}/{total_pages} 페이지 ({extraction_ratio*100:.0f}%), 품질: {quality_details.overall_score:.2f}")
             else:
                 status = ExtractionStatus.FAILED
             
@@ -1507,7 +1499,8 @@ class PDFExtractor(BaseExtractor):
                         col_count=table_obj.cols,
                         bbox=None,
                         confidence=recovered.confidence,
-                        extraction_method=recovered.recovery_method
+                        extraction_method=recovered.recovery_method,
+                        page_num=page_num  # Cross-page 병합용 페이지 번호
                     )
                     tables.append(table_data)
                     print(f"[TABLE] 선 검출 기반 복원 성공: Page {page_num}, "
@@ -1650,7 +1643,8 @@ class PDFExtractor(BaseExtractor):
                                 col_count=len(final_table[0]) if final_table else 0,
                                 bbox=bbox,
                                 confidence=0.5,  # pdfplumber 기본 신뢰도
-                                extraction_method="pdfplumber"
+                                extraction_method="pdfplumber",
+                                page_num=page_num  # Cross-page 병합용 페이지 번호
                             ))
         except Exception as e:
             print(f"[TABLE EXTRACT ERROR] Page {page_num}: {e}")

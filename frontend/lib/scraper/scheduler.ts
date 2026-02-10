@@ -437,18 +437,23 @@ async function executeSchedule(scheduleId: string): Promise<void> {
 
 /**
  * 즉시 실행 API를 호출하여 SSE 스트림 결과를 파싱
- * - 즉시 실행 스크래핑 테스트(stream/route.ts)와 100% 동일한 로직 사용
+ * - 웹 스크래핑: /api/scraper/execute/instant/stream 호출
+ * - API 스크래핑: /api/scraper/execute/instant/api/stream 호출
+ * 
+ * @param boardId 보드 ID
+ * @param isApiMode true면 API 스크래핑, false면 웹 스크래핑
  */
 interface ScrapeResult {
   success: boolean;
   articlesCount: number;
   attachmentsDownloaded: number;
   attachmentsFailed: number;
+  jsonPath?: string;
   xlsxPath?: string;
   errors: string[];
 }
 
-async function callInstantScrapeApi(boardId: string): Promise<ScrapeResult> {
+async function callInstantScrapeApi(boardId: string, isApiMode: boolean = false): Promise<ScrapeResult> {
   const result: ScrapeResult = {
     success: false,
     articlesCount: 0,
@@ -461,9 +466,15 @@ async function callInstantScrapeApi(boardId: string): Promise<ScrapeResult> {
     // 내부 API 호출 (Next.js 서버 내부에서 호출)
     // mode=auto: 자동 스크래핑 모드 (basePath + 폴더 구조 규칙 적용)
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
-    const apiUrl = `${baseUrl}/api/scraper/execute/instant/stream?board_id=${encodeURIComponent(boardId)}&mode=auto`;
     
-    console.log(`[Scheduler]      API 호출: ${apiUrl}`);
+    // 보드 모드에 따라 적절한 API 엔드포인트 선택
+    const apiPath = isApiMode 
+      ? `/api/scraper/execute/instant/api/stream`  // API 스크래핑용
+      : `/api/scraper/execute/instant/stream`;      // 웹 스크래핑용
+    
+    const apiUrl = `${baseUrl}${apiPath}?board_id=${encodeURIComponent(boardId)}&mode=auto`;
+    
+    console.log(`[Scheduler]      API 호출 (${isApiMode ? 'API모드' : '웹모드'}): ${apiUrl}`);
     
     const response = await fetch(apiUrl, {
       method: "GET",
@@ -509,22 +520,26 @@ async function callInstantScrapeApi(boardId: string): Promise<ScrapeResult> {
               const msg = eventData.message || "";
               if (msg.includes("✅") || msg.includes("✗") || msg.includes("⚠️") || 
                   msg.includes("수집 대상") || msg.includes("저장 완료") ||
-                  msg.includes("다운로드 완료") || msg.includes("다운로드 실패")) {
+                  msg.includes("다운로드 완료") || msg.includes("다운로드 실패") ||
+                  msg.includes("API") || msg.includes("법령")) {
                 console.log(`[Scheduler]      ${msg}`);
               }
             }
             
             // 완료 이벤트에서 결과 추출
             // stream/route.ts에서 { type: "complete", data: { articlesCount, attachmentsCount, ... } } 형태로 전송
+            // api/stream/route.ts에서 { type: "complete", data: { dataCount, ... } } 형태로 전송
             if (eventData.type === "complete") {
               const data = eventData.data || eventData;
               result.success = data.success ?? true;
-              result.articlesCount = data.articlesCount ?? data.articles ?? 0;
+              // 웹 스크래핑: articlesCount, API 스크래핑: dataCount
+              result.articlesCount = data.articlesCount ?? data.dataCount ?? data.articles ?? 0;
               result.attachmentsDownloaded = data.attachmentsCount ?? data.attachments_downloaded ?? 0;
               result.attachmentsFailed = data.attachmentsFailed ?? data.attachments_failed ?? 0;
+              result.jsonPath = data.jsonPath ?? data.json_path;
               result.xlsxPath = data.xlsxPath ?? data.xlsx_path;
               
-              console.log(`[Scheduler]      ✓ 스크래핑 완료: ${result.articlesCount}건 수집, ${result.attachmentsDownloaded}건 첨부파일`);
+              console.log(`[Scheduler]      ✓ 완료: ${result.articlesCount}건 수집${result.attachmentsDownloaded > 0 ? `, ${result.attachmentsDownloaded}건 첨부파일` : ''}`);
             }
             
             // 오류 이벤트
@@ -630,18 +645,38 @@ async function runScheduleScraping(
     console.log(`[Scheduler] ──────────────────────────────────────────`);
     console.log(`[Scheduler] 📰 보드 처리: ${board.board_name} (${board.board_id})`);
 
-    if (!board.list_url || !board.web_config) {
-      console.log(`[Scheduler]    ✗ 필수 설정 없음, 스킵`);
-      errors.push(`${board.board_name}: 설정 불완전`);
-      totalFailed++;
-      continue;
+    // 보드 모드 확인 (API 모드 vs 웹 스크래핑 모드)
+    const boardMode = (board as Record<string, unknown>).board_mode as string | undefined;
+    const accessMode = (board as Record<string, unknown>).access_mode as string | undefined;
+    const isApiMode = boardMode === "api" || accessMode === "api";
+    const apiConfig = (board as Record<string, unknown>).api_config;
+    
+    console.log(`[Scheduler]    모드: ${isApiMode ? 'API 스크래핑' : '웹 스크래핑'}`);
+    
+    // 모드별 필수 설정 검증
+    if (isApiMode) {
+      // API 모드: api_config가 필요
+      if (!apiConfig) {
+        console.log(`[Scheduler]    ✗ API 설정(api_config) 없음, 스킵`);
+        errors.push(`${board.board_name}: API 설정 불완전`);
+        totalFailed++;
+        continue;
+      }
+    } else {
+      // 웹 스크래핑 모드: list_url과 web_config가 필요
+      if (!board.list_url || !board.web_config) {
+        console.log(`[Scheduler]    ✗ 웹 스크래핑 설정(list_url, web_config) 없음, 스킵`);
+        errors.push(`${board.board_name}: 설정 불완전`);
+        totalFailed++;
+        continue;
+      }
     }
 
     try {
       const scraperStartTime = Date.now();
       
-      // 즉시 실행 API 호출 (동일한 로직 사용)
-      const result = await callInstantScrapeApi(board.board_id);
+      // 모드에 따라 적절한 API 호출
+      const result = await callInstantScrapeApi(board.board_id, isApiMode);
       
       const scraperDuration = Date.now() - scraperStartTime;
       console.log(`[Scheduler]    완료: ${result.articlesCount}건 수집, ${result.attachmentsDownloaded}건 다운로드 (${Math.round(scraperDuration / 1000)}초)`);

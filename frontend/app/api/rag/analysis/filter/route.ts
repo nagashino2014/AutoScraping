@@ -21,6 +21,37 @@ interface FilterOptions {
 }
 
 /**
+ * 날짜 범위에서 모든 YYYY-MM 값 생성
+ * ChromaDB의 $gte/$lte가 문자열에서 불안정할 수 있으므로 $in으로 변환
+ */
+function generateDateFolderValues(start: string, end: string): string[] {
+  const values: string[] = [];
+  
+  // start와 end에서 연도와 월 추출
+  const startMatch = start.match(/^(\d{4})-?(\d{2})?/);
+  const endMatch = end.match(/^(\d{4})-?(\d{2})?/);
+  
+  if (!startMatch || !endMatch) return values;
+  
+  const startYear = parseInt(startMatch[1]);
+  const startMonth = startMatch[2] ? parseInt(startMatch[2]) : 1;
+  const endYear = parseInt(endMatch[1]);
+  const endMonth = endMatch[2] ? parseInt(endMatch[2]) : 12;
+  
+  // 시작일부터 종료일까지 모든 YYYY-MM 생성
+  for (let year = startYear; year <= endYear; year++) {
+    const monthStart = (year === startYear) ? startMonth : 1;
+    const monthEnd = (year === endYear) ? endMonth : 12;
+    
+    for (let month = monthStart; month <= monthEnd; month++) {
+      values.push(`${year}-${String(month).padStart(2, "0")}`);
+    }
+  }
+  
+  return values;
+}
+
+/**
  * ChromaDB where 절 생성
  */
 function buildWhereClause(filter: FilterOptions): Record<string, any> | null {
@@ -54,14 +85,18 @@ function buildWhereClause(filter: FilterOptions): Record<string, any> | null {
   }
   
   // 날짜 필터 (date_folder 메타데이터 사용, YYYY-MM 형식)
-  if (filter.dateRange) {
-    if (filter.dateRange.start) {
-      const startMonth = filter.dateRange.start.slice(0, 7);
-      conditions.push({ date_folder: { "$gte": startMonth } });
-    }
-    if (filter.dateRange.end) {
-      const endMonth = filter.dateRange.end.slice(0, 7);
-      conditions.push({ date_folder: { "$lte": endMonth } });
+  // $in 연산자로 명시적으로 모든 해당 월을 지정 (ChromaDB 호환성 향상)
+  if (filter.dateRange && (filter.dateRange.start || filter.dateRange.end)) {
+    const start = filter.dateRange.start || "2020-01";
+    const end = filter.dateRange.end || "2030-12";
+    const dateFolders = generateDateFolderValues(start, end);
+    
+    if (dateFolders.length > 0) {
+      if (dateFolders.length === 1) {
+        conditions.push({ date_folder: dateFolders[0] });
+      } else {
+        conditions.push({ date_folder: { "$in": dateFolders } });
+      }
     }
   }
   
@@ -83,21 +118,17 @@ export async function POST(request: NextRequest) {
     
     const whereClause = buildWhereClause(filter);
     
-    // 백엔드에 필터링된 개수 요청
-    // ChromaDB는 직접적인 count + where를 지원하지 않으므로
-    // get으로 ID만 조회하여 개수 계산
-    const res = await fetch(`${BACKEND_URL}/vectordb/get-filtered`, {
+    // 백엔드에 필터링된 개수 요청 (전용 count 엔드포인트 사용)
+    const res = await fetch(`${BACKEND_URL}/vectordb/count-filtered`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         where: whereClause,
-        include: [],  // ID만 가져오기
-        limit: 10000,
       }),
     });
     
     if (!res.ok) {
-      // 엔드포인트가 없으면 전체 개수 반환
+      // count-filtered 엔드포인트가 없으면 status에서 전체 개수 반환
       const statusRes = await fetch(`${BACKEND_URL}/vectordb/status`);
       if (statusRes.ok) {
         const status = await statusRes.json();
@@ -114,10 +145,14 @@ export async function POST(request: NextRequest) {
     
     const data = await res.json();
     
+    if (!data.success) {
+      throw new Error(data.error || "카운트 조회 실패");
+    }
+    
     return NextResponse.json({
       success: true,
-      count: data.count || (data.ids ? data.ids.length : 0),
-      filtered: true,
+      count: data.count || 0,
+      filtered: data.filtered ?? (whereClause !== null),
       filter,
     });
     

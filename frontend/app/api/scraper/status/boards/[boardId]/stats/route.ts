@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, closeDb } from "@/lib/scraper/scraper-db";
+import { getDbAsync } from "@/lib/scraper/scraper-db";
 
 interface RouteParams {
   params: Promise<{ boardId: string }>;
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
   
   try {
-    const db = await getDb();
+    const db = await getDbAsync();
     
     // 1. 최근 30일 일별 수집 통계
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
@@ -32,8 +32,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       SELECT 
         date(scraped_at) as date,
         COUNT(*) as documents,
-        COUNT(DISTINCT id) as unique_docs
-      FROM scraped_documents
+        COUNT(DISTINCT doc_id) as unique_docs
+      FROM documents
       WHERE board_id = '${boardId}'
         AND date(scraped_at) >= '${thirtyDaysAgo}'
       GROUP BY date(scraped_at)
@@ -48,12 +48,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // 2. 파일 유형별 통계
     const fileTypeStats = db.exec(`
       SELECT 
-        LOWER(file_extension) as type,
+        LOWER(a.file_type) as type,
         COUNT(*) as count,
-        SUM(file_size) as size_bytes
-      FROM scraped_attachments
-      WHERE board_id = '${boardId}'
-      GROUP BY LOWER(file_extension)
+        COALESCE(SUM(a.file_size), 0) as size_bytes
+      FROM attachments a
+      INNER JOIN documents d ON a.doc_id = d.doc_id
+      WHERE d.board_id = '${boardId}'
+      GROUP BY LOWER(a.file_type)
       ORDER BY count DESC
     `);
     
@@ -125,9 +126,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const totalStats = db.exec(`
       SELECT 
         COUNT(*) as total_documents,
-        (SELECT COUNT(*) FROM scraped_attachments WHERE board_id = '${boardId}') as total_attachments,
-        (SELECT SUM(file_size) FROM scraped_attachments WHERE board_id = '${boardId}') as total_size_bytes
-      FROM scraped_documents
+        (SELECT COUNT(*) FROM attachments a INNER JOIN documents d ON a.doc_id = d.doc_id WHERE d.board_id = '${boardId}') as total_attachments,
+        (SELECT COALESCE(SUM(a.file_size), 0) FROM attachments a INNER JOIN documents d ON a.doc_id = d.doc_id WHERE d.board_id = '${boardId}') as total_size_bytes
+      FROM documents
       WHERE board_id = '${boardId}'
     `);
     
@@ -147,7 +148,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const successRate = db.exec(`
       SELECT 
         COUNT(*) as total_runs,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful_runs,
+        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful_runs,
         SUM(docs_scraped) as total_scraped,
         SUM(docs_failed) as total_failed
       FROM scrape_logs
@@ -158,8 +159,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const rateData = successRate[0]?.values[0] || [0, 0, 0, 0];
     const totalRuns = rateData[0] as number || 0;
     const successfulRuns = rateData[1] as number || 0;
-    
-    closeDb();
     
     return NextResponse.json({
       success: true,
@@ -179,7 +178,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     });
   } catch (error) {
     console.error("[boards/stats] Error:", error);
-    closeDb();
     return NextResponse.json(
       { success: false, error: "보드 통계 조회 중 오류가 발생했습니다." },
       { status: 500 }

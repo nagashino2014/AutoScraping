@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   readScraperTargets,
   writeScraperTargets,
+  syncTargetsToGitHub,
   type Board,
 } from "@/lib/scraper/targets-store";
 import {
@@ -140,7 +141,13 @@ export async function POST(req: Request) {
   const orgName = org?.org_name || org_id;
   createBoardSchedule(nextBoard, orgName);
 
-  return NextResponse.json({ ok: true, board: nextBoard }, { status: 201 });
+  // GitHub 자동 동기화
+  const gitSync = await syncTargetsToGitHub(`create: ${orgName} - ${nextBoard.board_name} 보드 생성`).catch(() => ({
+    success: false,
+    message: "GitHub 동기화 실패",
+  }));
+
+  return NextResponse.json({ ok: true, board: nextBoard, gitSync }, { status: 201 });
 }
 
 

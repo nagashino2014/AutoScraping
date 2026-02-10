@@ -1,5 +1,5 @@
 {
-  "model": "openai-small",
+  "model": "openai-large",
   "batchSize": 100,
   "concurrent": 5,
   "autoRetry": true

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   readScraperTargets,
   writeScraperTargets,
+  syncTargetsToGitHub,
   type Board,
 } from "@/lib/scraper/targets-store";
 import {
@@ -161,13 +162,20 @@ export async function PUT(req: Request, ctx: { params: Promise<{ boardId: string
     removeBoardSchedule(boardId);
   }
 
-  return NextResponse.json({ ok: true, board: next });
+  // GitHub 자동 동기화 (백그라운드 실행, 실패해도 API 응답은 성공)
+  const gitSync = await syncTargetsToGitHub(`update: ${orgName} - ${next.board_name} 설정 변경`).catch(() => ({
+    success: false,
+    message: "GitHub 동기화 실패",
+  }));
+
+  return NextResponse.json({ ok: true, board: next, gitSync });
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ boardId: string }> }) {
   const { boardId } = await ctx.params;
   const data = readScraperTargets();
-  if (!data.boards.some((b) => b.board_id === boardId)) {
+  const board = data.boards.find((b) => b.board_id === boardId);
+  if (!board) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
@@ -177,7 +185,13 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ boardId: st
   // 보드 삭제 시 해당 보드의 자동 생성 스케줄도 삭제
   removeBoardSchedule(boardId);
 
-  return NextResponse.json({ ok: true });
+  // GitHub 자동 동기화
+  const gitSync = await syncTargetsToGitHub(`delete: ${board.board_name} 보드 삭제`).catch(() => ({
+    success: false,
+    message: "GitHub 동기화 실패",
+  }));
+
+  return NextResponse.json({ ok: true, gitSync });
 }
 
 

@@ -3,6 +3,11 @@
  * Python 백엔드 서비스와 통신
  */
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
+import os from "os";
+
+export const runtime = "nodejs";
 
 const BACKEND_URL = process.env.EXTRACTION_BACKEND_URL || "http://localhost:8000";
 
@@ -51,9 +56,62 @@ export async function GET(req: NextRequest) {
 /**
  * POST /api/processing/extract
  * 텍스트 추출 실행
+ * - FormData (파일 직접 업로드) 또는 JSON (파일 경로) 지원
  */
 export async function POST(req: NextRequest) {
   try {
+    const contentType = req.headers.get("content-type") || "";
+    
+    // FormData 처리 (파일 직접 업로드)
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      const file = formData.get("file") as File;
+      
+      if (!file) {
+        return NextResponse.json(
+          { error: "파일이 필요합니다." },
+          { status: 400 }
+        );
+      }
+      
+      // 임시 파일로 저장
+      const tempDir = os.tmpdir();
+      const tempFileName = `extract_${Date.now()}_${file.name}`;
+      const tempFilePath = path.join(tempDir, tempFileName);
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      fs.writeFileSync(tempFilePath, buffer);
+      
+      try {
+        // 백엔드로 추출 요청
+        const response = await fetch(`${BACKEND_URL}/extract`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_path: tempFilePath }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          return NextResponse.json(
+            { error: errorData.detail || "Extraction failed" },
+            { status: response.status }
+          );
+        }
+        
+        const data = await response.json();
+        return NextResponse.json(data);
+      } finally {
+        // 임시 파일 삭제
+        try {
+          fs.unlinkSync(tempFilePath);
+        } catch (e) {
+          // 무시
+        }
+      }
+    }
+    
+    // JSON 처리 (기존 방식)
     const body = await req.json();
     const { file_path, file_paths, mode = "single" } = body;
 

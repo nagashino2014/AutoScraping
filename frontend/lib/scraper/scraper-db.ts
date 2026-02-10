@@ -1165,6 +1165,137 @@ export async function getScrapeLogDetail(logId: string): Promise<ScrapeLog | nul
   return row as ScrapeLog;
 }
 
+/**
+ * 즉시 실행(instant) 스크래핑 결과를 DB에 동기화
+ * - 즉시 실행/스트리밍 라우트에서 JSON 저장 후 호출
+ * - 수집 현황 대시보드의 통계 데이터를 갱신
+ */
+export async function syncInstantScrapeToDB(params: {
+  boardId: string;
+  orgId: string;
+  articles: Array<{
+    title: string;
+    link: string;
+    date?: string;
+    content: string;
+    attachments?: Array<{ fileName: string; downloadUrl: string }>;
+  }>;
+  downloadedFiles?: string[];
+  dedupKey?: DedupKeyType;
+}): Promise<{ logId: string; docsAdded: number; attachmentsAdded: number }> {
+  const { boardId, orgId, articles, downloadedFiles = [], dedupKey = "url" } = params;
+  
+  let docsAdded = 0;
+  let attachmentsAdded = 0;
+  let docsSkipped = 0;
+  
+  // 로그 생성
+  const log = await startScrapeLog(boardId);
+  
+  try {
+    const now = new Date().toISOString();
+    
+    for (const article of articles) {
+      // 문서 ID 생성
+      const docId = generateDocId(
+        { title: article.title, link: article.link, date: article.date, content: article.content },
+        boardId,
+        dedupKey
+      );
+      
+      // 중복 체크
+      if (await documentExists(docId)) {
+        docsSkipped++;
+        continue;
+      }
+      
+      // 날짜 파싱
+      let publishedDate: string | null = null;
+      if (article.date) {
+        const dateMatch = article.date.match(/(\d{4})[-./\s]*(\d{1,2})[-./\s]*(\d{1,2})/);
+        if (dateMatch) {
+          publishedDate = `${dateMatch[1]}-${dateMatch[2].padStart(2, "0")}-${dateMatch[3].padStart(2, "0")}`;
+        }
+      }
+      
+      // 문서 저장
+      await saveDocument({
+        doc_id: docId,
+        board_id: boardId,
+        org_id: orgId,
+        title: article.title,
+        content: article.content || "",
+        published_date: publishedDate,
+        source_url: article.link,
+        scraped_at: now,
+        metadata: {},
+      });
+      docsAdded++;
+      
+      // 첨부파일 메타데이터 저장
+      if (article.attachments && article.attachments.length > 0) {
+        for (const att of article.attachments) {
+          const fileId = generateFileId(att.downloadUrl, docId);
+          const fileType = att.fileName.split(".").pop()?.toLowerCase() || "";
+          
+          // 다운로드 파일 목록에서 해당 파일 찾기 (매칭)
+          const downloadedPath = downloadedFiles.find((fp) => {
+            const fn = fp.split(/[/\\]/).pop() || "";
+            return fn.includes(att.fileName.replace(/[\\/:*?"<>|]/g, "_").slice(0, 30));
+          });
+          
+          // 파일 크기 조회
+          let fileSize: number | null = null;
+          if (downloadedPath) {
+            try {
+              const fs = require("node:fs");
+              const stat = fs.statSync(downloadedPath);
+              fileSize = stat.size;
+            } catch {
+              // 파일 크기 조회 실패 무시
+            }
+          }
+          
+          await saveAttachment({
+            file_id: fileId,
+            doc_id: docId,
+            file_name: att.fileName,
+            file_type: fileType,
+            file_size: fileSize,
+            download_url: att.downloadUrl,
+            local_path: downloadedPath || null,
+            downloaded_at: downloadedPath ? now : null,
+            status: downloadedPath ? "downloaded" : "pending",
+          });
+          attachmentsAdded++;
+        }
+      }
+    }
+    
+    // 로그 완료
+    const finalStatus = docsAdded > 0 ? "success" : (articles.length > 0 ? "success" : "partial");
+    await finishScrapeLog(log.log_id, finalStatus as "success" | "partial" | "failed", {
+      docs_scraped: docsAdded,
+      docs_skipped: docsSkipped,
+      docs_failed: 0,
+      pages_processed: 1,
+    });
+    
+    return { logId: log.log_id, docsAdded, attachmentsAdded };
+  } catch (err) {
+    // 에러 시에도 로그 기록
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    await finishScrapeLog(log.log_id, "failed", {
+      docs_scraped: docsAdded,
+      docs_skipped: docsSkipped,
+      docs_failed: articles.length - docsAdded - docsSkipped,
+      pages_processed: 1,
+    }, errorMessage);
+    
+    throw err;
+  }
+}
+
 export function closeDb(): void {
   if (dbInstance) {
     saveDbToFile();

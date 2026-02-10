@@ -156,6 +156,9 @@ interface ExtractionSettings {
     forceOcrMode: boolean;         // 강제 OCR 모드
     hybridExtraction: boolean;     // 하이브리드 추출 (텍스트+OCR 병합)
     pageOptimalMethod: boolean;    // 페이지별 최적 방법 자동 선택
+    crossPageTableMerge: boolean;  // Cross-page 표 병합 활성화
+    mergeConfidenceThreshold: number; // 병합 신뢰도 임계값 (0.0~1.0)
+    headerSimilarityThreshold: number; // 헤더 유사도 임계값 (0.0~1.0)
   };
   hwp: {
     preserveTableStructure: boolean;
@@ -228,6 +231,9 @@ const extractionPresets: Record<string, Partial<ExtractionSettings>> = {
       forceOcrMode: true,
       hybridExtraction: false,
       pageOptimalMethod: false,
+      crossPageTableMerge: false,
+      mergeConfidenceThreshold: 0.7,
+      headerSimilarityThreshold: 0.8,
     },
     preprocessing: {
       enabled: true,
@@ -297,6 +303,9 @@ const defaultSettings: ExtractionSettings = {
     forceOcrMode: false,
     hybridExtraction: false,
     pageOptimalMethod: false,
+    crossPageTableMerge: true,
+    mergeConfidenceThreshold: 0.7,
+    headerSimilarityThreshold: 0.9,
   },
   hwp: { preserveTableStructure: true, convertBullets: true, includeFootnotes: true },
   preprocessing: {
@@ -2139,6 +2148,11 @@ export default function TextExtractionPage(): React.JSX.Element {
           hybrid_extraction: settings.pdf.hybridExtraction,
           page_optimal_method: settings.pdf.pageOptimalMethod,
         },
+        cross_page_merge: {
+          enabled: settings.pdf.crossPageTableMerge,
+          merge_confidence_threshold: settings.pdf.mergeConfidenceThreshold,
+          header_similarity_threshold: settings.pdf.headerSimilarityThreshold,
+        },
         hwp: {
           preserve_table_structure: settings.hwp.preserveTableStructure,
           convert_bullets: settings.hwp.convertBullets,
@@ -2398,6 +2412,11 @@ export default function TextExtractionPage(): React.JSX.Element {
         force_ocr_mode: settings.pdf.forceOcrMode,
         hybrid_extraction: settings.pdf.hybridExtraction,
         page_optimal_method: settings.pdf.pageOptimalMethod,
+      },
+      cross_page_merge: {
+        enabled: settings.pdf.crossPageTableMerge,
+        merge_confidence_threshold: settings.pdf.mergeConfidenceThreshold,
+        header_similarity_threshold: settings.pdf.headerSimilarityThreshold,
       },
       hwp: {
         preserve_table_structure: settings.hwp.preserveTableStructure,
@@ -3338,6 +3357,7 @@ export default function TextExtractionPage(): React.JSX.Element {
                         { key: "hybridExtraction", label: "하이브리드 추출" },
                         { key: "pageOptimalMethod", label: "페이지별 최적화" },
                         { key: "extractImageText", label: "이미지 내 텍스트" },
+                        { key: "crossPageTableMerge", label: "Cross-page 표 병합" },
                       ].map((option) => (
                         <label 
                           key={option.key} 
@@ -3354,6 +3374,47 @@ export default function TextExtractionPage(): React.JSX.Element {
                         </label>
                       ))}
                     </div>
+                    
+                    {/* Cross-page 표 병합 상세 설정 */}
+                    {settings.pdf.crossPageTableMerge && (
+                      <div className="mt-2 pt-2 border-t border-stone-200/60 space-y-1">
+                        <div className="text-[9px] font-medium text-stone-500">표 병합 설정</div>
+                        <div>
+                          <label className="text-[8px] text-stone-400 block">병합 신뢰도 임계값</label>
+                          <input
+                            type="range"
+                            min="0.5"
+                            max="1.0"
+                            step="0.05"
+                            value={settings.pdf.mergeConfidenceThreshold}
+                            onChange={(e) => setSettings({ 
+                              ...settings, 
+                              pdf: { ...settings.pdf, mergeConfidenceThreshold: parseFloat(e.target.value) }, 
+                              preset: "custom" 
+                            })}
+                            className="w-full h-1"
+                          />
+                          <div className="text-[8px] text-stone-400 text-right">{settings.pdf.mergeConfidenceThreshold}</div>
+                        </div>
+                        <div>
+                          <label className="text-[8px] text-stone-400 block">헤더 유사도 임계값</label>
+                          <input
+                            type="range"
+                            min="0.7"
+                            max="1.0"
+                            step="0.05"
+                            value={settings.pdf.headerSimilarityThreshold}
+                            onChange={(e) => setSettings({ 
+                              ...settings, 
+                              pdf: { ...settings.pdf, headerSimilarityThreshold: parseFloat(e.target.value) }, 
+                              preset: "custom" 
+                            })}
+                            className="w-full h-1"
+                          />
+                          <div className="text-[8px] text-stone-400 text-right">{settings.pdf.headerSimilarityThreshold}</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* 전처리 설정 */}

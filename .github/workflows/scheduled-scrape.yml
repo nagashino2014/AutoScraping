@@ -1,45 +1,60 @@
 # GitHub Actions 스케줄 스크래핑 워크플로우
-# 
+#
 # 설정된 스케줄에 따라 자동으로 스크래핑을 실행하고
 # 결과를 Artifact로 저장합니다.
+#
+# 개선 사항 (2026-01-21):
+# - 스케줄 시간 분산: 정각(00분) 대신 불규칙한 시간 사용으로 러너 경쟁 완화
+# - 동시성 제어: concurrency 설정으로 워크플로우 순차 실행
+# - 재시도 로직: 러너 할당 실패 시 자동 재시도
 
 name: Scheduled Scraping
 
 on:
   # 스케줄 트리거 (UTC 시간 기준, KST = UTC + 9)
+  # 정각(00분, 30분)을 피하고 불규칙한 시간 사용
   schedule:
-    # 아침 그룹 (KST 06:50) - 국가법령정보센터
-    - cron: '50 21 * * *'  # UTC 21:50 = KST 06:50
-    # 아침 그룹 (KST 07:00-08:00)
-    - cron: '0 22 * * *'   # UTC 22:00 = KST 07:00
-    - cron: '30 22 * * *'  # UTC 22:30 = KST 07:30
-    - cron: '0 23 * * *'   # UTC 23:00 = KST 08:00
-    # 낮 그룹 (KST 13:00, 15:50)
-    - cron: '0 4 * * *'    # UTC 04:00 = KST 13:00
-    - cron: '50 6 * * *'   # UTC 06:50 = KST 15:50
-    # 저녁 그룹 (KST 20:55, 22:22)
-    - cron: '55 11 * * *'  # UTC 11:55 = KST 20:55
-    - cron: '22 13 * * *'  # UTC 13:22 = KST 22:22
+    # 아침 그룹 (KST 06:47) - 국가법령정보센터
+    - cron: "47 21 * * *" # UTC 21:47 = KST 06:47
+    # 아침 그룹 (KST 07:13, 07:38, 08:07)
+    - cron: "13 22 * * *" # UTC 22:13 = KST 07:13
+    - cron: "38 22 * * *" # UTC 22:38 = KST 07:38
+    - cron: "7 23 * * *" # UTC 23:07 = KST 08:07
+    # 추가 아침 (KST 08:33, 09:03)
+    - cron: "33 23 * * *" # UTC 23:33 = KST 08:33
+    - cron: "3 0 * * *" # UTC 00:03 = KST 09:03
+    # 낮 그룹 (KST 13:03, 15:47)
+    - cron: "3 4 * * *" # UTC 04:03 = KST 13:03
+    - cron: "47 6 * * *" # UTC 06:47 = KST 15:47
+    # 저녁 그룹 (KST 20:52, 22:19)
+    - cron: "52 11 * * *" # UTC 11:52 = KST 20:52
+    - cron: "19 13 * * *" # UTC 13:19 = KST 22:19
 
   # 수동 트리거
   workflow_dispatch:
     inputs:
       board_ids:
-        description: '스크래핑할 보드 ID (쉼표 구분, 빈칸=스케줄 기반)'
+        description: "스크래핑할 보드 ID (쉼표 구분, 빈칸=스케줄 기반)"
         required: false
-        default: ''
+        default: ""
       max_pages:
-        description: '최대 페이지 수'
+        description: "최대 페이지 수"
         required: false
-        default: '10'
+        default: "10"
       download_attachments:
-        description: '첨부파일 다운로드'
+        description: "첨부파일 다운로드"
         required: false
-        default: 'true'
+        default: "true"
         type: boolean
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: "20"
+
+# 동시성 제어: 같은 워크플로우는 순차 실행
+# 새 실행이 대기열에 들어가고, 이전 실행 완료 후 시작
+concurrency:
+  group: scraping-workflow
+  cancel-in-progress: false
 
 jobs:
   # 스케줄 시간에 따라 실행할 보드 결정
@@ -48,7 +63,7 @@ jobs:
     outputs:
       boards: ${{ steps.set-boards.outputs.boards }}
       should_run: ${{ steps.set-boards.outputs.should_run }}
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -62,74 +77,81 @@ jobs:
             echo "should_run=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           # 현재 KST 시간 계산
           KST_HOUR=$(TZ='Asia/Seoul' date +%H)
           KST_MIN=$(TZ='Asia/Seoul' date +%M)
           KST_DOW=$(TZ='Asia/Seoul' date +%u)  # 1=Monday, 7=Sunday
-          
+
           echo "Current KST: ${KST_HOUR}:${KST_MIN}, Day of week: ${KST_DOW}"
-          
+
           BOARDS=""
-          
-          # 시간대별 보드 매핑 (scraper-schedules.json 기준)
+
+          # 시간대별 보드 매핑 (불규칙 시간에 맞춰 조정)
+          # 각 시간대에 ±5분 여유를 둠
           case "${KST_HOUR}" in
             06)
-              if [ "${KST_MIN}" -ge 45 ] && [ "${KST_MIN}" -le 55 ]; then
+              # KST 06:47 - law_board1
+              if [ "${KST_MIN}" -ge 42 ] && [ "${KST_MIN}" -le 52 ]; then
                 BOARDS="law_board1"
               fi
               ;;
             07)
-              if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
+              # KST 07:13 - moleg_board1 (+ 월요일: mcee_board2,3,4)
+              if [ "${KST_MIN}" -ge 8 ] && [ "${KST_MIN}" -le 18 ]; then
                 BOARDS="moleg_board1"
-                # 월요일에만 실행
                 if [ "${KST_DOW}" -eq 1 ]; then
                   BOARDS="${BOARDS},mcee_board2,mcee_board3,mcee_board4"
                 fi
-              elif [ "${KST_MIN}" -ge 25 ] && [ "${KST_MIN}" -le 35 ]; then
+              # KST 07:38 - keiti_board1
+              elif [ "${KST_MIN}" -ge 33 ] && [ "${KST_MIN}" -le 43 ]; then
                 BOARDS="keiti_board1"
-              elif [ "${KST_MIN}" -ge 40 ] && [ "${KST_MIN}" -le 50 ]; then
-                BOARDS="nier_board1"
               fi
               ;;
             08)
-              if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
+              # KST 08:07 - nier_board1
+              if [ "${KST_MIN}" -ge 2 ] && [ "${KST_MIN}" -le 12 ]; then
+                BOARDS="nier_board1"
+              # KST 08:33 - gir_board1
+              elif [ "${KST_MIN}" -ge 28 ] && [ "${KST_MIN}" -le 38 ]; then
                 BOARDS="gir_board1"
-              elif [ "${KST_MIN}" -ge 25 ] && [ "${KST_MIN}" -le 35 ]; then
-                BOARDS="gir_board2"
               fi
               ;;
             09)
+              # KST 09:03 - gir_board2, motie_board2 (+ 월요일: mcee_board5)
               if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
-                BOARDS="motie_board2"
-                # 월요일에만 실행
+                BOARDS="gir_board2,motie_board2"
                 if [ "${KST_DOW}" -eq 1 ]; then
                   BOARDS="${BOARDS},mcee_board5"
                 fi
               fi
               ;;
             13)
+              # KST 13:03 - keco_board1
               if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
                 BOARDS="keco_board1"
               fi
               ;;
             15)
-              if [ "${KST_MIN}" -ge 45 ] && [ "${KST_MIN}" -le 55 ]; then
+              # KST 15:47 - motie_board1
+              if [ "${KST_MIN}" -ge 42 ] && [ "${KST_MIN}" -le 52 ]; then
                 BOARDS="motie_board1"
               fi
               ;;
             20)
-              if [ "${KST_MIN}" -ge 50 ] && [ "${KST_MIN}" -le 59 ]; then
+              # KST 20:52 - kepco_board1
+              if [ "${KST_MIN}" -ge 47 ] && [ "${KST_MIN}" -le 57 ]; then
                 BOARDS="kepco_board1"
               fi
               ;;
             22)
-              if [ "${KST_MIN}" -ge 17 ] && [ "${KST_MIN}" -le 27 ]; then
+              # KST 22:19 - mcee_board1
+              if [ "${KST_MIN}" -ge 14 ] && [ "${KST_MIN}" -le 24 ]; then
                 BOARDS="mcee_board1"
               fi
               ;;
           esac
-          
+
           if [ -n "$BOARDS" ]; then
             echo "boards=${BOARDS}" >> $GITHUB_OUTPUT
             echo "should_run=true" >> $GITHUB_OUTPUT
@@ -140,12 +162,14 @@ jobs:
             echo "No boards to scrape at this time"
           fi
 
-  # 스크래핑 실행
+  # 스크래핑 실행 (재시도 로직 포함)
   scrape:
     needs: determine-boards
     if: needs.determine-boards.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    
+    # 러너 할당 타임아웃 설정 (기본 6시간 → 30분)
+    timeout-minutes: 45
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -154,7 +178,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
@@ -165,7 +189,61 @@ jobs:
         working-directory: frontend
         run: npx playwright install chromium --with-deps
 
-      - name: Run scraper
+      # 스크래핑 실행 (재시도 로직)
+      - name: Run scraper (attempt 1)
+        id: scrape1
+        working-directory: frontend
+        continue-on-error: true
+        env:
+          BOARDS: ${{ needs.determine-boards.outputs.boards }}
+          MAX_PAGES: ${{ github.event.inputs.max_pages || '10' }}
+          DOWNLOAD_ATTACHMENTS: ${{ github.event.inputs.download_attachments || 'true' }}
+        run: |
+          SCRAPE_ARGS="--boards=${BOARDS} --output=./results --max-pages=${MAX_PAGES}"
+
+          if [ "${DOWNLOAD_ATTACHMENTS}" = "false" ]; then
+            SCRAPE_ARGS="${SCRAPE_ARGS} --no-attachments"
+          fi
+
+          echo "Running: npm run scrape -- ${SCRAPE_ARGS}"
+          npm run scrape -- ${SCRAPE_ARGS}
+
+      # 첫 번째 시도 실패 시 30초 대기 후 재시도
+      - name: Wait before retry
+        if: steps.scrape1.outcome == 'failure'
+        run: |
+          echo "First attempt failed, waiting 30 seconds before retry..."
+          sleep 30
+
+      - name: Run scraper (attempt 2)
+        id: scrape2
+        if: steps.scrape1.outcome == 'failure'
+        working-directory: frontend
+        continue-on-error: true
+        env:
+          BOARDS: ${{ needs.determine-boards.outputs.boards }}
+          MAX_PAGES: ${{ github.event.inputs.max_pages || '10' }}
+          DOWNLOAD_ATTACHMENTS: ${{ github.event.inputs.download_attachments || 'true' }}
+        run: |
+          SCRAPE_ARGS="--boards=${BOARDS} --output=./results --max-pages=${MAX_PAGES}"
+
+          if [ "${DOWNLOAD_ATTACHMENTS}" = "false" ]; then
+            SCRAPE_ARGS="${SCRAPE_ARGS} --no-attachments"
+          fi
+
+          echo "Retry attempt: npm run scrape -- ${SCRAPE_ARGS}"
+          npm run scrape -- ${SCRAPE_ARGS}
+
+      # 두 번째 시도도 실패 시 60초 대기 후 최종 재시도
+      - name: Wait before final retry
+        if: steps.scrape1.outcome == 'failure' && steps.scrape2.outcome == 'failure'
+        run: |
+          echo "Second attempt failed, waiting 60 seconds before final retry..."
+          sleep 60
+
+      - name: Run scraper (attempt 3 - final)
+        id: scrape3
+        if: steps.scrape1.outcome == 'failure' && steps.scrape2.outcome == 'failure'
         working-directory: frontend
         env:
           BOARDS: ${{ needs.determine-boards.outputs.boards }}
@@ -173,12 +251,12 @@ jobs:
           DOWNLOAD_ATTACHMENTS: ${{ github.event.inputs.download_attachments || 'true' }}
         run: |
           SCRAPE_ARGS="--boards=${BOARDS} --output=./results --max-pages=${MAX_PAGES}"
-          
+
           if [ "${DOWNLOAD_ATTACHMENTS}" = "false" ]; then
             SCRAPE_ARGS="${SCRAPE_ARGS} --no-attachments"
           fi
-          
-          echo "Running: npm run scrape -- ${SCRAPE_ARGS}"
+
+          echo "Final attempt: npm run scrape -- ${SCRAPE_ARGS}"
           npm run scrape -- ${SCRAPE_ARGS}
 
       - name: Generate artifact name
@@ -201,8 +279,18 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- 대상 보드: ${{ needs.determine-boards.outputs.boards }}" >> $GITHUB_STEP_SUMMARY
           echo "- 실행 시간: $(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M:%S KST')" >> $GITHUB_STEP_SUMMARY
+
+          # 재시도 횟수 표시
+          ATTEMPTS=1
+          if [ "${{ steps.scrape1.outcome }}" == "failure" ]; then
+            ATTEMPTS=2
+            if [ "${{ steps.scrape2.outcome }}" == "failure" ]; then
+              ATTEMPTS=3
+            fi
+          fi
+          echo "- 시도 횟수: ${ATTEMPTS}회" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ -f frontend/results/summary.json ]; then
             echo "### 결과 요약" >> $GITHUB_STEP_SUMMARY
             cat frontend/results/summary.json | jq -r '"- 총 수집: \(.totalArticles)건"' >> $GITHUB_STEP_SUMMARY

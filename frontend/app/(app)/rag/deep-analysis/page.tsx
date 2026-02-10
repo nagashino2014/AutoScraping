@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, ArrowRight, Play, Pause, RefreshCw, Loader2,
   CheckCircle2, AlertTriangle, FileText, Building2, Target,
   Microscope, Lightbulb, ChevronDown, ChevronUp, Clock,
-  Download, Send, Edit3, Save, X, BarChart3, Zap,
+  Download, Send, Edit3, Save, X, BarChart3, Zap, DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,14 +22,26 @@ interface SelectedIssue {
   sources: { orgName: string; boardName: string }[];
   clusterSize: number;
   keywords: string[];
+  userTitle?: string;
+  userSummary?: string;
 }
 
 interface AnalysisResult {
   issueId: string;
   step: number;
+  stepName: string;
   content: string;
   method: string;
   timestamp: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  sources?: string[];
+}
+
+interface TokenUsage {
+  input: number;
+  output: number;
+  cost: number;
 }
 
 interface DeepAnalysisSession {
@@ -40,6 +52,9 @@ interface DeepAnalysisSession {
   progress: number;
   currentIssue?: string;
   currentStep?: number;
+  tokenUsage?: TokenUsage;
+  model?: string;
+  error?: string;
 }
 
 // ============================================================
@@ -79,6 +94,9 @@ function DeepAnalysisPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState("");
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
+  const [usedModel, setUsedModel] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // UI 상태
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
@@ -91,6 +109,9 @@ function DeepAnalysisPage() {
     includeRecommendation: true,
     maxSteps: 4,
   });
+
+  // SSE 연결 참조
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // 세션 로드
   const loadSession = useCallback(async () => {
@@ -124,67 +145,162 @@ function DeepAnalysisPage() {
     loadSession();
   }, [loadSession]);
 
-  // 분석 시작 (모의)
+  // 분석 중지
+  const stopAnalysis = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setAnalyzing(false);
+    setCurrentStep("중지됨");
+  };
+
+  // 심층 분석 실행 (실제 API 호출)
   const runDeepAnalysis = async () => {
-    if (selectedIssues.length === 0) return;
+    if (selectedIssues.length === 0 || !sessionIdParam) return;
 
     setAnalyzing(true);
     setProgress(0);
     setAnalysisResults({});
+    setTokenUsage(null);
+    setErrorMessage(null);
+    setCurrentStep("분석 시작 중...");
 
-    const steps = [
-      { name: "데이터 수집", method: "Retrieval" },
-      { name: "초기 분석", method: "Chain-of-Thought" },
-      { name: "심층 추론", method: "Multi-step Reasoning" },
-      { name: "결론 도출", method: "Synthesis" },
-    ];
+    // AbortController 생성
+    abortControllerRef.current = new AbortController();
 
-    const totalSteps = selectedIssues.length * steps.length;
-    let completedSteps = 0;
+    try {
+      const res = await fetch("/api/rag/deep-analysis/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: sessionIdParam,
+          issueIds: selectedIssues.map(i => i.id),
+          config: {
+            depth: analysisConfig.depth,
+            includeEvidence: analysisConfig.includeEvidence,
+            includeRecommendation: analysisConfig.includeRecommendation,
+            maxSteps: analysisConfig.maxSteps,
+          },
+        }),
+        signal: abortControllerRef.current.signal,
+      });
 
-    for (const issue of selectedIssues) {
-      const results: AnalysisResult[] = [];
-
-      for (let i = 0; i < Math.min(steps.length, analysisConfig.maxSteps); i++) {
-        const step = steps[i];
-        setCurrentStep(`${issue.title.slice(0, 20)}... - ${step.name}`);
-
-        // 모의 딜레이
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-
-        results.push({
-          issueId: issue.id,
-          step: i + 1,
-          content: generateMockAnalysis(issue, step.name),
-          method: step.method,
-          timestamp: new Date().toISOString(),
-        });
-
-        completedSteps++;
-        setProgress(Math.round((completedSteps / totalSteps) * 100));
-
-        // 중간 결과 업데이트
-        setAnalysisResults((prev) => ({
-          ...prev,
-          [issue.id]: [...results],
-        }));
+      if (!res.ok) {
+        throw new Error(`API 오류: ${res.status}`);
       }
-    }
 
-    setAnalyzing(false);
-    setProgress(100);
-    setCurrentStep("완료");
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error("스트림을 읽을 수 없습니다.");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleSSEMessage(data);
+            } catch {
+              // JSON 파싱 실패 무시
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      if (error.name === "AbortError") {
+        console.log("분석이 중지되었습니다.");
+      } else {
+        console.error("심층 분석 오류:", error);
+        setErrorMessage(error.message || "분석 중 오류가 발생했습니다.");
+      }
+    } finally {
+      setAnalyzing(false);
+      abortControllerRef.current = null;
+    }
   };
 
-  // 모의 분석 결과 생성
-  const generateMockAnalysis = (issue: SelectedIssue, stepName: string): string => {
-    const templates: Record<string, string> = {
-      "데이터 수집": `**${issue.title}** 관련 ${issue.clusterSize}개 문서를 분석했습니다.\n\n주요 출처:\n${issue.sources.slice(0, 3).map((s) => `- ${s.orgName} / ${s.boardName}`).join("\n")}\n\n핵심 키워드: ${issue.keywords.slice(0, 5).join(", ")}`,
-      "초기 분석": `**핵심 내용 분석**\n\n${issue.summary}\n\n이 이슈는 ${issue.score.total >= 0.7 ? "높은" : issue.score.total >= 0.5 ? "중간" : "낮은"} 중요도를 가지며, 관련 정책 변화에 대한 면밀한 모니터링이 필요합니다.`,
-      "심층 추론": `**영향 분석**\n\n1. **산업 영향**: 해당 분야 기업들의 규제 대응 필요\n2. **시기**: 관련 법규 시행 일정 확인 필요\n3. **대응 방안**: 내부 프로세스 점검 및 준비 권고\n\n관련 문서 ${issue.clusterSize}개에서 일관된 패턴을 확인했습니다.`,
-      "결론 도출": `**최종 요약 및 권고사항**\n\n본 이슈는 ${issue.sources[0]?.orgName || "관련 기관"}에서 발표한 정책과 관련되어 있습니다.\n\n**권고사항**:\n1. 관련 규정 변경사항 지속 모니터링\n2. 내부 담당 부서와 공유\n3. 필요시 전문가 자문 검토\n\n분석 신뢰도: ${Math.round(issue.score.total * 100)}%`,
-    };
-    return templates[stepName] || `${stepName} 분석 결과`;
+  // SSE 메시지 핸들러
+  const handleSSEMessage = (data: any) => {
+    switch (data.type) {
+      case "started":
+        setUsedModel(data.model || "");
+        setCurrentStep("분석 시작됨");
+        break;
+
+      case "progress":
+        setProgress(data.progress || 0);
+        setCurrentStep(`${data.issueTitle?.slice(0, 20) || ""}... - ${data.stepName || ""}`);
+        break;
+
+      case "step_complete":
+        setAnalysisResults((prev) => {
+          const existing = prev[data.issueId] || [];
+          return {
+            ...prev,
+            [data.issueId]: [
+              ...existing,
+              {
+                issueId: data.issueId,
+                step: data.step,
+                stepName: data.stepName,
+                content: data.content,
+                method: data.method,
+                timestamp: new Date().toISOString(),
+                inputTokens: data.inputTokens,
+                outputTokens: data.outputTokens,
+              },
+            ],
+          };
+        });
+        break;
+
+      case "step_error":
+        setAnalysisResults((prev) => {
+          const existing = prev[data.issueId] || [];
+          return {
+            ...prev,
+            [data.issueId]: [
+              ...existing,
+              {
+                issueId: data.issueId,
+                step: data.step,
+                stepName: data.stepName,
+                content: `오류: ${data.error}`,
+                method: "Error",
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          };
+        });
+        break;
+
+      case "issue_complete":
+        // 이슈 분석 완료
+        break;
+
+      case "complete":
+        setProgress(100);
+        setCurrentStep("완료");
+        setTokenUsage(data.tokenUsage);
+        setUsedModel(data.model || "");
+        break;
+
+      case "error":
+        setErrorMessage(data.error);
+        setCurrentStep("오류 발생");
+        break;
+    }
   };
 
   // 스텝 토글
@@ -234,7 +350,7 @@ function DeepAnalysisPage() {
 
             {analyzing ? (
               <button
-                onClick={() => setAnalyzing(false)}
+                onClick={stopAnalysis}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium bg-red-500 text-white hover:bg-red-600"
               >
                 <Pause className="w-4 h-4" />
@@ -243,10 +359,10 @@ function DeepAnalysisPage() {
             ) : (
               <button
                 onClick={runDeepAnalysis}
-                disabled={selectedIssues.length === 0}
+                disabled={selectedIssues.length === 0 || !sessionIdParam}
                 className={cn(
                   "flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all",
-                  selectedIssues.length > 0
+                  selectedIssues.length > 0 && sessionIdParam
                     ? "bg-primary text-white hover:bg-primary/90"
                     : "bg-stone-200 text-stone-400 cursor-not-allowed"
                 )}
@@ -262,7 +378,10 @@ function DeepAnalysisPage() {
         {analyzing && (
           <div className="mt-4 p-4 rounded-xl bg-primary/5 border border-primary/20">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-stone-700">{currentStep}</span>
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                <span className="text-sm font-medium text-stone-700">{currentStep}</span>
+              </div>
               <span className="text-sm font-bold text-primary">{progress}%</span>
             </div>
             <div className="w-full h-2 bg-stone-200 rounded-full overflow-hidden">
@@ -270,6 +389,41 @@ function DeepAnalysisPage() {
                 className="h-full bg-primary transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
+            </div>
+            {usedModel && (
+              <div className="mt-2 text-xs text-stone-500">
+                사용 모델: {usedModel}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 오류 메시지 */}
+        {errorMessage && (
+          <div className="mt-4 p-4 rounded-xl bg-red-50 border border-red-200">
+            <div className="flex items-center gap-2 text-red-700">
+              <AlertTriangle className="w-4 h-4" />
+              <span className="text-sm font-medium">{errorMessage}</span>
+            </div>
+          </div>
+        )}
+
+        {/* 완료 후 토큰 사용량 */}
+        {!analyzing && tokenUsage && (
+          <div className="mt-4 p-4 rounded-xl bg-green-50 border border-green-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle2 className="w-4 h-4" />
+                <span className="text-sm font-medium">분석 완료</span>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-green-600">
+                <span>입력: {tokenUsage.input.toLocaleString()} 토큰</span>
+                <span>출력: {tokenUsage.output.toLocaleString()} 토큰</span>
+                <span className="flex items-center gap-1">
+                  <DollarSign className="w-3 h-3" />
+                  {tokenUsage.cost.toFixed(4)}
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -435,25 +589,44 @@ function DeepAnalysisPage() {
                     {analysisResults[selectedIssueId].map((result, idx) => {
                       const key = `${result.issueId}-${result.step}`;
                       const isExpanded = expandedSteps.has(key);
+                      const isError = result.method === "Error";
 
                       return (
-                        <div key={key} className="glass-panel rounded-2xl overflow-hidden">
+                        <div key={key} className={cn(
+                          "glass-panel rounded-2xl overflow-hidden",
+                          isError && "border-red-200 bg-red-50/30"
+                        )}>
                           <button
                             onClick={() => toggleStep(key)}
                             className="w-full px-4 py-3 flex items-center justify-between hover:bg-stone-50/50"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <span className="text-sm font-bold text-primary">{result.step}</span>
+                              <div className={cn(
+                                "w-8 h-8 rounded-lg flex items-center justify-center",
+                                isError ? "bg-red-100" : "bg-primary/10"
+                              )}>
+                                {isError ? (
+                                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                                ) : (
+                                  <span className="text-sm font-bold text-primary">{result.step}</span>
+                                )}
                               </div>
                               <div className="text-left">
-                                <div className="font-semibold text-stone-700 text-sm">
-                                  {["데이터 수집", "초기 분석", "심층 추론", "결론 도출"][result.step - 1] || `단계 ${result.step}`}
+                                <div className={cn(
+                                  "font-semibold text-sm",
+                                  isError ? "text-red-700" : "text-stone-700"
+                                )}>
+                                  {result.stepName || ["데이터 수집", "초기 분석", "심층 추론", "결론 도출"][result.step - 1] || `단계 ${result.step}`}
                                 </div>
                                 <div className="text-[10px] text-stone-400">{result.method}</div>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
+                              {result.inputTokens && result.outputTokens && (
+                                <span className="text-[10px] text-stone-400 bg-stone-100 px-2 py-0.5 rounded">
+                                  {result.inputTokens + result.outputTokens} 토큰
+                                </span>
+                              )}
                               <span className="text-[10px] text-stone-400">
                                 {new Date(result.timestamp).toLocaleTimeString("ko-KR")}
                               </span>
@@ -469,12 +642,30 @@ function DeepAnalysisPage() {
                             <div className="px-4 pb-4 border-t border-stone-100">
                               <div className="pt-4 prose prose-sm prose-stone max-w-none">
                                 <div
-                                  className="text-sm text-stone-600 whitespace-pre-wrap"
+                                  className={cn(
+                                    "text-sm whitespace-pre-wrap",
+                                    isError ? "text-red-600" : "text-stone-600"
+                                  )}
                                   dangerouslySetInnerHTML={{
-                                    __html: result.content.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>"),
+                                    __html: result.content
+                                      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                                      .replace(/##\s+(.*?)(\n|$)/g, "<h3 class='text-base font-semibold mt-4 mb-2'>$1</h3>")
+                                      .replace(/\n/g, "<br/>"),
                                   }}
                                 />
                               </div>
+                              {result.sources && result.sources.length > 0 && (
+                                <div className="mt-4 pt-3 border-t border-stone-100">
+                                  <div className="text-xs font-semibold text-stone-500 mb-2">참조 출처</div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {result.sources.map((src, i) => (
+                                      <span key={i} className="text-[10px] bg-stone-100 text-stone-600 px-2 py-1 rounded">
+                                        {src}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>

@@ -3151,7 +3151,7 @@ export default function ScraperStatusPage() {
     fetchRunningJobs();
     fetchErrorLogs();
     fetchSchedules();
-  }, [fetchSummary, fetchFileTypes, fetchBoards, fetchErrorLogs, fetchSchedules]);
+  }, [fetchSummary, fetchFileTypes, fetchBoards, fetchRunningJobs, fetchErrorLogs, fetchSchedules]);
 
   // 기간 변경 시 타임라인 갱신
   useEffect(() => {

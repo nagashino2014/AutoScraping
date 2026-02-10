@@ -42,6 +42,7 @@ export const MENU_ITEMS = [
       { title: "RAG 분석", href: "/rag/analysis" },
       { title: "사용자 인터랙션", href: "/rag/interaction" },
       { title: "심층 분석", href: "/rag/deep-analysis" },
+      { title: "사업장 프로파일", href: "/rag/profiles" },
       { title: "RAG 설정", href: "/rag/settings" },
     ],
   },

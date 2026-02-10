@@ -424,11 +424,11 @@ export default function ScraperSchedulePage() {
     boardName: string;
     articlesCount: number;
     attachmentsCount: number;
-    xlsxPath: string;
+    jsonPath?: string;
+    xlsxPath?: string;
     attachmentDir: string;
     downloadedFiles: string[];
     // API 모드 추가 필드
-    jsonPath?: string;
     dataCount?: number;
     saveDir?: string;
   } | null>(null);
@@ -705,6 +705,7 @@ export default function ScraperSchedulePage() {
         {
           method: "DELETE",
           body: JSON.stringify({
+            jsonPath: executionResult.jsonPath,
             xlsxPath: executionResult.xlsxPath,
             attachmentDir: executionResult.attachmentDir || executionResult.saveDir,
           }),
@@ -1591,27 +1592,19 @@ export default function ScraperSchedulePage() {
                 <div className="p-4 rounded-xl bg-amber-50/50 border border-amber-100">
                   <div className="flex items-center gap-2">
                     <FileText className="w-5 h-5 text-amber-600" />
-                    <div className="text-xs font-semibold text-amber-700">XLSX 저장</div>
+                    <div className="text-xs font-semibold text-amber-700">데이터 저장</div>
                   </div>
-                  <div className="text-[10px] text-amber-600 mt-1 truncate" title={executionResult.xlsxPath}>
-                    {executionResult.xlsxPath ? "저장 완료" : "없음"}
+                  <div className="text-[10px] text-amber-600 mt-1 truncate" title={executionResult.jsonPath || executionResult.xlsxPath || ""}>
+                    {(executionResult.jsonPath || executionResult.xlsxPath) ? "저장 완료" : "없음"}
                   </div>
                 </div>
               </div>
 
               {/* 파일 경로 */}
-              {(executionResult.xlsxPath || executionResult.jsonPath) && (
+              {(executionResult.jsonPath || executionResult.xlsxPath) && (
                 <div className="mt-4 p-3 rounded-xl bg-stone-50 border border-stone-200">
                   <div className="text-xs font-bold text-stone-600 mb-2">저장 경로</div>
                   <div className="space-y-1.5">
-                    {executionResult.xlsxPath && (
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3.5 h-3.5 text-stone-400" />
-                        <code className="text-[10px] text-stone-600 font-mono bg-white px-2 py-1 rounded flex-1 truncate">
-                          {executionResult.xlsxPath}
-                        </code>
-                      </div>
-                    )}
                     {executionResult.jsonPath && (
                       <div className="flex items-center gap-2">
                         <FileText className="w-3.5 h-3.5 text-blue-400" />

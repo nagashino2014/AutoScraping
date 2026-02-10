@@ -6,8 +6,10 @@
 
 import { NextRequest } from "next/server";
 import { readScraperTargets, type CollectionTargets, type SiteSearchConfig, type BrowserConfig as BrowserSettings } from "@/lib/scraper/targets-store";
-import { exportToXlsx, type ScrapedArticle } from "@/lib/scraper/xlsx-export";
+import { exportToJson, type ScrapedArticle } from "@/lib/scraper/xlsx-export";
+import { syncInstantScrapeToDB } from "@/lib/scraper/scraper-db";
 import * as cheerio from "cheerio";
+import { parseStringPromise } from "xml2js";
 import fs from "node:fs";
 import path from "node:path";
 import { promises as fsPromises } from "node:fs";
@@ -695,10 +697,10 @@ function checkCollectionRange(
     case "yearly": {
       if (!itemDate || !range.years || range.years.length === 0) return true;
       const itemYear = itemDate.getFullYear();
-      if (range.years.includes(itemYear)) return true;
       const minYear = Math.min(...range.years);
       if (itemYear < minYear) return "stop";
-      return false;
+      if (!range.years.includes(itemYear)) return false;
+      return true;
     }
     default:
       return true;
@@ -911,6 +913,27 @@ interface WebConfig {
   };
   collection_range?: CollectionRange;
   collect_body?: boolean;
+
+  // 외부 상세 링크 추적
+  external_detail?: {
+    enabled: boolean;
+    url_selector?: string;
+    url_pattern?: string;
+    label_selector?: string;
+    mode: "html" | "api_xml";
+    content_selector?: string;
+    attachments_selector?: string;
+    api_xml?: {
+      type_param?: string;
+      content_fields?: string[];
+      attachment_fields?: { url_field: string; name_field: string }[];
+    };
+    url_transform?: {
+      extract_param: string;
+      template: string;
+    };
+    metadata_selectors?: { [key: string]: string };
+  };
 }
 
 // ============================================================
@@ -1322,6 +1345,7 @@ interface AttachmentInfo {
 interface DetailPageResult {
   content: string;
   attachments: AttachmentInfo[];
+  metadata?: { [key: string]: string };
 }
 
 async function parseDetailPage(
@@ -1788,6 +1812,12 @@ async function parseDetailPage(
   }
 
   if (!shouldCollectAttachments) {
+    // 외부 상세 링크 추적은 본문 수집 시에도 필요하므로 첨부파일 미수집이라도 처리
+    if (config.external_detail?.enabled) {
+      const extResult = await processExternalDetail($, url, config, content);
+      if (extResult.content) content = extResult.content;
+      return { content, attachments: [], metadata: extResult.metadata };
+    }
     return { content, attachments: [] };
   }
 
@@ -1808,7 +1838,233 @@ async function parseDetailPage(
     }
   }
 
-  return { content, attachments: allAttachments };
+  // ============================================================
+  // 외부 상세 링크 추적 (external_detail)
+  // ============================================================
+  let metadata: { [key: string]: string } | undefined;
+  
+  if (config.external_detail?.enabled) {
+    const extResult = await processExternalDetail($, url, config, content);
+    if (extResult.content) content = extResult.content;
+    metadata = extResult.metadata;
+    if (extResult.attachments.length > 0) {
+      for (const att of extResult.attachments) {
+        if (!mergedUrls.has(att.downloadUrl)) {
+          allAttachments.push(att);
+          mergedUrls.add(att.downloadUrl);
+        }
+      }
+    }
+  }
+
+  return { content, attachments: allAttachments, metadata };
+}
+
+// ============================================================
+// 외부 상세 링크 처리 (external_detail)
+// ============================================================
+
+async function processExternalDetail(
+  $: cheerio.CheerioAPI,
+  baseUrl: string,
+  config: WebConfig,
+  currentContent: string
+): Promise<{ content: string; attachments: AttachmentInfo[]; metadata?: { [key: string]: string } }> {
+  const extConfig = config.external_detail!;
+  let content = "";
+  const attachments: AttachmentInfo[] = [];
+  let metadata: { [key: string]: string } | undefined;
+
+  console.log(`[processExternalDetail] 외부 상세 링크 추적 (mode: ${extConfig.mode})`);
+
+  // 메타데이터 추출
+  if (extConfig.metadata_selectors) {
+    metadata = {};
+    for (const [key, selector] of Object.entries(extConfig.metadata_selectors)) {
+      const text = cleanText($(selector).first().text());
+      if (text) metadata[key] = text;
+    }
+    if (Object.keys(metadata).length > 0) {
+      console.log(`[processExternalDetail] 메타데이터: ${JSON.stringify(metadata)}`);
+    }
+  }
+
+  // jsessionid 제거 (다른 사이트의 세션 ID가 외부 요청에 포함되지 않도록)
+  const stripJsessionId = (url: string) => url.replace(/;jsessionid=[^?&]*/gi, "");
+
+  // 외부 URL 추출
+  let externalUrl: string | null = null;
+
+  if (extConfig.url_selector) {
+    const href = $(extConfig.url_selector).first().attr("href");
+    if (href) {
+      console.log(`[processExternalDetail] url_selector 매칭: ${href.slice(0, 80)}...`);
+      externalUrl = stripJsessionId(resolveUrl(baseUrl, href));
+    }
+  }
+  if (!externalUrl && extConfig.label_selector) {
+    const $label = $(extConfig.label_selector).first();
+    if ($label.length > 0) {
+      const $link = $label.next("dd").find("a[href]")
+        .add($label.closest("tr").find("td a[href]"))
+        .add($label.parent().find("a[href]"));
+      const href = $link.first().attr("href");
+      if (href) {
+        console.log(`[processExternalDetail] label_selector 매칭: ${href.slice(0, 80)}...`);
+        externalUrl = stripJsessionId(resolveUrl(baseUrl, href));
+      }
+    }
+  }
+  if (!externalUrl && extConfig.url_pattern) {
+    const re = new RegExp(extConfig.url_pattern);
+    $("a[href]").each((_, el) => {
+      const href = $(el).attr("href") || "";
+      if (re.test(href)) {
+        console.log(`[processExternalDetail] url_pattern 매칭: ${href.slice(0, 80)}...`);
+        externalUrl = stripJsessionId(resolveUrl(baseUrl, href));
+        return false;
+      }
+    });
+  }
+
+  if (!externalUrl) {
+    console.log(`[processExternalDetail] 외부 링크 미발견`);
+    return { content: currentContent, attachments, metadata };
+  }
+
+  // URL 변환 (DRF API URL → 공개 페이지 URL 등)
+  if (extConfig.url_transform) {
+    try {
+      const urlObj = new URL(externalUrl);
+      const paramValue = urlObj.searchParams.get(extConfig.url_transform.extract_param);
+      if (paramValue) {
+        externalUrl = extConfig.url_transform.template.replace(
+          `{${extConfig.url_transform.extract_param}}`, paramValue
+        );
+        console.log(`[processExternalDetail] URL 변환됨: ${externalUrl.slice(0, 120)}...`);
+      }
+    } catch (e) {
+      console.log(`[processExternalDetail] URL 변환 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  try {
+    if (extConfig.mode === "api_xml") {
+      // XML API 모드
+      let xmlUrl = externalUrl;
+      if (extConfig.api_xml?.type_param) {
+        xmlUrl = externalUrl.replace(/([?&])type=[^&]*/i, `$1type=${extConfig.api_xml.type_param}`);
+        if (xmlUrl === externalUrl && !externalUrl.includes("type=")) {
+          xmlUrl += (externalUrl.includes("?") ? "&" : "?") + `type=${extConfig.api_xml.type_param}`;
+        }
+      }
+      console.log(`[processExternalDetail] XML 요청: ${xmlUrl.slice(0, 120)}...`);
+
+      const xmlText = await fetchHtml(xmlUrl);
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = await parseStringPromise(xmlText, {
+          explicitArray: false, ignoreAttrs: false, mergeAttrs: true,
+          trim: true, normalize: true, normalizeTags: false,
+        });
+      } catch (parseErr) {
+        console.log(`[processExternalDetail] XML 파싱 실패: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
+        return { content: currentContent, attachments, metadata };
+      }
+
+      const rootCandidates = ["행정규칙", "법령", "자치법규", "판례", "헌재결정례"];
+      let root: Record<string, unknown> | null = null;
+      for (const key of rootCandidates) {
+        if (parsed[key] && typeof parsed[key] === "object") {
+          root = parsed[key] as Record<string, unknown>;
+          break;
+        }
+      }
+      if (!root) {
+        const keys = Object.keys(parsed);
+        if (keys.length === 1 && typeof parsed[keys[0]] === "object") {
+          root = parsed[keys[0]] as Record<string, unknown>;
+        }
+      }
+      if (!root) {
+        console.log(`[processExternalDetail] XML 루트 요소 미발견`);
+        return { content: currentContent, attachments, metadata };
+      }
+
+      // 본문 추출
+      const contentFields = extConfig.api_xml?.content_fields || ["조문내용"];
+      for (const field of contentFields) {
+        const value = root[field];
+        if (value && typeof value === "string") content += value + "\n";
+        else if (value && typeof value === "object") content += JSON.stringify(value, null, 2) + "\n";
+      }
+      content = content.trim();
+      console.log(`[processExternalDetail] 본문 추출: ${content.length}자`);
+
+      // 첨부파일 추출
+      for (const mapping of extConfig.api_xml?.attachment_fields || []) {
+        const fileUrl = root[mapping.url_field];
+        const fileName = root[mapping.name_field];
+        if (fileUrl && typeof fileUrl === "string" && fileUrl.trim()) {
+          const urls = fileUrl.split(/[,;|\n]/).map(u => u.trim()).filter(Boolean);
+          const names = (typeof fileName === "string" ? fileName : "").split(/[,;|\n]/).map(n => n.trim()).filter(Boolean);
+          for (let i = 0; i < urls.length; i++) {
+            attachments.push({ fileName: names[i] || `attachment_${i + 1}`, downloadUrl: urls[i] });
+          }
+        }
+      }
+      console.log(`[processExternalDetail] 첨부파일 ${attachments.length}개 발견`);
+    } else {
+      // HTML 모드
+      console.log(`[processExternalDetail] HTML 요청: ${externalUrl.slice(0, 120)}...`);
+      const extHtml = await fetchHtml(externalUrl);
+      const ext$ = cheerio.load(extHtml);
+
+      if (extConfig.content_selector) {
+        const $c = ext$(extConfig.content_selector).first();
+        if ($c.length > 0) {
+          $c.find("script, style, nav, header, footer").remove();
+          content = cleanText($c.text());
+        }
+      }
+      if (!content) {
+        ext$("script, style, nav, header, footer").remove();
+        content = cleanText(ext$("body").text()).slice(0, 10000);
+      }
+
+      const attachSel = extConfig.attachments_selector ||
+        "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.docx'], a[href*='.xls'], a[href*='.xlsx'], a[href*='download'], a[href*='fileDown']";
+      const seenExtUrls = new Set<string>();
+      ext$(attachSel).each((_, el) => {
+        const href = ext$(el).attr("href") || "";
+        if (!href) return;
+        const downloadUrl = resolveUrl(externalUrl!, href);
+        if (seenExtUrls.has(downloadUrl)) return;
+        seenExtUrls.add(downloadUrl);
+        let fileName = cleanText(ext$(el).text());
+        if (!fileName) {
+          const imgAlt = ext$(el).find("img").first().attr("alt") || "";
+          try {
+            const urlParams = new URLSearchParams(href.split("?")[1] || "");
+            const flNm = urlParams.get("flNm");
+            if (flNm) {
+              const ext = imgAlt.match(/HWP/i) ? ".hwp" : imgAlt.match(/PDF/i) ? ".pdf" : imgAlt.match(/DOC/i) ? ".doc" : "";
+              fileName = flNm + ext;
+            } else {
+              fileName = imgAlt || href.split("/").pop()?.split("?")[0] || "unknown";
+            }
+          } catch {
+            fileName = imgAlt || href.split("/").pop()?.split("?")[0] || "unknown";
+          }
+        }
+        attachments.push({ fileName, downloadUrl });
+      });
+    }
+  } catch (err: unknown) {
+    console.log(`[processExternalDetail] 외부 처리 실패: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  return { content: content || currentContent, attachments, metadata };
 }
 
 // ============================================================
@@ -2260,13 +2516,20 @@ export async function GET(req: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      let streamClosed = false;
       const send = (event: ProgressEvent) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        if (streamClosed) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch (e) {
+          streamClosed = true;
+          console.log(`[STREAM-ERROR] controller.enqueue 실패: ${e instanceof Error ? e.message : String(e)}`);
+        }
       };
 
       const articles: ScrapedArticle[] = [];
       const downloadedFiles: string[] = [];
-      let xlsxPath = "";
+      let jsonPath = "";
 
       try {
         // 보드 설정 먼저 로드 (저장 경로 결정에 필요)
@@ -2294,7 +2557,7 @@ export async function GET(req: NextRequest) {
         // 초기화
         send({ type: "progress", phase: "init", progress: 0, message: "스크래핑 준비 중..." });
         send({ type: "log", message: `🔧 실행 모드: ${mode === "auto" ? "자동 스크래핑" : "즉시 실행 테스트"}` });
-        send({ type: "log", message: `💾 제목/본문 저장 경로: ${SAVE_BASE_DIR}` });
+        send({ type: "log", message: `💾 제목/본문 저장: ExtractedData/${orgName}/${board.board_name}/ (JSON)` });
         send({ type: "log", message: `📎 첨부파일 저장 경로: ${ATTACHMENT_DIR}` });
 
         // 저장 공간 체크
@@ -2421,7 +2684,12 @@ export async function GET(req: NextRequest) {
         let currentUrl: string | null = baseUrl;
         let currentPage = 0;
         let shouldStop = false;
-        const maxPages = webConfig.list?.pagination?.max_pages || 10;
+        // max_pages 기본값: collection_range에 따라 동적 설정
+        // yearly 모드는 수년간 데이터를 수집하므로 더 높은 기본값 사용
+        const collRangeType = effectiveConfig.collection_range?.type;
+        const defaultMaxPages = collRangeType === "yearly" ? 100 : collRangeType === "relative" ? 50 : 30;
+        const maxPages = webConfig.list?.pagination?.max_pages || defaultMaxPages;
+        send({ type: "log", message: `   최대 페이지: ${maxPages} (${webConfig.list?.pagination?.max_pages ? '설정값' : `기본값, 수집범위: ${collRangeType || 'none'}`})` });
         let allItems: ScrapingItem[] = [];
         let prevPageLinks = new Set<string>();  // 이전 페이지의 링크들 (중복 페이지 감지용)
         const seenLinks = new Set<string>();  // 이미 수집된 링크 추적
@@ -2438,7 +2706,8 @@ export async function GET(req: NextRequest) {
               "article_id", "post_id", "contentId", "id",
               "cbIdx", "bcIdx", "nttSn", "nttId", "bbsId", "articleId", "boardNo", "boardMngNo",
               "pstNo", "ntIdx",  // NIER 전용 파라미터
-              "article_seq", "articleSeq", "articleNo", "article_no"  // KECO 등 article 기반 파라미터
+              "article_seq", "articleSeq", "articleNo", "article_no",  // KECO 등 article 기반 파라미터
+              "lawSeq", "lsId", "admRulSeq"  // 국가법령정보센터/법령 게시판 파라미터
             ];
             const importantParams: string[] = [];
             for (const param of idParams) {
@@ -2447,10 +2716,12 @@ export async function GET(req: NextRequest) {
                 importantParams.push(`${param}=${value}`);
               }
             }
+            // pathname에서 jsessionid 제거 (같은 게시글이 다른 세션 ID로 다르게 보이는 것 방지)
+            const cleanPathname = u.pathname.replace(/;jsessionid=[^?/]*/gi, "");
             // pathname + 중요 파라미터로 고유 식별
             return importantParams.length > 0
-              ? `${u.pathname}?${importantParams.join("&")}`
-              : u.pathname;
+              ? `${cleanPathname}?${importantParams.join("&")}`
+              : cleanPathname;
           } catch {
             return url;
           }
@@ -2753,18 +3024,46 @@ export async function GET(req: NextRequest) {
 
         send({ type: "progress", phase: "detail", progress: 65, message: "게시글 처리 완료" });
 
-        // XLSX 저장
+        // JSON 저장 (ExtractedData 경로에 직접 저장 - 텍스트 추출 단계 불필요)
+        console.log(`[JSON-EXPORT] articles.length=${articles.length}, streamClosed=${streamClosed}`);
         if (articles.length > 0) {
-          send({ type: "progress", phase: "save", progress: 70, message: "XLSX 파일 저장 중..." });
-          send({ type: "log", message: "💾 XLSX 파일 저장 중..." });
+          send({ type: "progress", phase: "save", progress: 70, message: "JSON 파일 저장 중..." });
+          send({ type: "log", message: "💾 JSON 파일 저장 중 (ExtractedData)..." });
 
-          const exportResult = exportToXlsx(articles, board.board_name, SAVE_BASE_DIR);
+          console.log(`[JSON-EXPORT] exportToJson 호출 시작...`);
+          const exportResult = exportToJson(articles, board.board_name, orgName, board.board_id);
+          console.log(`[JSON-EXPORT] exportToJson 결과: success=${exportResult.success}, filePath=${exportResult.filePath}, error=${exportResult.error || 'none'}`);
 
           if (exportResult.success) {
-            xlsxPath = exportResult.filePath;
+            jsonPath = exportResult.filePath;
             send({ type: "log", message: `   ✅ 저장 완료: ${path.basename(exportResult.filePath)}` });
+            send({ type: "log", message: `   📂 경로: ${exportResult.filePath}` });
           } else {
             send({ type: "log", message: `   ⚠️ 저장 실패: ${exportResult.error}` });
+          }
+        } else {
+          console.log(`[JSON-EXPORT] articles가 비어있어 JSON 저장 건너뜀`);
+        }
+
+        // DB 통계 동기화 (수집 현황 대시보드용)
+        if (articles.length > 0) {
+          try {
+            send({ type: "log", message: "📊 수집 현황 DB 동기화 중..." });
+            const dbSyncResult = await syncInstantScrapeToDB({
+              boardId: boardId!,
+              orgId: board.org_id,
+              articles: articles.map(a => ({
+                title: a.title,
+                link: a.link,
+                date: a.date,
+                content: a.content,
+                attachments: a.attachments,
+              })),
+            });
+            send({ type: "log", message: `   ✅ DB 동기화 완료: ${dbSyncResult.docsAdded}건 추가, ${dbSyncResult.attachmentsAdded}건 첨부` });
+          } catch (dbError) {
+            console.error("[DB-SYNC] 통계 DB 동기화 실패:", dbError);
+            send({ type: "log", message: `   ⚠️ DB 동기화 실패 (JSON 저장은 정상 완료)` });
           }
         }
 
@@ -3082,6 +3381,27 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        // 다운로드 완료 후 DB 첨부파일 정보 업데이트
+        if (downloadedFiles.length > 0 && articles.length > 0) {
+          try {
+            await syncInstantScrapeToDB({
+              boardId: boardId!,
+              orgId: board.org_id,
+              articles: articles.map(a => ({
+                title: a.title,
+                link: a.link,
+                date: a.date,
+                content: a.content,
+                attachments: a.attachments,
+              })),
+              downloadedFiles,
+              dedupKey: "url",
+            });
+          } catch {
+            // 이미 초기 동기화에서 문서가 저장되었으므로 무시
+          }
+        }
+
         // 완료
         send({ type: "progress", phase: "done", progress: 100, message: "스크래핑 완료!" });
         send({ type: "log", message: "" });
@@ -3099,7 +3419,7 @@ export async function GET(req: NextRequest) {
             boardName: board.board_name,
             articlesCount: articles.length,
             attachmentsCount: downloadedFiles.length,
-            xlsxPath,
+            jsonPath,
             attachmentDir: ATTACHMENT_DIR,
             downloadedFiles,
           },
@@ -3107,8 +3427,14 @@ export async function GET(req: NextRequest) {
 
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
+        console.log(`[STREAM-CATCH] 에러 발생: ${errorMsg}`);
+        console.log(`[STREAM-CATCH] articles.length=${articles.length}, jsonPath=${jsonPath}, downloadedFiles=${downloadedFiles.length}`);
+        if (error instanceof Error && error.stack) {
+          console.log(`[STREAM-CATCH] 스택: ${error.stack.split('\n').slice(0, 5).join(' | ')}`);
+        }
         send({ type: "error", message: errorMsg });
       } finally {
+        console.log(`[STREAM-FINALLY] 스트림 종료. streamClosed=${streamClosed}`);
         controller.close();
       }
     },

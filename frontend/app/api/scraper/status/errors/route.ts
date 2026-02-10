@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, closeDb } from "@/lib/scraper/scraper-db";
+import { getDbAsync } from "@/lib/scraper/scraper-db";
 import { readScraperTargets } from "@/lib/scraper/targets-store";
 
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "100", 10);
   
   try {
-    const db = await getDb();
+    const db = await getDbAsync();
     const { orgs, boards } = readScraperTargets();
     
     // 맵 변환
@@ -70,8 +70,6 @@ export async function GET(request: NextRequest) {
       };
     }) || [];
     
-    closeDb();
-    
     return NextResponse.json({
       success: true,
       logs,
@@ -79,7 +77,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("[status/errors] Error:", error);
-    closeDb();
     return NextResponse.json(
       { success: false, error: "에러 로그 조회 중 오류가 발생했습니다." },
       { status: 500 }

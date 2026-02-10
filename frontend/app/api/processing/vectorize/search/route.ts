@@ -106,16 +106,20 @@ export async function POST(request: NextRequest) {
     const settings = loadEmbeddingSettings();
     const isOpenAI = settings.model.startsWith("openai");
 
-    // OpenAI 모델인 경우 API 키 필요
-    if (isOpenAI && !api_key) {
+    // OpenAI 모델인 경우 API 키 필요 - 환경 변수에서 자동 로드
+    let effectiveApiKey = api_key;
+    if (isOpenAI && !effectiveApiKey) {
+      effectiveApiKey = process.env.OPENAI_API_KEY;
+    }
+    if (isOpenAI && !effectiveApiKey) {
       return NextResponse.json(
-        { success: false, error: "OpenAI API 키가 필요합니다." },
+        { success: false, error: "OpenAI API 키가 필요합니다. .env.local에 OPENAI_API_KEY를 설정하세요." },
         { status: 400 }
       );
     }
 
     // 쿼리 임베딩 생성
-    const queryEmbedding = await getQueryEmbedding(query, settings.model, api_key);
+    const queryEmbedding = await getQueryEmbedding(query, settings.model, effectiveApiKey);
 
     // 벡터 DB 검색
     const searchRes = await fetch(`${BACKEND_URL}/vectordb/search`, {
@@ -135,6 +139,17 @@ export async function POST(request: NextRequest) {
     }
 
     const searchResult = await searchRes.json();
+    
+    console.log("[VectorSearch] Backend response:", {
+      success: searchResult.success,
+      count: searchResult.count,
+      resultsLength: searchResult.results?.length,
+      error: searchResult.error,
+      firstResult: searchResult.results?.[0] ? {
+        distance: searchResult.results[0].distance,
+        similarity: searchResult.results[0].similarity,
+      } : null
+    });
 
     return NextResponse.json({
       success: true,

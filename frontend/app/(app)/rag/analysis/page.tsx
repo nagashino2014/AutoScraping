@@ -3,68 +3,136 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Calendar, Play, Filter, BarChart3, Loader2, RefreshCw,
-  Building2, FolderOpen, FileText, CheckCircle2, XCircle,
-  Info, ChevronDown, ChevronUp, Database,
+  BarChart3, Loader2, RefreshCw,
+  CheckCircle2, XCircle,
+  Info, ChevronDown, ChevronUp, Factory,
   AlertTriangle, Lightbulb, ArrowRight, Sparkles,
   Settings2, History, Sliders, DollarSign, Clock, Hash,
+  Shield, Globe, HardHat, HelpCircle,
+  Zap, Thermometer, Trash, Droplet, Circle, Hammer,
+  Hexagon, Fuel, FlaskConical, Beaker, Cpu, Car,
+  Wine, Shirt, Package, Microchip, Building, Battery,
+  MoreHorizontal, FileText, Beef,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  ANALYSIS_CATEGORIES,
+  countSelectedOptions,
+} from "@/lib/rag/analysis-options";
+
+// ============================================================
+// 업종 아이콘 매핑 (lucide 컴포넌트)
+// ============================================================
+const INDUSTRY_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  power: Zap, steam: Thermometer, waste: Trash, petrochemical: Droplet,
+  rubber: Circle, steel: Hammer, nonferrous: Hexagon, refinery: Fuel,
+  inorganic: FlaskConical, otherchemical: Beaker, pulp: FileText,
+  electronics: Cpu, meat: Beef, alcohol: Wine, textile: Shirt,
+  plastic: Package, semiconductor: Microchip, autoparts: Car,
+  cement: Building, battery: Battery, other: MoreHorizontal,
+};
+
+// 카테고리 아이콘 매핑
+const CATEGORY_ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+  Shield, Globe, HardHat,
+};
+
+// ============================================================
+// 업종 상수 (site-profile.ts 기반, UI 전용)
+// ============================================================
+interface IndustryCategoryUI {
+  id: string;
+  label: string;
+}
+
+const INDUSTRY_CATEGORIES_UI: IndustryCategoryUI[] = [
+  { id: "power", label: "발전업" },
+  { id: "steam", label: "증기/냉온수" },
+  { id: "waste", label: "폐기물" },
+  { id: "petrochemical", label: "석유화학" },
+  { id: "rubber", label: "고무" },
+  { id: "steel", label: "철강" },
+  { id: "nonferrous", label: "비철" },
+  { id: "refinery", label: "석유정제/비료" },
+  { id: "inorganic", label: "무기/유기화학" },
+  { id: "otherchemical", label: "기타화학" },
+  { id: "pulp", label: "종이/펄프" },
+  { id: "electronics", label: "전자부품" },
+  { id: "meat", label: "도축/육가공" },
+  { id: "alcohol", label: "알콜음료" },
+  { id: "textile", label: "섬유/염색" },
+  { id: "plastic", label: "플라스틱" },
+  { id: "semiconductor", label: "반도체" },
+  { id: "autoparts", label: "자동차부품" },
+  { id: "cement", label: "시멘트" },
+  { id: "battery", label: "2차전지" },
+  { id: "other", label: "기타" },
+];
+
+// ============================================================
+// 프로파일 타입
+// ============================================================
+interface ProfileListItem {
+  id: string;
+  name: string;
+  code?: string;
+  logo?: string;
+  industryCategory: string;
+  industryLabel: string;
+  scale: string;
+  scaleLabel: string;
+  location: string;
+  emissionFacilityCount: number;
+  preventionFacilityCount: number;
+  permitCount: number;
+  hasIntegratedPermit: boolean;
+  updatedAt: string;
+}
 
 // ============================================================
 // 타입 정의
 // ============================================================
 
-interface Organization {
-  id: string;
-  name: string;
-  count: number;
-}
-
-interface Board {
-  id: string;
-  name: string;
-  orgName: string;
-  count: number;
-}
-
-interface ChunkType {
-  type: string;
-  count: number;
-}
-
 interface Stats {
   success: boolean;
   connected: boolean;
   totalChunks: number;
-  organizations: Organization[];
-  boards: Board[];
+  organizations: { id: string; name: string; count: number }[];
+  boards: { id: string; name: string; orgName: string; count: number }[];
   dateRange: {
     earliest: string;
     latest: string;
   };
-  chunkTypes: ChunkType[];
+  chunkTypes: { type: string; count: number }[];
   error?: string;
 }
+
+type PeriodMode = "monthly" | "quarterly" | "yearly" | "custom";
 
 interface FilterState {
   dateStart: string;
   dateEnd: string;
-  selectedOrgs: string[];
-  selectedBoards: string[];
-  selectedChunkTypes: string[];
+  periodMode: PeriodMode;
+  selectedYear: number;
+  selectedMonths: number[];
+  selectedQuarters: number[];
+  selectedYears: number[];
 }
 
 interface DiscoveryConfig {
   numClusters: number;
   minClusterSize: number;
   numIssues: number;
-  scoreWeights: {
-    legalMandatory: number;
-    novelty: number;
-    impact: number;
-    international: number;
-  };
+  scoreWeights: Record<string, number>;
+}
+
+/** RAG 설정 연동 평가 기준 */
+interface ScoringCriteriaItem {
+  id: string;
+  label: string;
+  description: string;
+  weight: number;
+  enabled: boolean;
 }
 
 interface DiscoveredIssue {
@@ -110,38 +178,54 @@ export default function RAGAnalysisPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
-  // 필터 상태
+  // 필터 상태 (기간만)
   const [filter, setFilter] = useState<FilterState>({
     dateStart: "",
     dateEnd: "",
-    selectedOrgs: [],
-    selectedBoards: [],
-    selectedChunkTypes: [],
+    periodMode: "monthly",
+    selectedYear: new Date().getFullYear(),
+    selectedMonths: [],
+    selectedQuarters: [],
+    selectedYears: [],
   });
   
-  // 필터링된 청크 수
-  const [filteredCount, setFilteredCount] = useState<number | null>(null);
-  const [filterLoading, setFilterLoading] = useState(false);
+  // 사업장 프로파일 목록
+  const [profiles, setProfiles] = useState<ProfileListItem[]>([]);
+  const [profilesLoading, setProfilesLoading] = useState(false);
+  
+  // 업종 태그 선택
+  const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
+  // 업종별 필터링된 업체 목록
+  const [industryProfiles, setIndustryProfiles] = useState<ProfileListItem[]>([]);
+  // 선택된 업체
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  // 선택된 업체 상세 데이터
+  const [selectedProfileDetail, setSelectedProfileDetail] = useState<any | null>(null);
+  const [profileDetailLoading, setProfileDetailLoading] = useState(false);
+  
+  // 분석 옵션 (카테고리별 선택된 옵션 ID 배열)
+  const [analysisOptions, setAnalysisOptions] = useState<Record<string, string[]>>({
+    integrated_permit: [],
+    climate_change: [],
+    industrial_safety: [],
+  });
+  // 옵션 탭
+  const [optionTab, setOptionTab] = useState<string>("integrated_permit");
   
   // 발굴 설정 상태
   const [discoveryConfig, setDiscoveryConfig] = useState<DiscoveryConfig>({
     numClusters: 10,
     minClusterSize: 3,
     numIssues: 10,
-    scoreWeights: {
-      legalMandatory: 0.4,
-      novelty: 0.25,
-      impact: 0.2,
-      international: 0.15,
-    },
+    scoreWeights: {},
   });
   
-  // UI 상태 - 모든 섹션 펼쳐진 상태로 기본 설정
+  // RAG 설정 연동 평가 기준
+  const [scoringCriteria, setScoringCriteria] = useState<ScoringCriteriaItem[]>([]);
+  
+  // UI 상태
   const [expandedSections, setExpandedSections] = useState({
     date: true,
-    org: true,
-    board: true,
-    chunkType: true,
     discoveryConfig: true,
     sessions: true,
   });
@@ -162,7 +246,7 @@ export default function RAGAnalysisPage() {
       status: "completed",
       issueCount: 8,
       selectedCount: 3,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2시간 전
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
     },
     {
       id: "demo-session-2",
@@ -170,7 +254,7 @@ export default function RAGAnalysisPage() {
       status: "completed",
       issueCount: 12,
       selectedCount: 5,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1일 전
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
     },
     {
       id: "demo-session-3",
@@ -178,7 +262,7 @@ export default function RAGAnalysisPage() {
       status: "completed",
       issueCount: 6,
       selectedCount: 0,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(), // 3일 전
+      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
     },
   ]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
@@ -234,6 +318,10 @@ export default function RAGAnalysisPage() {
   
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // ============================================================
+  // 데이터 로드
+  // ============================================================
+
   // 통계 로드
   const loadStats = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
@@ -244,7 +332,6 @@ export default function RAGAnalysisPage() {
       const data = await res.json();
       setStats(data);
       
-      // 날짜 범위 기본값 설정
       if (data.success && data.dateRange.earliest && !filter.dateStart) {
         setFilter((prev) => ({
           ...prev,
@@ -268,115 +355,164 @@ export default function RAGAnalysisPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filter.dateStart]);
+  }, []);
 
-  // 필터링된 개수 조회
-  const loadFilteredCount = useCallback(async () => {
-    setFilterLoading(true);
-    
-    try {
-      const res = await fetch("/api/rag/analysis/filter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dateRange: filter.dateStart || filter.dateEnd ? {
-            start: filter.dateStart,
-            end: filter.dateEnd,
-          } : undefined,
-          orgs: filter.selectedOrgs.length > 0 ? filter.selectedOrgs : undefined,
-          boards: filter.selectedBoards.length > 0 ? filter.selectedBoards : undefined,
-          chunkTypes: filter.selectedChunkTypes.length > 0 ? filter.selectedChunkTypes : undefined,
-        }),
-      });
-      
-      const data = await res.json();
-      setFilteredCount(data.count || 0);
-    } catch (error) {
-      console.error("Failed to load filtered count:", error);
-    } finally {
-      setFilterLoading(false);
-    }
-  }, [filter]);
-
-  // 세션 목록 로드 - 실제 세션이 있으면 더미 데이터 대체
+  // 세션 목록 로드
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true);
     try {
       const res = await fetch("/api/rag/discovery/sessions");
       const data = await res.json();
       if (data.success && data.sessions && data.sessions.length > 0) {
-        // 실제 세션이 있으면 사용
         setSessions(data.sessions);
       }
-      // 실제 세션이 없으면 더미 데이터 유지
     } catch (error) {
       console.error("Failed to load sessions:", error);
-      // 에러 시에도 더미 데이터 유지
     } finally {
       setSessionsLoading(false);
+    }
+  }, []);
+
+  // 프로파일 목록 로드
+  const loadProfiles = useCallback(async () => {
+    try {
+      setProfilesLoading(true);
+      const res = await fetch("/api/rag/profiles");
+      const data = await res.json();
+      if (data.success) {
+        setProfiles(data.profiles || []);
+      }
+    } catch (error) {
+      console.error("Failed to load profiles:", error);
+    } finally {
+      setProfilesLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadStats();
     loadSessions();
-  }, [loadStats, loadSessions]);
+    loadProfiles();
+  }, [loadStats, loadSessions, loadProfiles]);
 
-  // 필터 변경 시 개수 업데이트
+  // RAG 설정에서 평가 기준 로드
   useEffect(() => {
-    if (stats?.connected) {
-      const timer = setTimeout(() => {
-        loadFilteredCount();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [filter, stats?.connected, loadFilteredCount]);
+    fetch("/api/rag/settings")
+      .then(res => res.json())
+      .then((data) => {
+        const criteria: ScoringCriteriaItem[] = data.discovery?.scoringCriteria || [];
+        setScoringCriteria(criteria);
+        // 활성화된 기준으로 scoreWeights 초기화
+        const weights: Record<string, number> = {};
+        criteria.filter(c => c.enabled).forEach(c => {
+          weights[c.id] = c.weight;
+        });
+        setDiscoveryConfig(prev => ({ ...prev, scoreWeights: weights }));
+      })
+      .catch(err => console.error("Failed to load RAG settings for scoring criteria:", err));
+  }, []);
 
-  // 섹션 토글
+  // 업종 태그 선택 시 업체 목록 필터링
+  useEffect(() => {
+    if (selectedIndustry) {
+      const filtered = profiles.filter(p => p.industryCategory === selectedIndustry);
+      setIndustryProfiles(filtered);
+      setSelectedProfileId(null);
+    } else {
+      setIndustryProfiles(profiles);
+    }
+  }, [selectedIndustry, profiles]);
+
+  // 선택된 사업장 상세 데이터 로드
+  useEffect(() => {
+    if (!selectedProfileId) {
+      setSelectedProfileDetail(null);
+      return;
+    }
+    setProfileDetailLoading(true);
+    fetch(`/api/rag/profiles/${selectedProfileId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.profile) {
+          setSelectedProfileDetail(data.profile);
+        }
+      })
+      .catch(err => console.error("Failed to load profile detail:", err))
+      .finally(() => setProfileDetailLoading(false));
+  }, [selectedProfileId]);
+
+  // 업종별 카운트
+  const industryCounts = profiles.reduce((acc, p) => {
+    acc[p.industryCategory] = (acc[p.industryCategory] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // ============================================================
+  // 핸들러
+  // ============================================================
+
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  // 기관 선택 토글
-  const toggleOrg = (orgName: string) => {
-    setFilter((prev) => ({
+  // 분석 옵션 토글
+  const toggleAnalysisOption = (categoryId: string, optionId: string) => {
+    setAnalysisOptions((prev) => ({
       ...prev,
-      selectedOrgs: prev.selectedOrgs.includes(orgName)
-        ? prev.selectedOrgs.filter((o) => o !== orgName)
-        : [...prev.selectedOrgs, orgName],
+      [categoryId]: prev[categoryId].includes(optionId)
+        ? prev[categoryId].filter((o) => o !== optionId)
+        : [...prev[categoryId], optionId],
     }));
   };
 
-  // 보드 선택 토글
-  const toggleBoard = (boardName: string) => {
-    setFilter((prev) => ({
-      ...prev,
-      selectedBoards: prev.selectedBoards.includes(boardName)
-        ? prev.selectedBoards.filter((b) => b !== boardName)
-        : [...prev.selectedBoards, boardName],
-    }));
-  };
+  // 기간 모드 변경 시 날짜 범위 계산
+  const calculateDateRange = useCallback(() => {
+    const year = filter.selectedYear;
+    
+    switch (filter.periodMode) {
+      case "monthly":
+        if (filter.selectedMonths.length === 0) return { start: "", end: "" };
+        const sortedMonths = [...filter.selectedMonths].sort((a, b) => a - b);
+        const startMonth = String(sortedMonths[0]).padStart(2, "0");
+        const endMonth = String(sortedMonths[sortedMonths.length - 1]).padStart(2, "0");
+        return {
+          start: `${year}-${startMonth}`,
+          end: `${year}-${endMonth}`,
+        };
+      
+      case "quarterly":
+        if (filter.selectedQuarters.length === 0) return { start: "", end: "" };
+        const sortedQuarters = [...filter.selectedQuarters].sort((a, b) => a - b);
+        const qStart = (sortedQuarters[0] - 1) * 3 + 1;
+        const qEnd = sortedQuarters[sortedQuarters.length - 1] * 3;
+        return {
+          start: `${year}-${String(qStart).padStart(2, "0")}`,
+          end: `${year}-${String(qEnd).padStart(2, "0")}`,
+        };
+      
+      case "yearly":
+        if (filter.selectedYears.length === 0) return { start: "", end: "" };
+        const sortedYears = [...filter.selectedYears].sort((a, b) => a - b);
+        return {
+          start: `${sortedYears[0]}-01`,
+          end: `${sortedYears[sortedYears.length - 1]}-12`,
+        };
+      
+      case "custom":
+      default:
+        return { start: filter.dateStart, end: filter.dateEnd };
+    }
+  }, [filter.periodMode, filter.selectedYear, filter.selectedMonths, filter.selectedQuarters, filter.selectedYears, filter.dateStart, filter.dateEnd]);
 
-  // 청크 유형 선택 토글
-  const toggleChunkType = (type: string) => {
-    setFilter((prev) => ({
-      ...prev,
-      selectedChunkTypes: prev.selectedChunkTypes.includes(type)
-        ? prev.selectedChunkTypes.filter((t) => t !== type)
-        : [...prev.selectedChunkTypes, type],
-    }));
-  };
-
-  // 필터 초기화
-  const resetFilter = () => {
-    setFilter({
-      dateStart: stats?.dateRange.earliest || "",
-      dateEnd: stats?.dateRange.latest || "",
-      selectedOrgs: [],
-      selectedBoards: [],
-      selectedChunkTypes: [],
-    });
-  };
+  // 기간 선택 변경 시 dateStart/dateEnd 업데이트
+  useEffect(() => {
+    if (filter.periodMode !== "custom") {
+      const range = calculateDateRange();
+      if (range.start !== filter.dateStart || range.end !== filter.dateEnd) {
+        setFilter(prev => ({ ...prev, dateStart: range.start, dateEnd: range.end }));
+      }
+    }
+  }, [filter.periodMode, filter.selectedYear, filter.selectedMonths, filter.selectedQuarters, filter.selectedYears, calculateDateRange]);
 
   // 자동 이슈 발굴 실행
   const runDiscovery = async () => {
@@ -391,25 +527,34 @@ export default function RAGAnalysisPage() {
     abortControllerRef.current = new AbortController();
     
     try {
+      const selectedProfile = profiles.find(p => p.id === selectedProfileId);
+      
       const res = await fetch("/api/rag/discovery/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: `이슈 발굴 ${new Date().toLocaleString("ko-KR")}`,
+          name: selectedProfile 
+            ? `${selectedProfile.name} - 이슈 발굴` 
+            : `이슈 발굴 ${new Date().toLocaleString("ko-KR")}`,
+          profileId: selectedProfileId || undefined,
+          analysisOptions: analysisOptions,
           filter: {
             dateRange: filter.dateStart || filter.dateEnd ? {
               start: filter.dateStart,
               end: filter.dateEnd,
             } : undefined,
-            orgs: filter.selectedOrgs.length > 0 ? filter.selectedOrgs : undefined,
-            boards: filter.selectedBoards.length > 0 ? filter.selectedBoards : undefined,
-            chunkTypes: filter.selectedChunkTypes.length > 0 ? filter.selectedChunkTypes : undefined,
           },
           config: {
             numIssues: discoveryConfig.numIssues,
             numClusters: discoveryConfig.numClusters,
             minClusterSize: discoveryConfig.minClusterSize,
             scoreWeights: discoveryConfig.scoreWeights,
+            scoringCriteria: scoringCriteria.filter(c => c.enabled).map(c => ({
+              id: c.id,
+              label: c.label,
+              description: c.description,
+              weight: discoveryConfig.scoreWeights[c.id] ?? c.weight,
+            })),
           },
         }),
         signal: abortControllerRef.current.signal,
@@ -451,7 +596,6 @@ export default function RAGAnalysisPage() {
                 if (data.tokenUsage) {
                   setTokenUsage(data.tokenUsage);
                 }
-                // 세션 목록 갱신
                 loadSessions();
                 break;
               case "error":
@@ -473,23 +617,18 @@ export default function RAGAnalysisPage() {
     }
   };
 
-  // 발굴 취소
   const cancelDiscovery = () => {
     abortControllerRef.current?.abort();
   };
 
-  // 사용자 인터랙션으로 이동
   const goToInteraction = () => {
     if (sessionId) {
       router.push(`/rag/interaction?session=${sessionId}`);
     }
   };
 
-  // 필터가 적용되었는지 확인
-  const hasActiveFilter = 
-    filter.selectedOrgs.length > 0 ||
-    filter.selectedBoards.length > 0 ||
-    filter.selectedChunkTypes.length > 0;
+  // 선택된 옵션 총 개수
+  const totalSelectedOptions = countSelectedOptions(analysisOptions);
 
   if (loading) {
     return (
@@ -501,14 +640,14 @@ export default function RAGAnalysisPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-full flex flex-col gap-4 overflow-hidden">
       {/* 헤더 */}
-      <div className="glass-panel p-6 rounded-3xl">
+      <div className="glass-panel p-6 rounded-3xl shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-stone-800">RAG 분석</h1>
             <p className="text-xs text-stone-500 mt-0.5">
-              분석 대상 데이터 필터링 및 자동 이슈 발굴
+              사업장 맞춤형 이슈 발굴 및 자동 분석
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -553,10 +692,10 @@ export default function RAGAnalysisPage() {
             ) : (
               <button
                 onClick={runDiscovery}
-                disabled={!stats?.connected || (filteredCount || 0) === 0}
+                disabled={!stats?.connected || (stats?.totalChunks || 0) === 0}
                 className={cn(
                   "flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium transition-all",
-                  stats?.connected && (filteredCount || 0) > 0
+                  stats?.connected && (stats?.totalChunks || 0) > 0
                     ? "bg-primary text-white hover:bg-primary/90"
                     : "bg-stone-200 text-stone-400 cursor-not-allowed"
                 )}
@@ -587,7 +726,7 @@ export default function RAGAnalysisPage() {
 
       {/* 연결 오류 알림 */}
       {!stats?.connected && (
-        <div className="glass-panel p-4 rounded-2xl bg-red-50/50 border-red-200/60 flex items-start gap-3">
+        <div className="glass-panel p-4 rounded-2xl bg-red-50/50 border-red-200/60 flex items-start gap-3 shrink-0">
           <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5" />
           <div>
             <p className="font-semibold text-red-700 text-sm">벡터 DB 연결 실패</p>
@@ -598,447 +737,862 @@ export default function RAGAnalysisPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-[6fr_4fr] gap-6">
-        {/* 왼쪽: 필터링 영역 + 발굴 설정 */}
-        <div className="space-y-4">
+      <div className="flex-1 min-h-0 grid grid-cols-[6fr_4fr] gap-6">
+        {/* ============================== */}
+        {/* 왼쪽 패널 */}
+        {/* ============================== */}
+        <div className="h-full flex flex-col gap-4 overflow-auto">
           {/* 필터 요약 */}
-          <div className="glass-panel p-4 rounded-2xl">
+          <div className="glass-panel p-4 rounded-2xl shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Database className="w-5 h-5 text-primary" />
-                </div>
                 <div>
                   <div className="text-sm font-semibold text-stone-700">
                     분석 대상 청크
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-2xl font-bold text-primary">
-                      {filterLoading ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        (filteredCount ?? stats?.totalChunks ?? 0).toLocaleString()
-                      )}
+                      {(stats?.totalChunks ?? 0).toLocaleString()}
                     </span>
-                    <span className="text-xs text-stone-400">
-                      / {stats?.totalChunks.toLocaleString() || 0} 전체
-                    </span>
+                    <span className="text-xs text-stone-400">전체</span>
                   </div>
                 </div>
               </div>
+              <div className="flex items-center gap-2 text-xs text-stone-500">
+                {selectedProfileId && (
+                  <span className="px-2 py-1 rounded-lg bg-green-50 text-green-700 font-medium">
+                    {profiles.find(p => p.id === selectedProfileId)?.name}
+                  </span>
+                )}
+                {totalSelectedOptions > 0 && (
+                  <span className="px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-medium">
+                    옵션 {totalSelectedOptions}개
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 발굴 설정 + 분석 기간 병렬 배치 */}
+          <div className="grid grid-cols-2 gap-4 shrink-0 min-h-[360px]">
+            {/* 발굴 설정 패널 */}
+            <div className="glass-panel rounded-2xl overflow-hidden flex flex-col">
+              <button
+                onClick={() => toggleSection("discoveryConfig")}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-stone-50/50"
+              >
+                <div className="flex items-center gap-2">
+                  <Settings2 className="w-4 h-4 text-indigo-500" />
+                  <span className="font-semibold text-stone-700 text-sm">발굴 설정</span>
+                </div>
+                {expandedSections.discoveryConfig ? (
+                  <ChevronUp className="w-4 h-4 text-stone-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-stone-400" />
+                )}
+              </button>
               
-              {hasActiveFilter && (
-                <button
-                  onClick={resetFilter}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-stone-500 hover:bg-stone-100"
-                >
-                  필터 초기화
-                </button>
+              {expandedSections.discoveryConfig && (
+                <div className="px-4 pb-5 border-t border-stone-100 pt-4 space-y-4 flex-1">
+                  {/* 클러스터 설정 */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-stone-500 mb-1 block">클러스터</label>
+                      <input
+                        type="number"
+                        min={3}
+                        max={30}
+                        value={discoveryConfig.numClusters}
+                        onChange={(e) => setDiscoveryConfig((prev) => ({
+                          ...prev,
+                          numClusters: parseInt(e.target.value) || 10,
+                        }))}
+                        className="input-field text-xs"
+                        disabled={discovering}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-stone-500 mb-1 block">최소크기</label>
+                      <input
+                        type="number"
+                        min={2}
+                        max={10}
+                        value={discoveryConfig.minClusterSize}
+                        onChange={(e) => setDiscoveryConfig((prev) => ({
+                          ...prev,
+                          minClusterSize: parseInt(e.target.value) || 3,
+                        }))}
+                        className="input-field text-xs"
+                        disabled={discovering}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-stone-500 mb-1 block">이슈 수</label>
+                      <input
+                        type="number"
+                        min={3}
+                        max={20}
+                        value={discoveryConfig.numIssues}
+                        onChange={(e) => setDiscoveryConfig((prev) => ({
+                          ...prev,
+                          numIssues: parseInt(e.target.value) || 10,
+                        }))}
+                        className="input-field text-xs"
+                        disabled={discovering}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* 중요도 가중치 (RAG 설정 연동) */}
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Sliders className="w-3 h-3 text-stone-400" />
+                      <span className="text-[10px] font-semibold text-stone-600">가중치</span>
+                      <span className="text-[9px] text-stone-400">
+                        ({Math.round(
+                          Object.values(discoveryConfig.scoreWeights).reduce((sum, v) => sum + v, 0) * 100
+                        )}%)
+                      </span>
+                    </div>
+                    {scoringCriteria.filter(c => c.enabled).length > 0 ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        {scoringCriteria.filter(c => c.enabled).map((criteria) => (
+                          <div key={criteria.id}>
+                            <div className="flex justify-between text-[10px] mb-1">
+                              <span className="text-stone-500 truncate" title={criteria.description}>
+                                {criteria.label}
+                              </span>
+                              <span className="font-mono text-stone-700 shrink-0 ml-1">
+                                {Math.round((discoveryConfig.scoreWeights[criteria.id] ?? criteria.weight) * 100)}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min={0}
+                              max={0.6}
+                              step={0.05}
+                              value={discoveryConfig.scoreWeights[criteria.id] ?? criteria.weight}
+                              onChange={(e) => setDiscoveryConfig((prev) => ({
+                                ...prev,
+                                scoreWeights: {
+                                  ...prev.scoreWeights,
+                                  [criteria.id]: parseFloat(e.target.value),
+                                },
+                              }))}
+                              className="w-full h-1.5"
+                              disabled={discovering}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-stone-400 text-center py-2">
+                        RAG 설정에서 평가 기준을 추가하세요
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 분석 기간 카드 */}
+            <div className="glass-panel rounded-2xl overflow-hidden flex flex-col">
+              <button
+                onClick={() => toggleSection("date")}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-stone-50/50"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-stone-700 text-sm">분석 기간</span>
+                  {(filter.dateStart || filter.dateEnd) && (
+                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-primary/10 text-primary">
+                      {filter.dateStart || "~"} ~ {filter.dateEnd || "~"}
+                    </span>
+                  )}
+                </div>
+                {expandedSections.date ? (
+                  <ChevronUp className="w-4 h-4 text-stone-400" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-stone-400" />
+                )}
+              </button>
+              
+              {expandedSections.date && (
+                <div className="border-t border-stone-100 pt-[30px]">
+                  <div className="flex pl-[30px] pr-[30px]">
+                    {/* 좌측 탭 */}
+                    <div className="w-16 border-r border-stone-100 bg-stone-50/50">
+                      {(["monthly", "quarterly", "yearly", "custom"] as PeriodMode[]).map((mode) => (
+                        <button
+                          key={mode}
+                          onClick={() => setFilter(prev => ({ ...prev, periodMode: mode }))}
+                          className={cn(
+                            "w-full px-1.5 py-2 text-[10px] font-medium text-left border-l-2 transition-all",
+                            filter.periodMode === mode
+                              ? "bg-white border-primary text-primary"
+                              : "border-transparent text-stone-500 hover:bg-white/50 hover:text-stone-700"
+                          )}
+                        >
+                          {mode === "monthly" && "월별"}
+                          {mode === "quarterly" && "분기별"}
+                          {mode === "yearly" && "연도별"}
+                          {mode === "custom" && "직접입력"}
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* 우측 컨텐츠 */}
+                    <div className="flex-1 p-3 h-[260px] overflow-auto">
+                      {/* 월별 */}
+                      {filter.periodMode === "monthly" && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setFilter(prev => ({ ...prev, selectedYear: prev.selectedYear - 1 }))}
+                              className="p-0.5 rounded hover:bg-stone-100"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5 rotate-90" />
+                            </button>
+                            <span className="text-xs font-semibold text-stone-700 w-14 text-center">
+                              {filter.selectedYear}년
+                            </span>
+                            <button
+                              onClick={() => setFilter(prev => ({ ...prev, selectedYear: prev.selectedYear + 1 }))}
+                              className="p-0.5 rounded hover:bg-stone-100"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5 rotate-90" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-4 gap-1">
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
+                              const isSelected = filter.selectedMonths.includes(month);
+                              return (
+                                <button
+                                  key={month}
+                                  onClick={() => {
+                                    setFilter(prev => ({
+                                      ...prev,
+                                      selectedMonths: isSelected
+                                        ? prev.selectedMonths.filter(m => m !== month)
+                                        : [...prev.selectedMonths, month].sort((a, b) => a - b),
+                                    }));
+                                  }}
+                                  className={cn(
+                                    "py-1.5 text-[10px] font-medium rounded-md transition-all",
+                                    isSelected
+                                      ? "bg-primary text-white"
+                                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                                  )}
+                                >
+                                  {month}월
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 분기별 */}
+                      {filter.periodMode === "quarterly" && (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setFilter(prev => ({ ...prev, selectedYear: prev.selectedYear - 1 }))}
+                              className="p-0.5 rounded hover:bg-stone-100"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5 rotate-90" />
+                            </button>
+                            <span className="text-xs font-semibold text-stone-700 w-14 text-center">
+                              {filter.selectedYear}년
+                            </span>
+                            <button
+                              onClick={() => setFilter(prev => ({ ...prev, selectedYear: prev.selectedYear + 1 }))}
+                              className="p-0.5 rounded hover:bg-stone-100"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5 rotate-90" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {[1, 2, 3, 4].map((q) => {
+                              const isSelected = filter.selectedQuarters.includes(q);
+                              return (
+                                <button
+                                  key={q}
+                                  onClick={() => {
+                                    setFilter(prev => ({
+                                      ...prev,
+                                      selectedQuarters: isSelected
+                                        ? prev.selectedQuarters.filter(x => x !== q)
+                                        : [...prev.selectedQuarters, q].sort((a, b) => a - b),
+                                    }));
+                                  }}
+                                  className={cn(
+                                    "py-2.5 text-xs font-medium rounded-lg transition-all",
+                                    isSelected
+                                      ? "bg-primary text-white"
+                                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                                  )}
+                                >
+                                  Q{q}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[9px] text-stone-400 text-center">
+                            Q1: 1-3월 | Q2: 4-6월 | Q3: 7-9월 | Q4: 10-12월
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* 연도별 */}
+                      {filter.periodMode === "yearly" && (
+                        <div className="space-y-2">
+                          <p className="text-[10px] text-stone-500 text-center">연도 선택</p>
+                          <div className="flex flex-wrap gap-1.5 justify-center">
+                            {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 5 + i).map((year) => {
+                              const isSelected = filter.selectedYears.includes(year);
+                              return (
+                                <button
+                                  key={year}
+                                  onClick={() => {
+                                    setFilter(prev => ({
+                                      ...prev,
+                                      selectedYears: isSelected
+                                        ? prev.selectedYears.filter(y => y !== year)
+                                        : [...prev.selectedYears, year].sort((a, b) => a - b),
+                                    }));
+                                  }}
+                                  className={cn(
+                                    "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+                                    isSelected
+                                      ? "bg-primary text-white"
+                                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                                  )}
+                                >
+                                  {year}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 직접 입력 */}
+                      {filter.periodMode === "custom" && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[10px] text-stone-500 mb-1 block">시작</label>
+                            <input
+                              type="month"
+                              value={filter.dateStart}
+                              onChange={(e) => setFilter((prev) => ({ ...prev, dateStart: e.target.value }))}
+                              min={stats?.dateRange.earliest}
+                              max={stats?.dateRange.latest}
+                              className="input-field text-xs"
+                              disabled={!stats?.connected}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-stone-500 mb-1 block">종료</label>
+                            <input
+                              type="month"
+                              value={filter.dateEnd}
+                              onChange={(e) => setFilter((prev) => ({ ...prev, dateEnd: e.target.value }))}
+                              min={stats?.dateRange.earliest}
+                              max={stats?.dateRange.latest}
+                              className="input-field text-xs"
+                              disabled={!stats?.connected}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 선택된 기간 표시 */}
+                      {(filter.dateStart || filter.dateEnd) && (
+                        <div className="mt-2 pt-2 border-t border-stone-100">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-stone-500">기간:</span>
+                            <span className="font-medium text-primary">
+                              {filter.dateStart || "~"} ~ {filter.dateEnd || "~"}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 선택된 기간 표시 태그 소카드 */}
+                  <div className="mx-[30px] mt-3 mb-3 p-2.5 rounded-lg bg-stone-50/80 border border-stone-200/60">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span className="text-[10px] font-semibold text-stone-600 shrink-0">선택 기간</span>
+                      {filter.periodMode === "monthly" && filter.selectedMonths.length > 0 ? (
+                        <>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                            {filter.selectedYear}년
+                          </span>
+                          {filter.selectedMonths.map(m => (
+                            <span key={m} className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                              {m}월
+                            </span>
+                          ))}
+                        </>
+                      ) : filter.periodMode === "quarterly" && filter.selectedQuarters.length > 0 ? (
+                        <>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                            {filter.selectedYear}년
+                          </span>
+                          {filter.selectedQuarters.map(q => (
+                            <span key={q} className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                              Q{q}
+                            </span>
+                          ))}
+                        </>
+                      ) : filter.periodMode === "yearly" && filter.selectedYears.length > 0 ? (
+                        <>
+                          {filter.selectedYears.map(y => (
+                            <span key={y} className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                              {y}년
+                            </span>
+                          ))}
+                        </>
+                      ) : filter.periodMode === "custom" && (filter.dateStart || filter.dateEnd) ? (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                          {filter.dateStart || "~"} ~ {filter.dateEnd || "~"}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-stone-400 italic">기간을 선택해 주세요</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>
 
-          {/* 발굴 설정 패널 */}
-          <div className="glass-panel rounded-2xl overflow-hidden">
-            <button
-              onClick={() => toggleSection("discoveryConfig")}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-stone-50/50"
-            >
+          {/* ============================== */}
+          {/* 사업장 프로파일 카드 (3열 구성) */}
+          {/* ============================== */}
+          <div className="glass-panel rounded-2xl overflow-hidden flex-1 min-h-0 flex flex-col">
+            <div className="px-4 py-3 border-b border-stone-100 shrink-0">
               <div className="flex items-center gap-2">
-                <Settings2 className="w-4 h-4 text-indigo-500" />
-                <span className="font-semibold text-stone-700 text-sm">발굴 설정</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
-                  클러스터 {discoveryConfig.numClusters}개
-                </span>
+                <Factory className="w-4 h-4 text-primary" />
+                <span className="font-semibold text-stone-700 text-sm">사업장 프로파일</span>
+                {selectedProfileId && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">
+                    선택됨
+                  </span>
+                )}
+                {totalSelectedOptions > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">
+                    옵션 {totalSelectedOptions}개
+                  </span>
+                )}
               </div>
-              {expandedSections.discoveryConfig ? (
-                <ChevronUp className="w-4 h-4 text-stone-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-stone-400" />
-              )}
-            </button>
+            </div>
             
-            {expandedSections.discoveryConfig && (
-              <div className="px-4 pb-4 border-t border-stone-100 pt-4 space-y-4">
-                {/* 클러스터 설정 */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs text-stone-500 mb-1 block">클러스터 수</label>
-                    <input
-                      type="number"
-                      min={3}
-                      max={30}
-                      value={discoveryConfig.numClusters}
-                      onChange={(e) => setDiscoveryConfig((prev) => ({
-                        ...prev,
-                        numClusters: parseInt(e.target.value) || 10,
-                      }))}
-                      className="input-field text-sm"
-                      disabled={discovering}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-stone-500 mb-1 block">최소 크기</label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={10}
-                      value={discoveryConfig.minClusterSize}
-                      onChange={(e) => setDiscoveryConfig((prev) => ({
-                        ...prev,
-                        minClusterSize: parseInt(e.target.value) || 3,
-                      }))}
-                      className="input-field text-sm"
-                      disabled={discovering}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-stone-500 mb-1 block">최대 이슈 수</label>
-                    <input
-                      type="number"
-                      min={3}
-                      max={20}
-                      value={discoveryConfig.numIssues}
-                      onChange={(e) => setDiscoveryConfig((prev) => ({
-                        ...prev,
-                        numIssues: parseInt(e.target.value) || 10,
-                      }))}
-                      className="input-field text-sm"
-                      disabled={discovering}
-                    />
-                  </div>
-                </div>
-                
-                {/* 중요도 가중치 */}
+            <div className="flex-1 min-h-0 grid grid-cols-[3fr_3fr_4fr] divide-x divide-stone-200 overflow-hidden">
+              {/* ===== 1열 (30%): 업종 선택 + 전체 사업장 (세로 배치) ===== */}
+              <div className="overflow-y-auto p-3 flex flex-col gap-3">
+                {/* 업종 선택 */}
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sliders className="w-3.5 h-3.5 text-stone-400" />
-                    <span className="text-xs font-semibold text-stone-600">중요도 가중치</span>
-                    <span className="text-[10px] text-stone-400">
-                      (합계: {Math.round((
-                        discoveryConfig.scoreWeights.legalMandatory +
-                        discoveryConfig.scoreWeights.novelty +
-                        discoveryConfig.scoreWeights.impact +
-                        discoveryConfig.scoreWeights.international
-                      ) * 100)}%)
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-stone-500">법적 강제성</span>
-                        <span className="font-mono text-stone-700">
-                          {Math.round(discoveryConfig.scoreWeights.legalMandatory * 100)}%
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={0.6}
-                        step={0.05}
-                        value={discoveryConfig.scoreWeights.legalMandatory}
-                        onChange={(e) => setDiscoveryConfig((prev) => ({
-                          ...prev,
-                          scoreWeights: {
-                            ...prev.scoreWeights,
-                            legalMandatory: parseFloat(e.target.value),
-                          },
-                        }))}
-                        className="w-full h-1.5"
-                        disabled={discovering}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-stone-500">신규성</span>
-                        <span className="font-mono text-stone-700">
-                          {Math.round(discoveryConfig.scoreWeights.novelty * 100)}%
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={0.6}
-                        step={0.05}
-                        value={discoveryConfig.scoreWeights.novelty}
-                        onChange={(e) => setDiscoveryConfig((prev) => ({
-                          ...prev,
-                          scoreWeights: {
-                            ...prev.scoreWeights,
-                            novelty: parseFloat(e.target.value),
-                          },
-                        }))}
-                        className="w-full h-1.5"
-                        disabled={discovering}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-stone-500">파급력</span>
-                        <span className="font-mono text-stone-700">
-                          {Math.round(discoveryConfig.scoreWeights.impact * 100)}%
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={0.6}
-                        step={0.05}
-                        value={discoveryConfig.scoreWeights.impact}
-                        onChange={(e) => setDiscoveryConfig((prev) => ({
-                          ...prev,
-                          scoreWeights: {
-                            ...prev.scoreWeights,
-                            impact: parseFloat(e.target.value),
-                          },
-                        }))}
-                        className="w-full h-1.5"
-                        disabled={discovering}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-[10px] mb-1">
-                        <span className="text-stone-500">국제 동향</span>
-                        <span className="font-mono text-stone-700">
-                          {Math.round(discoveryConfig.scoreWeights.international * 100)}%
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={0.6}
-                        step={0.05}
-                        value={discoveryConfig.scoreWeights.international}
-                        onChange={(e) => setDiscoveryConfig((prev) => ({
-                          ...prev,
-                          scoreWeights: {
-                            ...prev.scoreWeights,
-                            international: parseFloat(e.target.value),
-                          },
-                        }))}
-                        className="w-full h-1.5"
-                        disabled={discovering}
-                      />
-                    </div>
+                  <h4 className="text-xs font-semibold text-stone-500 mb-2 px-1">업종 선택</h4>
+                  <div className="grid grid-cols-3 gap-1">
+                    {INDUSTRY_CATEGORIES_UI.map((industry) => {
+                      const Icon = INDUSTRY_ICON_MAP[industry.id] || MoreHorizontal;
+                      const count = industryCounts[industry.id] || 0;
+                      const isSelected = selectedIndustry === industry.id;
+                      
+                      return (
+                        <button
+                          key={industry.id}
+                          onClick={() => setSelectedIndustry(isSelected ? null : industry.id)}
+                          className={cn(
+                            "flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all",
+                            isSelected
+                              ? "bg-primary text-white"
+                              : count > 0
+                              ? "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                              : "bg-stone-50 text-stone-400 hover:bg-stone-100"
+                          )}
+                        >
+                          <Icon className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{industry.label}</span>
+                          {count > 0 && (
+                            <span className={cn(
+                              "px-1 rounded-full text-[8px] shrink-0",
+                              isSelected ? "bg-white/20" : "bg-stone-200"
+                            )}>
+                              {count}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
 
-          {/* 날짜 필터 */}
-          <div className="glass-panel rounded-2xl overflow-hidden">
-            <button
-              onClick={() => toggleSection("date")}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-stone-50/50"
-            >
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-primary" />
-                <span className="font-semibold text-stone-700 text-sm">분석 기간</span>
-                {(filter.dateStart || filter.dateEnd) && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary">
-                    {filter.dateStart || "~"} ~ {filter.dateEnd || "~"}
-                  </span>
-                )}
-              </div>
-              {expandedSections.date ? (
-                <ChevronUp className="w-4 h-4 text-stone-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-stone-400" />
-              )}
-            </button>
-            
-            {expandedSections.date && (
-              <div className="px-4 pb-4 border-t border-stone-100">
-                <div className="grid grid-cols-2 gap-4 pt-4">
-                  <div>
-                    <label className="text-xs text-stone-500 mb-1 block">시작일</label>
-                    <input
-                      type="month"
-                      value={filter.dateStart}
-                      onChange={(e) => setFilter((prev) => ({ ...prev, dateStart: e.target.value }))}
-                      min={stats?.dateRange.earliest}
-                      max={stats?.dateRange.latest}
-                      className="input-field text-sm"
-                      disabled={!stats?.connected}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-stone-500 mb-1 block">종료일</label>
-                    <input
-                      type="month"
-                      value={filter.dateEnd}
-                      onChange={(e) => setFilter((prev) => ({ ...prev, dateEnd: e.target.value }))}
-                      min={stats?.dateRange.earliest}
-                      max={stats?.dateRange.latest}
-                      className="input-field text-sm"
-                      disabled={!stats?.connected}
-                    />
-                  </div>
+                {/* 전체 사업장 (업종 선택 하단) */}
+                <div className="border-t border-stone-100 pt-2">
+                  <h4 className="text-xs font-semibold text-stone-500 mb-2 px-1">
+                    {selectedIndustry
+                      ? `${INDUSTRY_CATEGORIES_UI.find(i => i.id === selectedIndustry)?.label} (${industryProfiles.length})`
+                      : `전체 사업장 (${industryProfiles.length})`
+                    }
+                  </h4>
+                  
+                  {profilesLoading ? (
+                    <div className="p-4 flex items-center justify-center">
+                      <Loader2 className="w-4 h-4 animate-spin text-stone-400" />
+                    </div>
+                  ) : industryProfiles.length === 0 ? (
+                    <div className="p-3 text-center">
+                      <Factory className="w-5 h-5 text-stone-300 mx-auto mb-1" />
+                      <p className="text-[10px] text-stone-400">
+                        {selectedIndustry ? "해당 업종 사업장 없음" : "등록된 사업장 없음"}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-1">
+                      {industryProfiles.map((profile) => (
+                        <button
+                          key={profile.id}
+                          onClick={() => setSelectedProfileId(
+                            selectedProfileId === profile.id ? null : profile.id
+                          )}
+                          className={cn(
+                            "flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-all text-left",
+                            selectedProfileId === profile.id
+                              ? "bg-primary text-white"
+                              : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                          )}
+                        >
+                          <Factory className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{profile.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* 기관 필터 */}
-          <div className="glass-panel rounded-2xl overflow-hidden">
-            <button
-              onClick={() => toggleSection("org")}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-stone-50/50"
-            >
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-blue-500" />
-                <span className="font-semibold text-stone-700 text-sm">기관 필터</span>
-                {filter.selectedOrgs.length > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
-                    {filter.selectedOrgs.length}개 선택
-                  </span>
-                )}
-              </div>
-              {expandedSections.org ? (
-                <ChevronUp className="w-4 h-4 text-stone-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-stone-400" />
-              )}
-            </button>
-            
-            {expandedSections.org && (
-              <div className="px-4 pb-4 border-t border-stone-100">
-                {stats?.organizations && stats.organizations.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 pt-4">
-                    {stats.organizations.map((org) => (
-                      <button
-                        key={org.id}
-                        onClick={() => toggleOrg(org.name)}
-                        disabled={!stats.connected}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                          filter.selectedOrgs.includes(org.name)
-                            ? "bg-blue-500 text-white"
-                            : "bg-stone-100 text-stone-600 hover:bg-stone-200"
-                        )}
-                      >
-                        {org.name}
-                        <span className="ml-1 opacity-70">({org.count})</span>
-                      </button>
-                    ))}
+              {/* ===== 2열 (30%): 사업장 개요 ===== */}
+              <div className="overflow-y-auto p-3 flex flex-col">
+                <h4 className="text-xs font-semibold text-stone-500 mb-2 px-1">사업장 개요</h4>
+                {!selectedProfileId ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <div className="text-center">
+                      <Building className="w-8 h-8 text-stone-300 mx-auto mb-2" />
+                      <p className="text-[11px] text-stone-400">사업장을 선택해 주세요</p>
+                    </div>
+                  </div>
+                ) : profileDetailLoading ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-stone-400" />
                   </div>
                 ) : (
-                  <div className="pt-4 text-xs text-stone-400 text-center">
-                    등록된 기관이 없습니다.
+                  <div className="space-y-2">
+                    {(() => {
+                      const detail = selectedProfileDetail;
+                      const basicInfo = detail?.overview?.basicInfo || {};
+                      const facilitySummary = detail?.overview?.facilitySummary || {};
+                      const listItem = industryProfiles.find(p => p.id === selectedProfileId);
+                      const currentIssues = detail?.overview?.currentIssues || [];
+
+                      return (
+                        <>
+                          {/* 로고 + 사업장명 */}
+                          <div className="flex items-center gap-2.5 p-2 rounded-lg bg-stone-50 border border-stone-200/60">
+                            {basicInfo.logo ? (
+                              <img
+                                src={basicInfo.logo}
+                                alt="로고"
+                                className="w-10 h-10 rounded-lg object-contain bg-white border border-stone-200 shrink-0"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-stone-200 flex items-center justify-center shrink-0">
+                                <Factory className="w-5 h-5 text-stone-400" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-bold text-stone-800 truncate">
+                                {basicInfo.name || listItem?.name || ""}
+                              </div>
+                              <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                                  {listItem?.industryLabel || ""}
+                                </span>
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-stone-200 text-stone-600 font-medium">
+                                  {listItem?.scaleLabel || ""}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 기본 정보 리스트 */}
+                          <div className="space-y-1.5">
+                            {/* 소재지 */}
+                            <div className="flex items-start gap-1.5 text-[10px]">
+                              <span className="text-stone-400 shrink-0 w-14">소재지</span>
+                              <span className="text-stone-700 font-medium">
+                                {basicInfo.location?.roadAddress || basicInfo.location?.jibunAddress || listItem?.location || "미등록"}
+                              </span>
+                            </div>
+                            {/* 대상업종 */}
+                            <div className="flex items-start gap-1.5 text-[10px]">
+                              <span className="text-stone-400 shrink-0 w-14">대상업종</span>
+                              <span className="text-stone-700 font-medium">{listItem?.industryLabel || ""}</span>
+                            </div>
+                            {/* 표준산업분류코드 */}
+                            {basicInfo.industryCodes?.length > 0 && (
+                              <div className="flex items-start gap-1.5 text-[10px]">
+                                <span className="text-stone-400 shrink-0 w-14">분류코드</span>
+                                <div className="flex flex-wrap gap-0.5">
+                                  {basicInfo.industryCodes.map((code: any, i: number) => (
+                                    <span key={i} className="px-1 py-0.5 rounded bg-stone-100 text-stone-600 text-[9px] font-mono">
+                                      {typeof code === 'string' ? code : code.code || code.name || ''}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {/* 대기/수질 종규모 */}
+                            {(basicInfo.facilityClass?.airClass || basicInfo.facilityClass?.waterClass) && (
+                              <div className="flex items-start gap-1.5 text-[10px]">
+                                <span className="text-stone-400 shrink-0 w-14">종규모</span>
+                                <div className="flex gap-1.5">
+                                  {basicInfo.facilityClass?.airClass && (
+                                    <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-medium">
+                                      대기 {basicInfo.facilityClass.airClass}종
+                                    </span>
+                                  )}
+                                  {basicInfo.facilityClass?.waterClass && (
+                                    <span className="px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-700 text-[9px] font-medium">
+                                      수질 {basicInfo.facilityClass.waterClass}종
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 시설현황 요약 */}
+                          <div className="p-2 rounded-lg bg-stone-50 border border-stone-200/60">
+                            <div className="text-[10px] font-semibold text-stone-600 mb-1.5">시설 현황</div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                              {[
+                                { label: "배출시설", value: facilitySummary.emissionFacilityCount || 0 },
+                                { label: "방지시설", value: facilitySummary.preventionFacilityCount || 0 },
+                                { label: "일반굴뚝", value: facilitySummary.generalStackCount || 0 },
+                                { label: "CleanSYS", value: facilitySummary.cleansysStackCount || 0 },
+                                { label: "플레어스택", value: facilitySummary.flareStackCount || 0 },
+                                { label: "방류구", value: facilitySummary.dischargePointCount || 0 },
+                              ].map((item) => (
+                                <div key={item.label} className="flex justify-between text-[10px]">
+                                  <span className="text-stone-400">{item.label}</span>
+                                  <span className="font-medium text-stone-700">{item.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* 주요 생산품 */}
+                          <div className="p-2 rounded-lg bg-stone-50 border border-stone-200/60">
+                            <div className="text-[10px] font-semibold text-stone-600 mb-1.5">주요 생산품</div>
+                            {basicInfo.mainProducts?.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {basicInfo.mainProducts.map((product: string, i: number) => (
+                                  <span key={i} className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-700 text-[9px] font-medium">
+                                    {product}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-stone-400 italic">등록된 생산품 없음</p>
+                            )}
+                          </div>
+
+                          {/* 현재 이슈 상황 */}
+                          <div className="p-2 rounded-lg bg-stone-50 border border-stone-200/60">
+                            <div className="text-[10px] font-semibold text-stone-600 mb-1.5">현재 이슈</div>
+                            {currentIssues.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {currentIssues.map((issue: any) => (
+                                  <span
+                                    key={issue.id}
+                                    className={cn(
+                                      "px-1.5 py-0.5 rounded text-[9px] font-medium",
+                                      issue.severity === "critical" ? "bg-red-100 text-red-700" :
+                                      issue.severity === "warning" ? "bg-amber-100 text-amber-700" :
+                                      "bg-blue-100 text-blue-700"
+                                    )}
+                                    title={issue.memo || ""}
+                                  >
+                                    {issue.severity === "critical" ? "●" : issue.severity === "warning" ? "●" : "●"}{" "}
+                                    {issue.label}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[10px] text-stone-400 italic">등록된 이슈 없음</p>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
-            )}
-          </div>
 
-          {/* 보드 필터 */}
-          <div className="glass-panel rounded-2xl overflow-hidden">
-            <button
-              onClick={() => toggleSection("board")}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-stone-50/50"
-            >
-              <div className="flex items-center gap-2">
-                <FolderOpen className="w-4 h-4 text-purple-500" />
-                <span className="font-semibold text-stone-700 text-sm">게시판 필터</span>
-                {filter.selectedBoards.length > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700">
-                    {filter.selectedBoards.length}개 선택
-                  </span>
-                )}
-              </div>
-              {expandedSections.board ? (
-                <ChevronUp className="w-4 h-4 text-stone-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-stone-400" />
-              )}
-            </button>
-            
-            {expandedSections.board && (
-              <div className="px-4 pb-4 border-t border-stone-100">
-                {stats?.boards && stats.boards.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 pt-4 max-h-48 overflow-y-auto">
-                    {stats.boards.map((board) => (
+              {/* ===== 3열 (40%): 카테고리 탭 옵션 패널 ===== */}
+              <div className="flex flex-col overflow-hidden">
+                {/* 탭 헤더 */}
+                <div className="flex border-b border-stone-100 shrink-0">
+                  {ANALYSIS_CATEGORIES.map((cat) => {
+                    const Icon = CATEGORY_ICON_MAP[cat.iconName] || Shield;
+                    const selectedCount = analysisOptions[cat.id]?.length || 0;
+                    return (
                       <button
-                        key={board.id}
-                        onClick={() => toggleBoard(board.name)}
-                        disabled={!stats.connected}
+                        key={cat.id}
+                        onClick={() => setOptionTab(cat.id)}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                          filter.selectedBoards.includes(board.name)
-                            ? "bg-purple-500 text-white"
-                            : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                          "flex-1 px-2 py-2 text-[11px] font-medium transition-all flex items-center justify-center gap-1",
+                          optionTab === cat.id
+                            ? "bg-white text-primary border-b-2 border-primary"
+                            : "text-stone-500 hover:bg-stone-50 hover:text-stone-700"
                         )}
                       >
-                        {board.name}
-                        <span className="ml-1 opacity-70">({board.count})</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="pt-4 text-xs text-stone-400 text-center">
-                    등록된 게시판이 없습니다.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 청크 유형 필터 */}
-          <div className="glass-panel rounded-2xl overflow-hidden">
-            <button
-              onClick={() => toggleSection("chunkType")}
-              className="w-full px-4 py-3 flex items-center justify-between hover:bg-stone-50/50"
-            >
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-amber-500" />
-                <span className="font-semibold text-stone-700 text-sm">청크 유형</span>
-                {filter.selectedChunkTypes.length > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                    {filter.selectedChunkTypes.length}개 선택
-                  </span>
-                )}
-              </div>
-              {expandedSections.chunkType ? (
-                <ChevronUp className="w-4 h-4 text-stone-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-stone-400" />
-              )}
-            </button>
-            
-            {expandedSections.chunkType && (
-              <div className="px-4 pb-4 border-t border-stone-100">
-                {stats?.chunkTypes && stats.chunkTypes.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 pt-4">
-                    {stats.chunkTypes.map((ct) => (
-                      <button
-                        key={ct.type}
-                        onClick={() => toggleChunkType(ct.type)}
-                        disabled={!stats.connected}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                          filter.selectedChunkTypes.includes(ct.type)
-                            ? "bg-amber-500 text-white"
-                            : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                        <Icon className="w-3.5 h-3.5" />
+                        {cat.label}
+                        {selectedCount > 0 && (
+                          <span className="px-1 py-0.5 rounded-full text-[8px] font-bold bg-primary/10 text-primary">
+                            {selectedCount}
+                          </span>
                         )}
-                      >
-                        {ct.type === "text" ? "텍스트" : ct.type === "table" ? "테이블" : ct.type}
-                        <span className="ml-1 opacity-70">({ct.count})</span>
                       </button>
-                    ))}
+                    );
+                  })}
+                </div>
+
+                {/* 탭 컨텐츠 */}
+                <div className="overflow-y-auto p-2.5">
+                  {ANALYSIS_CATEGORIES.map((cat) => (
+                    <div
+                      key={cat.id}
+                      className={cn(
+                        "grid grid-cols-2 gap-1.5",
+                        optionTab !== cat.id && "hidden"
+                      )}
+                    >
+                      {cat.options.map((opt) => {
+                        const isChecked = analysisOptions[cat.id]?.includes(opt.id);
+                        return (
+                          <label
+                            key={opt.id}
+                            className={cn(
+                              "flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer transition-all",
+                              isChecked
+                                ? "bg-primary/5 border border-primary/30"
+                                : "bg-stone-50 border border-transparent hover:bg-stone-100"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleAnalysisOption(cat.id, opt.id)}
+                              className="shrink-0 w-3.5 h-3.5 rounded accent-primary"
+                              disabled={discovering}
+                            />
+                            <span className="flex-1 min-w-0 text-[11px] font-medium text-stone-700 truncate">
+                              {opt.label}
+                            </span>
+                            {/* 설명 툴팁 */}
+                            <span className="relative group shrink-0">
+                              <HelpCircle className="w-3.5 h-3.5 text-stone-400 hover:text-stone-600 cursor-help" />
+                              <span className="absolute bottom-full right-0 mb-1 w-52 p-2 rounded-lg bg-stone-800 text-white text-[9px] leading-relaxed shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                {opt.description}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
+
+                  {/* 전부 선택 / 전부 해제 버튼 (탭 컨텐츠 바로 아래 10px) */}
+                  <div className="flex justify-end gap-2 mt-[10px]">
+                    <button
+                      onClick={() => {
+                        const cat = ANALYSIS_CATEGORIES.find(c => c.id === optionTab);
+                        if (cat) {
+                          setAnalysisOptions(prev => ({
+                            ...prev,
+                            [optionTab]: cat.options.map(o => o.id),
+                          }));
+                        }
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-medium rounded bg-primary/10 text-primary hover:bg-primary/20 transition-all"
+                      disabled={discovering}
+                    >
+                      전부 선택
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAnalysisOptions(prev => ({
+                          ...prev,
+                          [optionTab]: [],
+                        }));
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-medium rounded bg-stone-100 text-stone-600 hover:bg-stone-200 transition-all"
+                      disabled={discovering}
+                    >
+                      전부 해제
+                    </button>
                   </div>
-                ) : (
-                  <div className="pt-4 text-xs text-stone-400 text-center">
-                    청크 유형 정보가 없습니다.
+                </div>
+
+                {/* 선택된 옵션 요약 태그 */}
+                {totalSelectedOptions > 0 && (
+                  <div className="border-t border-stone-100 px-2.5 py-2 shrink-0 bg-stone-50/50 overflow-y-auto">
+                    <div className="text-[10px] font-semibold text-stone-500 mb-1.5">선택된 옵션</div>
+                    <div className="flex flex-wrap gap-1">
+                      {ANALYSIS_CATEGORIES.map((cat) =>
+                        (analysisOptions[cat.id] || []).map((optId) => {
+                          const opt = cat.options.find((o) => o.id === optId);
+                          if (!opt) return null;
+                          const colorMap: Record<string, string> = {
+                            integrated_permit: "bg-emerald-100 text-emerald-700",
+                            climate_change: "bg-blue-100 text-blue-700",
+                            industrial_safety: "bg-amber-100 text-amber-700",
+                          };
+                          return (
+                            <button
+                              key={`${cat.id}-${optId}`}
+                              onClick={() => toggleAnalysisOption(cat.id, optId)}
+                              className={cn(
+                                "px-1.5 py-0.5 rounded text-[9px] font-medium flex items-center gap-0.5",
+                                colorMap[cat.id] || "bg-stone-100 text-stone-600"
+                              )}
+                              title={`${cat.label}: ${opt.label} (클릭하여 제거)`}
+                            >
+                              {opt.label}
+                              <XCircle className="w-2.5 h-2.5 opacity-60" />
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
+        {/* ============================== */}
         {/* 오른쪽: 세션 히스토리 + 발굴된 이슈 */}
-        <div className="space-y-4">
+        {/* ============================== */}
+        <div className="h-full flex flex-col gap-4 overflow-auto">
           {/* 세션 히스토리 */}
           <div className="glass-panel rounded-2xl overflow-hidden">
             <button
@@ -1124,7 +1678,6 @@ export default function RAGAnalysisPage() {
 
           {/* 발굴된 이슈 */}
           {(() => {
-            // 실제 발굴된 이슈가 있으면 사용, 없으면 더미 데이터 표시 (UI 확인용)
             const displayIssues = discoveredIssues.length > 0 ? discoveredIssues : dummyIssues;
             const isUsingDummy = discoveredIssues.length === 0;
             
@@ -1172,7 +1725,6 @@ export default function RAGAnalysisPage() {
                         <div className="text-xs text-stone-500 mt-1 line-clamp-2">
                           {issue.summary}
                         </div>
-                        {/* 키워드 */}
                         <div className="flex flex-wrap gap-1 mt-2">
                           {issue.keywords?.slice(0, 3).map((kw, i) => (
                             <span
@@ -1209,7 +1761,7 @@ export default function RAGAnalysisPage() {
                 <Lightbulb className="w-8 h-8 mb-3 opacity-30" />
                 <p className="text-sm font-medium">발굴된 이슈 없음</p>
                 <p className="text-xs mt-1 text-center">
-                  필터를 설정하고<br />'자동 이슈 발굴'을 실행하세요
+                  설정을 완료하고<br />&apos;자동 이슈 발굴&apos;을 실행하세요
                 </p>
               </div>
             )}
@@ -1219,7 +1771,6 @@ export default function RAGAnalysisPage() {
 
           {/* 발굴 결과 통계 */}
           {(() => {
-            // 실제 데이터가 있으면 실제 값, 없으면 더미 통계 표시
             const showStats = tokenUsage || discoveredIssues.length === 0;
             const statsData = tokenUsage || { input: 15200, output: 4800, cost: 0.0089 };
             const issueCount = discoveredIssues.length > 0 ? discoveredIssues.length : dummyIssues.length;

@@ -215,37 +215,49 @@ class HWPExtractor(BaseExtractor):
             )
     
     def _extract_with_hwp5(self, file_path: Path) -> Tuple[str, ExtractionMethod]:
-        """hwp5 라이브러리를 사용한 추출"""
+        """hwp5 라이브러리를 사용한 추출 (대용량 파일 지원)"""
         try:
-            from hwp5.hwp5txt import extract_text
-            from hwp5.hwp5html import HTMLTransform
             import subprocess
+            
+            # 파일 크기에 따른 타임아웃 조정 (최소 60초, MB당 10초 추가, 최대 600초)
+            file_size_mb = file_path.stat().st_size / (1024 * 1024)
+            timeout_seconds = min(600, max(60, int(60 + file_size_mb * 10)))
+            
+            print(f"[HWP5] hwp5txt 시작: {file_path.name} ({file_size_mb:.1f}MB), 타임아웃: {timeout_seconds}초")
             
             # hwp5txt 명령어 실행
             result = subprocess.run(
                 ['hwp5txt', str(file_path)],
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=timeout_seconds,
                 encoding='utf-8'
             )
             
             if result.returncode == 0 and result.stdout:
+                print(f"[HWP5] hwp5txt 성공: {len(result.stdout)}자 추출")
                 return result.stdout, ExtractionMethod.TEXT_LAYER
+            else:
+                print(f"[HWP5] hwp5txt 실패: returncode={result.returncode}")
+                if result.stderr:
+                    print(f"[HWP5] stderr: {result.stderr[:500]}")
             
         except ImportError:
-            pass
+            print("[HWP5] hwp5 라이브러리가 설치되지 않음")
         except subprocess.TimeoutExpired:
-            pass
+            print(f"[HWP5] hwp5txt 타임아웃 ({timeout_seconds}초)")
+        except FileNotFoundError:
+            print("[HWP5] hwp5txt 명령어를 찾을 수 없음")
         except Exception as e:
             print(f"[HWP5] Error: {e}")
         
         return "", ExtractionMethod.TEXT_LAYER
     
     def _extract_with_olefile(self, file_path: Path) -> Tuple[str, ExtractionMethod]:
-        """olefile을 사용한 직접 파싱"""
+        """olefile을 사용한 직접 파싱 (개선된 버전)"""
         olefile = get_olefile()
         if olefile is None:
+            print("[OLEFILE] olefile 모듈이 설치되지 않음")
             return "", ExtractionMethod.TEXT_LAYER
         
         try:
@@ -263,9 +275,12 @@ class HWPExtractor(BaseExtractor):
             else:
                 is_compressed = True
             
+            print(f"[OLEFILE] 파일 압축 상태: {'압축됨' if is_compressed else '비압축'}")
+            
             # BodyText 섹션에서 텍스트 추출
             texts = []
             section_idx = 0
+            total_chars = 0
             
             while True:
                 section_name = f'BodyText/Section{section_idx}'
@@ -273,87 +288,144 @@ class HWPExtractor(BaseExtractor):
                     break
                 
                 section_data = ole.openstream(section_name).read()
+                original_size = len(section_data)
                 
                 # 압축 해제
                 if is_compressed:
                     try:
                         section_data = zlib.decompress(section_data, -15)
                     except zlib.error:
-                        # 압축되지 않은 경우
-                        pass
+                        # 압축되지 않은 경우 또는 다른 압축 방식 시도
+                        try:
+                            section_data = zlib.decompress(section_data)
+                        except zlib.error:
+                            # 압축되지 않은 것으로 간주
+                            pass
+                
+                decompressed_size = len(section_data)
                 
                 # 텍스트 파싱
                 section_text = self._parse_hwp_section(section_data)
                 if section_text:
                     texts.append(section_text)
+                    total_chars += len(section_text)
+                
+                print(f"[OLEFILE] Section{section_idx}: 원본 {original_size}bytes -> 해제 {decompressed_size}bytes -> 텍스트 {len(section_text) if section_text else 0}자")
                 
                 section_idx += 1
             
             ole.close()
             
+            print(f"[OLEFILE] 총 {section_idx}개 섹션 처리, {total_chars}자 추출")
+            
             if texts:
                 return "\n\n".join(texts), ExtractionMethod.TEXT_LAYER
             
         except Exception as e:
+            import traceback
             print(f"[OLEFILE] Error: {e}")
+            print(f"[OLEFILE] Traceback: {traceback.format_exc()}")
         
         return "", ExtractionMethod.TEXT_LAYER
     
     def _parse_hwp_section(self, data: bytes) -> str:
-        """HWP 섹션 데이터에서 텍스트 파싱"""
+        """HWP 섹션 데이터에서 텍스트 파싱 (개선된 버전)"""
         texts = []
         pos = 0
+        data_len = len(data)
+        record_count = 0
+        text_record_count = 0
+        error_count = 0
         
-        while pos < len(data):
-            # 레코드 헤더 읽기 (4바이트)
-            if pos + 4 > len(data):
-                break
-            
-            header = struct.unpack('<I', data[pos:pos+4])[0]
-            tag_id = header & 0x3FF
-            level = (header >> 10) & 0x3FF
-            size = (header >> 20) & 0xFFF
-            
-            # 확장 크기 처리
-            if size == 0xFFF:
-                if pos + 8 > len(data):
+        # 레코드 타입 상수
+        HWPTAG_PARA_TEXT = 67  # 0x010 + 51
+        
+        while pos < data_len:
+            try:
+                # 레코드 헤더 읽기 (4바이트)
+                if pos + 4 > data_len:
                     break
-                size = struct.unpack('<I', data[pos+4:pos+8])[0]
-                pos += 8
-            else:
-                pos += 4
-            
-            # 텍스트 레코드 (tag_id = 67: HWPTAG_PARA_TEXT)
-            if tag_id == 67 and pos + size <= len(data):
-                text_data = data[pos:pos+size]
-                text = self._decode_hwp_text(text_data)
-                if text:
-                    texts.append(text)
-            
-            pos += size
+                
+                header = struct.unpack('<I', data[pos:pos+4])[0]
+                tag_id = header & 0x3FF
+                level = (header >> 10) & 0x3FF
+                size = (header >> 20) & 0xFFF
+                
+                header_size = 4
+                
+                # 확장 크기 처리 (size == 0xFFF인 경우)
+                if size == 0xFFF:
+                    if pos + 8 > data_len:
+                        break
+                    size = struct.unpack('<I', data[pos+4:pos+8])[0]
+                    header_size = 8
+                
+                # 레코드 크기 유효성 검증
+                if size > 10 * 1024 * 1024:  # 10MB 초과는 비정상
+                    print(f"[HWP PARSE] 비정상 레코드 크기 ({size}) at pos {pos}, 스킵")
+                    pos += header_size
+                    error_count += 1
+                    if error_count > 100:  # 에러가 너무 많으면 중단
+                        print(f"[HWP PARSE] 에러 과다, 파싱 중단")
+                        break
+                    continue
+                
+                record_start = pos + header_size
+                record_end = record_start + size
+                
+                # 경계 검사
+                if record_end > data_len:
+                    # 데이터 끝을 넘어가면 남은 데이터만 처리
+                    size = data_len - record_start
+                    record_end = data_len
+                
+                record_count += 1
+                
+                # 텍스트 레코드 (HWPTAG_PARA_TEXT)
+                if tag_id == HWPTAG_PARA_TEXT and size > 0:
+                    text_data = data[record_start:record_end]
+                    text = self._decode_hwp_text(text_data)
+                    if text:
+                        texts.append(text)
+                        text_record_count += 1
+                
+                # 다음 레코드로 이동
+                pos = record_end
+                
+            except struct.error as e:
+                # 구조체 언팩 오류 - 다음 바이트로 이동하여 재시도
+                pos += 1
+                error_count += 1
+                if error_count > 100:
+                    break
+                continue
+            except Exception as e:
+                # 기타 오류 - 다음 바이트로 이동
+                pos += 1
+                error_count += 1
+                if error_count > 100:
+                    break
+                continue
+        
+        if record_count > 0:
+            print(f"[HWP PARSE] 섹션 파싱 완료: {record_count}개 레코드, {text_record_count}개 텍스트 레코드, {error_count}개 오류")
         
         return "\n".join(texts)
     
     def _decode_hwp_text(self, data: bytes) -> str:
-        """HWP 텍스트 데이터 디코딩 (단순화된 방식)"""
+        """HWP 텍스트 데이터 디코딩 (제어 문자만 제거, 확장 데이터는 별도 레코드)"""
         try:
-            # HWP 텍스트 레코드는 UTF-16LE로 인코딩
-            # 제어 코드(0x00-0x1F)는 HWP 특수 기능을 위한 것
-            # 
-            # HWP 5.0 텍스트 레코드 구조:
-            # - 일반 텍스트: UTF-16LE 문자 그대로
-            # - 인라인 컨트롤 (0x02-0x08, 0x0B-0x1F): 코드 + 확장 데이터
-            #   확장 데이터는 컨트롤 종류에 따라 다름
+            # HWP 5.0 텍스트 레코드(HWPTAG_PARA_TEXT) 구조:
+            # - UTF-16LE 인코딩된 텍스트
+            # - 인라인 컨트롤은 2바이트 제어 문자만 포함 (확장 데이터는 별도 레코드)
+            # - 제어 문자(0x00-0x1F)는 HWP 특수 기능을 위한 마커
             
-            # 방법 1: 단순 UTF-16LE 디코딩 후 제어 문자만 제거
-            # (기존 방식이 더 안정적일 수 있음)
+            # 단순 UTF-16LE 디코딩
             text = data.decode('utf-16le', errors='ignore')
             
             # 제어 문자 제거 (0x00-0x1F, 단 줄바꿈/탭은 유지)
             result = []
-            i = 0
-            while i < len(text):
-                char = text[i]
+            for char in text:
                 code = ord(char)
                 
                 if code == 0x0000:
@@ -366,24 +438,34 @@ class HWPExtractor(BaseExtractor):
                     # 줄바꿈 유지
                     result.append('\n')
                 elif 0x0001 <= code <= 0x001F:
-                    # 기타 제어 문자 - 무시
-                    # HWP 인라인 컨트롤의 확장 데이터는 문자 형태로 나타나지 않음
-                    # (이미 UTF-16LE 디코딩 시 처리됨)
+                    # 기타 제어 문자 - 무시 (HWP 인라인 컨트롤 마커)
                     pass
                 else:
                     # 일반 문자
                     result.append(char)
-                
-                i += 1
             
-            return ''.join(result).strip()
+            text = ''.join(result)
+            
+            # 깨진 문자 패턴 제거 (HWP 인코딩 오류)
+            broken_patterns = [
+                (r'[†‡][\u4E00-\u9FFF]', ''),  # †普, ‡漠 등 (필드 마커 잔여물)
+                (r'氠瑢', ''),                  # 공백 인코딩 오류
+                (r'漠杳', ''),                  # 공백 인코딩 오류
+                (r'[\uF000-\uF8FF]', ''),       # Private Use Area
+                (r'[\uFFFC\uFFFD]', ''),        # 대체 문자
+            ]
+            for pattern, replacement in broken_patterns:
+                text = re.sub(pattern, replacement, text)
+            
+            return text.strip()
             
         except Exception as e:
             # 폴백: 정규식으로 제어 문자 제거
             try:
                 text = data.decode('utf-16le', errors='ignore')
-                # 제어 문자 제거 (탭, 줄바꿈 제외)
                 text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
+                text = re.sub(r'[†‡][\u4E00-\u9FFF]', '', text)
+                text = re.sub(r'[氠漠][瑢杳]', '', text)
                 return text.strip()
             except:
                 return ""
@@ -430,11 +512,21 @@ class HWPExtractor(BaseExtractor):
         text = re.sub(r' +', ' ', text)
         text = re.sub(r'\t+', '\t', text)
         
-        # HWP 특수 문자 정리
+        # HWP 특수 문자 및 인코딩 오류 패턴 정리
         hwp_patterns = [
             (r'\uf000', ''),  # 특수 제어 문자
             (r'\uf001', ''),
             (r'\ufffc', ''),  # 개체 대체 문자
+            (r'[\uF000-\uF8FF]', ''),  # Private Use Area 전체
+            (r'[\uFFFD]', ''),  # 대체 문자 (깨진 문자 표시)
+            # HWP 인라인 컨트롤 확장 데이터가 잘못 디코딩된 패턴
+            (r'[†‡][\u4E00-\u9FFF]', ''),  # †普, ‡漠 등
+            (r'[†‡]\d', ''),  # †1, ‡2 등
+            # HWP 필드 마커 잔여물
+            (r'[\u2020\u2021]', ''),  # † (dagger), ‡ (double dagger)
+            # 깨진 한자 패턴 (단독 한자가 문맥 없이 나타나는 경우)
+            (r'(?<=[가-힣])[瑢杳普漠](?=[가-힣\s])', ''),  # 한글 사이의 깨진 한자
+            (r'(?<=[가-힣])[氠](?=[가-힣\s])', ''),  # 한글 사이의 깨진 한자
         ]
         
         for pattern, replacement in hwp_patterns:
@@ -896,7 +988,8 @@ class HWPExtractor(BaseExtractor):
                             row_count=table_obj.rows,
                             col_count=table_obj.cols,
                             confidence=0.8,
-                            extraction_method="hwp5html"
+                            extraction_method="hwp5html",
+                            page_num=1  # hwp5html은 전체 문서를 한번에 처리하므로 페이지 구분 어려움
                         ))
             
         except subprocess.TimeoutExpired:
@@ -970,6 +1063,9 @@ class HWPExtractor(BaseExtractor):
                 
                 print(f"[HWP OLEFILE] Section{section_idx}: {original_size}bytes -> {len(section_data)}bytes (압축해제)")
                 
+                # 섹션 인덱스 저장 (표 데이터에 페이지 번호로 사용)
+                self._current_section_idx = section_idx
+                
                 # 섹션에서 표 추출
                 section_tables = self._parse_tables_from_section(section_data, table_index)
                 if section_tables:
@@ -989,10 +1085,11 @@ class HWPExtractor(BaseExtractor):
     
     def _parse_tables_from_section(self, data: bytes, start_index: int = 0) -> List[TableData]:
         """
-        HWP 섹션 데이터에서 표 구조 파싱 (RAG 최적화)
+        HWP 섹션 데이터에서 표 구조 파싱 (RAG 최적화, 중첩 표/목록 지원)
         
         HWPTAG_TABLE 및 관련 레코드를 파싱합니다.
         각 셀의 LIST_HEADER에서 col, row 인덱스를 읽어 정확한 위치에 배치합니다.
+        레벨(level) 값을 추적하여 중첩 구조를 처리합니다.
         
         Args:
             data: 섹션 바이너리 데이터
@@ -1009,10 +1106,16 @@ class HWPExtractor(BaseExtractor):
         in_table = False
         table_row_count = 0
         table_col_count = 0
+        table_start_level = -1  # 표 시작 레벨 (중첩 표 감지용)
+        
         # 셀 데이터를 (row, col) -> text 매핑으로 저장
         cell_data = {}  # {(row, col): text}
         current_cell_row = -1
         current_cell_col = -1
+        cell_start_level = -1  # 셀 시작 레벨 (중첩 목록 감지용)
+        
+        # 중첩 표 스택 (외부 표 정보 저장)
+        table_stack = []
         
         # 레코드 타입 상수 (HWPTAG_BEGIN = 0x010 = 16)
         HWPTAG_PARA_HEADER = 66     # 문단 헤더 (0x010 + 50)
@@ -1064,7 +1167,8 @@ class HWPExtractor(BaseExtractor):
                     row_count=table_obj.rows,
                     col_count=table_obj.cols,
                     confidence=0.7,
-                    extraction_method="hwp_olefile"
+                    extraction_method="hwp_olefile",
+                    page_num=self._current_section_idx + 1 if hasattr(self, '_current_section_idx') else 1
                 ))
             
             cell_data = {}
@@ -1096,8 +1200,20 @@ class HWPExtractor(BaseExtractor):
             
             # 표 시작 레코드 (HWPTAG_TABLE)
             if tag_id == HWPTAG_TABLE:
-                # 이전 표가 있으면 저장
-                if in_table:
+                # 중첩 표 감지: 이미 표 안에 있고 레벨이 더 높으면 중첩 표
+                if in_table and level > table_start_level:
+                    # 중첩 표는 스택에 외부 표 정보 저장하고 중첩 표 처리
+                    table_stack.append({
+                        'cell_data': cell_data,
+                        'table_row_count': table_row_count,
+                        'table_col_count': table_col_count,
+                        'table_start_level': table_start_level,
+                        'current_cell_row': current_cell_row,
+                        'current_cell_col': current_cell_col,
+                        'cell_start_level': cell_start_level,
+                    })
+                elif in_table:
+                    # 같은 레벨의 새 표 - 이전 표 저장
                     save_current_table()
                 
                 # 새 표 시작
@@ -1105,6 +1221,8 @@ class HWPExtractor(BaseExtractor):
                 cell_data = {}
                 current_cell_row = -1
                 current_cell_col = -1
+                table_start_level = level
+                cell_start_level = -1
                 
                 # 표 구조 정보 파싱
                 # HWP 표 헤더: flags(4bytes) + rows(2bytes) + cols(2bytes)
@@ -1112,7 +1230,7 @@ class HWPExtractor(BaseExtractor):
                     try:
                         table_row_count = struct.unpack('<H', record_data[4:6])[0]
                         table_col_count = struct.unpack('<H', record_data[6:8])[0]
-                        print(f"[HWP TABLE PARSE] 표 시작: {table_row_count}행 x {table_col_count}열")
+                        print(f"[HWP TABLE PARSE] 표 시작: {table_row_count}행 x {table_col_count}열 (레벨 {level})")
                     except:
                         table_row_count = 0
                         table_col_count = 0
@@ -1120,18 +1238,28 @@ class HWPExtractor(BaseExtractor):
             # 리스트 헤더 - 셀 시작 (HWPTAG_LIST_HEADER)
             elif tag_id == HWPTAG_LIST_HEADER and in_table:
                 # ListHeader 기본 속성 이후 TableCell 확장 속성:
-                # ListHeader: paragraphs(2) + unknown1(2) + listflags(4) = 8 bytes
+                # ListHeader: paragraphs(2) + textDirection(2) + listflags(4) = 8 bytes
                 # TableCell: col(2) + row(2) + colspan(2) + rowspan(2) + ...
+                #
+                # 표(HWPTAG_TABLE) 내부에서 발견된 LIST_HEADER는 셀로 처리
+                # 다만, 셀 좌표가 표 범위 내에 있어야 함 (중첩 목록/표 제외)
                 if len(record_data) >= 12:  # 최소 8 + 4 bytes
                     try:
                         # TableCell 확장 속성에서 col, row 읽기
                         cell_col = struct.unpack('<H', record_data[8:10])[0]
                         cell_row = struct.unpack('<H', record_data[10:12])[0]
-                        current_cell_col = cell_col
-                        current_cell_row = cell_row
-                        # 셀 초기화
-                        if (current_cell_row, current_cell_col) not in cell_data:
-                            cell_data[(current_cell_row, current_cell_col)] = ''
+                        
+                        # 셀 좌표가 현재 표 범위 내에 있는지 확인
+                        # 범위 내: 새 셀 시작, 범위 밖: 중첩 구조이므로 현재 셀 유지
+                        if cell_row < table_row_count and cell_col < table_col_count:
+                            # 유효한 셀 좌표 - 새 셀 시작
+                            current_cell_col = cell_col
+                            current_cell_row = cell_row
+                            cell_start_level = level
+                            # 셀 초기화
+                            if (current_cell_row, current_cell_col) not in cell_data:
+                                cell_data[(current_cell_row, current_cell_col)] = ''
+                        # else: 범위 밖이면 셀 내 중첩 구조 - 현재 셀 좌표 유지하고 텍스트 추가
                     except:
                         pass
             
@@ -1150,14 +1278,34 @@ class HWPExtractor(BaseExtractor):
             elif tag_id == HWPTAG_CTRL_HEADER and in_table:
                 if len(record_data) >= 4:
                     ctrl_id = record_data[:4]
-                    # 'tbl ' (표)이 아닌 다른 컨트롤이면 표 종료
-                    if ctrl_id != b'tbl ':
+                    # 표 내부 컨트롤(각주/필드 등)은 무시하고,
+                    # 표와 같은 레벨에서만 표 종료 처리
+                    if ctrl_id != b'tbl ' and level <= table_start_level:
                         save_current_table()
+                        # 스택에서 외부 표 복원
+                        if table_stack:
+                            outer = table_stack.pop()
+                            cell_data = outer['cell_data']
+                            table_row_count = outer['table_row_count']
+                            table_col_count = outer['table_col_count']
+                            table_start_level = outer['table_start_level']
+                            current_cell_row = outer['current_cell_row']
+                            current_cell_col = outer['current_cell_col']
+                            cell_start_level = outer['cell_start_level']
+                            in_table = True
             
             pos += size
         
         # 마지막 표 저장
         if in_table:
+            save_current_table()
+        
+        # 스택에 남은 표도 저장
+        while table_stack:
+            outer = table_stack.pop()
+            cell_data = outer['cell_data']
+            table_row_count = outer['table_row_count']
+            table_col_count = outer['table_col_count']
             save_current_table()
         
         # 디버그: 주요 태그 출력
@@ -1720,8 +1868,10 @@ class HWPXExtractor(BaseExtractor):
                 and name.endswith('.xml')
             ])
             
-            for section_file in section_files:
+            for section_idx, section_file in enumerate(section_files):
                 section_data = zf.read(section_file)
+                # 섹션 인덱스 저장 (표 데이터에 페이지 번호로 사용)
+                self._current_section_idx = section_idx
                 section_tables = self._parse_tables_from_hwpx_xml(section_data, table_index)
                 tables.extend(section_tables)
                 table_index += len(section_tables)
@@ -1785,7 +1935,8 @@ class HWPXExtractor(BaseExtractor):
                             row_count=table_obj.rows,
                             col_count=table_obj.cols,
                             confidence=0.8,  # HWPX는 구조화된 형식이므로 신뢰도 높음
-                            extraction_method="hwpx_xml"
+                            extraction_method="hwpx_xml",
+                            page_num=self._current_section_idx + 1 if hasattr(self, '_current_section_idx') else 1
                         ))
                 break
         
@@ -1984,7 +2135,8 @@ class HWPXExtractor(BaseExtractor):
                     row_count=table_obj.rows,
                     col_count=table_obj.cols,
                     confidence=0.7,  # ElementTree 파싱은 신뢰도 약간 낮음
-                    extraction_method="hwpx_etree"
+                    extraction_method="hwpx_etree",
+                    page_num=self._current_section_idx + 1 if hasattr(self, '_current_section_idx') else 1
                 ))
         
         return tables

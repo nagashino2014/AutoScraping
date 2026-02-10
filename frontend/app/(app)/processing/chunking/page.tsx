@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   FileText,
   ChevronRight,
@@ -425,6 +425,7 @@ export default function ChunkingPage() {
     loading: boolean;
   }>({ connected: false, total_embeddings: 0, loading: true });
   const [migrating, setMigrating] = useState(false);
+  const [clearingEmbeddings, setClearingEmbeddings] = useState(false);
   
   // 임베딩 통계 (영구 저장)
   const [embeddingStats, setEmbeddingStats] = useState<{
@@ -463,6 +464,83 @@ export default function ChunkingPage() {
   const [showErrorTooltip, setShowErrorTooltip] = useState<string | null>(null);
 
   // ============================================================================
+  // ChromaDB 값을 반영한 계산된 stats
+  // ============================================================================
+  
+  // 청킹 진행률 상태 (실시간) - Ref로 SSE 이벤트에서 업데이트, State는 폴링으로 UI 업데이트
+  const [chunkingProgress, setChunkingProgress] = useState(0);
+  const [currentChunkingDoc, setCurrentChunkingDoc] = useState("");
+  const [chunkingCompletedDocs, setChunkingCompletedDocs] = useState(0);
+  const [chunkingTotalDocs, setChunkingTotalDocs] = useState(0);
+  
+  // Ref로 진행률 추적 (SSE 이벤트에서 빠르게 업데이트)
+  const chunkingProgressRef = useRef(0);
+  const chunkingCompletedDocsRef = useRef(0);
+  const chunkingTotalDocsRef = useRef(0);
+  const chunkingPollingRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const computedStats = useMemo(() => {
+    if (!stats) return null;
+    
+    // ChromaDB의 실제 임베딩 수를 반영
+    const actualEmbeddedChunks = chromaDbStatus.connected 
+      ? chromaDbStatus.total_embeddings 
+      : stats.embeddedChunks;
+    
+    // 청킹 진행률 (진행 중일 때는 실시간 진행률 사용)
+    const actualChunkingRate = processing 
+      ? chunkingProgress 
+      : stats.chunkingRate;
+    
+    // 청킹 중 문서 수 (진행 중일 때는 실시간 값 사용)
+    const actualChunkedDocs = processing 
+      ? chunkingCompletedDocs 
+      : stats.chunkedDocuments;
+    const actualTotalDocs = processing && chunkingTotalDocs > 0
+      ? chunkingTotalDocs
+      : stats.totalDocuments;
+    
+    // 임베딩 진행률 계산
+    // 1. 진행 중일 때: 실시간 진행률 사용
+    // 2. 진행 중이 아닐 때: ChromaDB 기반 계산
+    let actualEmbeddingRate: number;
+    let actualEmbeddedChunksDisplay: number;
+    
+    if (embeddingProcessing && embeddingProgress.total > 0) {
+      actualEmbeddingRate = Math.round((embeddingProgress.current / embeddingProgress.total) * 100);
+      actualEmbeddedChunksDisplay = embeddingProgress.current; // 임베딩 진행 중에는 현재 처리된 수 표시
+    } else {
+      actualEmbeddingRate = stats.totalChunks > 0 
+        ? Math.round((actualEmbeddedChunks / stats.totalChunks) * 100) 
+        : 0;
+      actualEmbeddedChunksDisplay = actualEmbeddedChunks;
+    }
+    
+    // 임베딩 대상 총 청크 수 (진행 중일 때는 실시간 값 사용)
+    const actualTotalChunks = embeddingProcessing && embeddingProgress.total > 0
+      ? embeddingProgress.total
+      : stats.totalChunks;
+    
+    // 임베딩 성공률 계산 (embedding-stats.json 기반)
+    const totalAttempts = embeddingStats.total_embeddings + embeddingStats.total_failed;
+    const actualEmbeddingSuccessRate = totalAttempts > 0
+      ? Math.round((embeddingStats.total_embeddings / totalAttempts) * 100)
+      : 0;
+    
+    return {
+      ...stats,
+      chunkingRate: actualChunkingRate,
+      chunkedDocuments: actualChunkedDocs,
+      totalDocuments: actualTotalDocs,
+      embeddedChunks: actualEmbeddedChunksDisplay,
+      totalChunks: actualTotalChunks,
+      embeddingRate: actualEmbeddingRate,
+      embeddingSuccessRate: actualEmbeddingSuccessRate,
+      embeddingFailedChunks: embeddingStats.total_failed,
+    };
+  }, [stats, chromaDbStatus, embeddingStats, processing, chunkingProgress, chunkingCompletedDocs, chunkingTotalDocs, embeddingProcessing, embeddingProgress]);
+
+  // ============================================================================
   // 데이터 로드
   // ============================================================================
 
@@ -495,13 +573,27 @@ export default function ChunkingPage() {
     try {
       const res = await fetch("/api/processing/embedding/migrate");
       const data = await res.json();
-      setChromaDbStatus({
+      const newStatus = {
         connected: data.success && data.status === "connected",
         total_embeddings: data.total_embeddings || 0,
         loading: false,
+      };
+      // 데이터가 변경되었을 때만 상태 업데이트 (깜박임 방지)
+      setChromaDbStatus(prev => {
+        if (prev.connected === newStatus.connected && 
+            prev.total_embeddings === newStatus.total_embeddings &&
+            prev.loading === newStatus.loading) {
+          return prev; // 변경 없으면 기존 상태 유지 (리렌더링 방지)
+        }
+        return newStatus;
       });
     } catch {
-      setChromaDbStatus({ connected: false, total_embeddings: 0, loading: false });
+      setChromaDbStatus(prev => {
+        if (!prev.connected && prev.total_embeddings === 0 && !prev.loading) {
+          return prev;
+        }
+        return { connected: false, total_embeddings: 0, loading: false };
+      });
     }
   }, []);
 
@@ -511,11 +603,21 @@ export default function ChunkingPage() {
       const res = await fetch("/api/processing/embedding/stats");
       const data = await res.json();
       if (data.success && data.stats) {
-        setEmbeddingStats({
+        const newStats = {
           total_embeddings: data.stats.total_embeddings || 0,
           total_failed: data.stats.total_failed || 0,
           total_cost: data.stats.total_cost || 0,
           total_tokens: data.stats.total_tokens || 0,
+        };
+        // 데이터가 변경되었을 때만 상태 업데이트 (깜박임 방지)
+        setEmbeddingStats(prev => {
+          if (prev.total_embeddings === newStats.total_embeddings &&
+              prev.total_failed === newStats.total_failed &&
+              prev.total_cost === newStats.total_cost &&
+              prev.total_tokens === newStats.total_tokens) {
+            return prev; // 변경 없으면 기존 상태 유지 (리렌더링 방지)
+          }
+          return newStats;
         });
       }
     } catch (error) {
@@ -547,6 +649,44 @@ export default function ChunkingPage() {
       console.error(error);
     } finally {
       setMigrating(false);
+    }
+  };
+  
+  // 임베딩 전체 초기화 (ChromaDB 삭제)
+  const handleClearEmbeddings = async () => {
+    if (!confirm("⚠️ 경고: 모든 임베딩 데이터가 삭제됩니다.\n\n서로 다른 모델로 임베딩된 데이터가 섞여 있거나,\n임베딩을 처음부터 다시 하고 싶을 때 사용하세요.\n\n계속하시겠습니까?")) {
+      return;
+    }
+    
+    // 2차 확인
+    if (!confirm("정말로 모든 임베딩을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.")) {
+      return;
+    }
+    
+    setClearingEmbeddings(true);
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+      const res = await fetch(`${backendUrl}/vectordb/clear`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      
+      if (data.success) {
+        alert(`초기화 완료: ${data.deleted || 0}개 임베딩이 삭제되었습니다.`);
+        // 모든 관련 상태 갱신
+        loadChromaDbStatus();
+        loadEmbeddingStats();
+        loadTreeData();
+        // 임베딩 통계 상태 리셋
+        setEmbeddingStats({ total_embeddings: 0, total_failed: 0, total_cost: 0, total_tokens: 0 });
+      } else {
+        alert(`초기화 실패: ${data.error}`);
+      }
+    } catch (error) {
+      alert("초기화 중 오류가 발생했습니다.");
+      console.error(error);
+    } finally {
+      setClearingEmbeddings(false);
     }
   };
 
@@ -884,7 +1024,7 @@ export default function ChunkingPage() {
   // ============================================================================
   // 청킹 실행
   // ============================================================================
-
+  
   const executeChunking = async (rechunk = false) => {
     if (documents.length === 0) {
       alert("청킹할 문서를 선택해주세요.");
@@ -900,8 +1040,24 @@ export default function ChunkingPage() {
       });
     });
     setChunkingResults(initialResults);
+    setChunkingProgress(0);
+    setCurrentChunkingDoc("");
+    setChunkingCompletedDocs(0);
+    setChunkingTotalDocs(documents.length);
+    
+    // Ref 초기화
+    chunkingProgressRef.current = 0;
+    chunkingCompletedDocsRef.current = 0;
+    chunkingTotalDocsRef.current = documents.length;
     
     setProcessing(true);
+    
+    // 폴링 시작 (500ms마다 Ref 값을 State로 동기화)
+    chunkingPollingRef.current = setInterval(() => {
+      setChunkingProgress(chunkingProgressRef.current);
+      setChunkingCompletedDocs(chunkingCompletedDocsRef.current);
+      setChunkingTotalDocs(chunkingTotalDocsRef.current);
+    }, 500);
     try {
       const res = await fetch("/api/processing/chunking/execute", {
         method: "POST",
@@ -911,45 +1067,108 @@ export default function ChunkingPage() {
           rechunk,
         }),
       });
-      const data = await res.json();
       
-      if (data.success) {
-        // 청킹 결과를 상태에 저장
-        const newResults = new Map<string, ChunkingResult>();
-        if (data.results && Array.isArray(data.results)) {
-          data.results.forEach((result: { doc_id: string; success: boolean; chunks?: number; tokens?: number; error?: string }) => {
-            newResults.set(result.doc_id, {
-              doc_id: result.doc_id,
-              status: result.success ? "success" : "failed",
-              chunks: result.chunks,
-              tokens: result.tokens,
-              error: result.error,
-            });
-          });
-        }
-        setChunkingResults(newResults);
-        
-        // 실패 건이 있으면 실패 필터로 전환
-        if (data.failed > 0) {
-          setStatusFilter("failed");
-        }
-        
-        loadTreeData();
-      } else {
-        alert(`오류: ${data.error}`);
-        // 모든 문서를 실패 상태로 설정
-        const failedResults = new Map<string, ChunkingResult>();
-        documents.forEach(doc => {
-          failedResults.set(doc.doc_id, {
-            doc_id: doc.doc_id,
-            status: "failed",
-            error: data.error || "알 수 없는 오류",
-          });
-        });
-        setChunkingResults(failedResults);
+      // SSE 스트림 처리
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error("스트림을 읽을 수 없습니다.");
       }
+      
+      let buffer = "";
+      let finalData: any = null;
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        
+        // SSE 이벤트 파싱
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              switch (data.type) {
+                case "started":
+                  console.log(`[청킹] 시작: 총 ${data.total}개 문서`);
+                  // Ref 업데이트 (폴링에서 State로 동기화됨)
+                  chunkingTotalDocsRef.current = data.total;
+                  chunkingCompletedDocsRef.current = 0;
+                  chunkingProgressRef.current = 0;
+                  break;
+                  
+                case "progress":
+                  // Ref 업데이트 (폴링에서 State로 동기화됨)
+                  chunkingProgressRef.current = data.progress;
+                  setCurrentChunkingDoc(data.doc_name || "");
+                  break;
+                  
+                case "doc_complete":
+                  // Ref 업데이트 (폴링에서 State로 동기화됨)
+                  chunkingCompletedDocsRef.current += 1;
+                  
+                  setChunkingResults(prev => {
+                    const newResults = new Map(prev);
+                    newResults.set(data.doc_id, {
+                      doc_id: data.doc_id,
+                      status: data.success ? "success" : "failed",
+                      chunks: data.chunks,
+                      tokens: data.tokens,
+                      error: data.error,
+                    });
+                    return newResults;
+                  });
+                  break;
+                  
+                case "complete":
+                  finalData = data;
+                  // 폴링 중지
+                  if (chunkingPollingRef.current) {
+                    clearInterval(chunkingPollingRef.current);
+                    chunkingPollingRef.current = null;
+                  }
+                  // 최종 값 즉시 반영
+                  chunkingProgressRef.current = 100;
+                  setChunkingProgress(100);
+                  setChunkingCompletedDocs(chunkingCompletedDocsRef.current);
+                  break;
+                  
+                case "error":
+                  // 폴링 중지
+                  if (chunkingPollingRef.current) {
+                    clearInterval(chunkingPollingRef.current);
+                    chunkingPollingRef.current = null;
+                  }
+                  alert(`오류: ${data.error}`);
+                  break;
+              }
+            } catch (e) {
+              console.warn("SSE 파싱 오류:", e);
+            }
+          }
+        }
+      }
+      
+      // 실패 건이 있으면 실패 필터로 전환
+      if (finalData?.failed > 0) {
+        setStatusFilter("failed");
+      }
+      
+      loadTreeData();
+      
     } catch (error) {
       console.error("Error executing chunking:", error);
+      // 폴링 중지
+      if (chunkingPollingRef.current) {
+        clearInterval(chunkingPollingRef.current);
+        chunkingPollingRef.current = null;
+      }
       alert("청킹 실행 중 오류가 발생했습니다.");
       // 모든 문서를 실패 상태로 설정
       const failedResults = new Map<string, ChunkingResult>();
@@ -962,7 +1181,13 @@ export default function ChunkingPage() {
       });
       setChunkingResults(failedResults);
     } finally {
+      // 폴링 정리 (혹시 남아있으면)
+      if (chunkingPollingRef.current) {
+        clearInterval(chunkingPollingRef.current);
+        chunkingPollingRef.current = null;
+      }
       setProcessing(false);
+      setCurrentChunkingDoc("");
     }
   };
 
@@ -1002,7 +1227,7 @@ export default function ChunkingPage() {
         alert(`삭제 완료: ${data.deleted}개 성공, ${data.failed}개 실패`);
         
         // 삭제된 문서를 목록에서 제거
-        const deletedIds = new Set(
+        const deletedIds = new Set<string>(
           data.results
             .filter((r: { success: boolean }) => r.success)
             .map((r: { doc_id: string }) => r.doc_id)
@@ -1060,6 +1285,10 @@ export default function ChunkingPage() {
     }
   };
 
+  // 현재 실행 중인 임베딩 Job ID
+  const [currentEmbeddingJobId, setCurrentEmbeddingJobId] = useState<string | null>(null);
+  const embeddingPollingRef = useRef<NodeJS.Timeout | null>(null);
+
   const executeEmbedding = async () => {
     // OpenAI 모델이고 API 키 모달에서 입력한 경우에만 apiKey 체크
     // 환경 변수를 사용하는 경우 apiKey가 비어있어도 OK
@@ -1067,47 +1296,160 @@ export default function ChunkingPage() {
     setEmbeddingProcessing(true);
     setEmbeddingProgress({ current: 0, total: stats?.totalChunks || 0 });
 
+    // 백엔드 URL (Docker 환경에서는 환경 변수 사용)
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
     try {
-      const res = await fetch("/api/processing/embedding/execute", {
+      // 백그라운드 작업 생성 (Python 백엔드)
+      const res = await fetch(`${BACKEND_URL}/jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // API 키: 입력된 값이 있으면 전달, 없으면 서버에서 환경 변수 사용
-          api_key: apiKey.trim() || undefined,
-          settings: embeddingSettings,
-          skip_existing: true,
+          type: "embedding",
+          params: {
+            api_key: apiKey.trim() || undefined,
+            settings: embeddingSettings,
+            skip_existing: true,
+          },
         }),
       });
       const data = await res.json();
 
-      if (data.success) {
-        const costMessage = isHuggingFaceModel 
-          ? "" 
-          : `\n예상 비용: $${(data.estimated_cost || 0).toFixed(4)}`;
-        const timeMessage = data.processing_time_ms 
-          ? `\n처리 시간: ${(data.processing_time_ms / 1000).toFixed(1)}초` 
-          : "";
-        alert(`임베딩 완료: ${data.processed}개 성공, ${data.failed}개 실패${data.skipped > 0 ? `, ${data.skipped}개 스킵` : ""}${costMessage}${timeMessage}`);
-        
-        // 현재 세션 비용 업데이트
-        if (!isHuggingFaceModel && data.estimated_cost) {
-          setCurrentSessionCost(prev => prev + data.estimated_cost);
-        }
-        
-        // 통계 리로드
-        loadEmbeddingStats();
-        loadTreeData();
-      } else {
+      if (!data.success) {
         alert(`오류: ${data.error}`);
+        setEmbeddingProcessing(false);
+        return;
       }
+
+      const jobId = data.job.id;
+      setCurrentEmbeddingJobId(jobId);
+
+      // 작업 상태 폴링 시작
+      const pollJobStatus = async () => {
+        try {
+          const statusRes = await fetch(`${BACKEND_URL}/jobs/${jobId}`);
+          const statusData = await statusRes.json();
+
+          if (!statusData.success) {
+            console.error("Job status error:", statusData.error);
+            return;
+          }
+
+          const job = statusData.job;
+          
+          // 진행률 업데이트
+          setEmbeddingProgress(prev => {
+            if (prev.current === job.progress.current && prev.total === job.progress.total) {
+              return prev; // 변경 없으면 리렌더링 방지
+            }
+            return { current: job.progress.current, total: job.progress.total };
+          });
+
+          // 도넛 차트/통계 실시간 업데이트 (상태 비교로 깜박임 방지)
+          if (job.status === "running") {
+            loadChromaDbStatus();
+            loadEmbeddingStats();
+          }
+
+          // 상태에 따른 처리
+          if (job.status === "completed") {
+            // 폴링 중지
+            if (embeddingPollingRef.current) {
+              clearInterval(embeddingPollingRef.current);
+              embeddingPollingRef.current = null;
+            }
+
+            const result = job.result;
+            const costMessage = isHuggingFaceModel 
+              ? "" 
+              : `\n예상 비용: $${(result?.data?.estimated_cost || 0).toFixed(4)}`;
+            const timeMessage = result?.data?.processing_time_ms 
+              ? `\n처리 시간: ${(result.data.processing_time_ms / 1000).toFixed(1)}초` 
+              : "";
+            alert(`임베딩 완료: ${result?.processed || 0}개 성공, ${result?.failed || 0}개 실패${result?.skipped > 0 ? `, ${result.skipped}개 스킵` : ""}${costMessage}${timeMessage}`);
+            
+            // 현재 세션 비용 업데이트
+            if (!isHuggingFaceModel && result?.data?.estimated_cost) {
+              setCurrentSessionCost(prev => prev + result.data.estimated_cost);
+            }
+            
+            // 통계 리로드 (ChromaDB 상태, 임베딩 통계, 트리 데이터 모두 갱신)
+            await loadChromaDbStatus();
+            await loadEmbeddingStats();
+            await loadTreeData();
+            
+            setEmbeddingProcessing(false);
+            setCurrentEmbeddingJobId(null);
+            setEmbeddingProgress({ current: 0, total: 0 });
+          } else if (job.status === "failed" || job.status === "cancelled") {
+            // 폴링 중지
+            if (embeddingPollingRef.current) {
+              clearInterval(embeddingPollingRef.current);
+              embeddingPollingRef.current = null;
+            }
+
+            alert(`임베딩 ${job.status === "cancelled" ? "취소됨" : "실패"}: ${job.error || "알 수 없는 오류"}`);
+            
+            setEmbeddingProcessing(false);
+            setCurrentEmbeddingJobId(null);
+            setEmbeddingProgress({ current: 0, total: 0 });
+          }
+          // running 상태면 계속 폴링
+        } catch (pollError) {
+          console.error("Polling error:", pollError);
+        }
+      };
+
+      // 초기 폴링 (1초 후)
+      setTimeout(pollJobStatus, 1000);
+      
+      // 주기적 폴링 (2초마다)
+      embeddingPollingRef.current = setInterval(pollJobStatus, 2000);
+
     } catch (error) {
-      console.error("Error executing embedding:", error);
-      alert("임베딩 실행 중 오류가 발생했습니다.");
-    } finally {
+      console.error("Error starting embedding job:", error);
+      alert("임베딩 작업 시작 중 오류가 발생했습니다.");
       setEmbeddingProcessing(false);
       setEmbeddingProgress({ current: 0, total: 0 });
     }
   };
+
+  // 임베딩 작업 취소
+  const cancelEmbedding = async () => {
+    if (!currentEmbeddingJobId) return;
+
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/jobs/${currentEmbeddingJobId}?action=cancel`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        // 폴링 중지
+        if (embeddingPollingRef.current) {
+          clearInterval(embeddingPollingRef.current);
+          embeddingPollingRef.current = null;
+        }
+        
+        setEmbeddingProcessing(false);
+        setCurrentEmbeddingJobId(null);
+        setEmbeddingProgress({ current: 0, total: 0 });
+      }
+    } catch (error) {
+      console.error("Error cancelling embedding:", error);
+    }
+  };
+
+  // 컴포넌트 언마운트 시 폴링 정리
+  useEffect(() => {
+    return () => {
+      if (embeddingPollingRef.current) {
+        clearInterval(embeddingPollingRef.current);
+      }
+    };
+  }, []);
 
   // ============================================================================
   // 포맷 유틸
@@ -1228,42 +1570,49 @@ export default function ChunkingPage() {
             <div className="w-[70%] glass-panel p-4 rounded-2xl flex flex-col">
               <h3 className="text-sm font-semibold text-stone-700 mb-3">청킹/임베딩 현황</h3>
               
-              {stats ? (
+              {computedStats ? (
                 <div className="flex-1 flex flex-col gap-3">
                   {/* 소카드 2개 영역 */}
                   <div className="flex gap-3 flex-1">
                     {/* 좌측 소카드 - 청킹 */}
                     <div className="flex-1 rounded-xl p-3 flex flex-col bg-white/40 backdrop-blur-md border border-white/60 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9),0_2px_8px_0_rgba(0,0,0,0.04)]">
-                      <span className="text-[11px] font-semibold text-stone-700 mb-2">청킹</span>
+                      <span className="text-[11px] font-semibold text-stone-700 mb-2">청킹 {processing && <span className="text-blue-500 animate-pulse">처리 중...</span>}</span>
                       <div className="flex gap-2 justify-center flex-1 items-center">
-                        {/* 진행률 도넛 */}
-                        <div className="flex flex-col items-center">
-                          <div className="relative w-32 h-32">
-                            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                              <defs>
-                                <linearGradient id="chunking-progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                  <stop offset="0%" stopColor="#3B82F6" />
-                                  <stop offset="100%" stopColor="#60A5FA" />
-                                </linearGradient>
-                              </defs>
-                              <circle cx="50" cy="50" r="42" fill="none" stroke="#E7E5E4" strokeWidth="10" />
-                              <circle 
-                                cx="50" cy="50" r="42" fill="none" strokeWidth="10" strokeLinecap="round"
-                                stroke="url(#chunking-progress-gradient)"
-                                style={{
-                                  strokeDasharray: 2 * Math.PI * 42,
-                                  strokeDashoffset: 2 * Math.PI * 42 - (stats.chunkingRate / 100) * 2 * Math.PI * 42,
-                                }}
-                                className="transition-all duration-500 ease-out"
-                              />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                              <span className="text-xl font-bold text-stone-800">{stats.chunkingRate}%</span>
-                              <span className="text-[11px] text-stone-500">진행률</span>
+                        {/* 진행률 도넛 - 진행 중일 때는 직접 상태값 사용 */}
+                        {(() => {
+                          const displayRate = processing ? chunkingProgress : computedStats.chunkingRate;
+                          const displayCompletedDocs = processing ? chunkingCompletedDocs : computedStats.chunkedDocuments;
+                          const displayTotalDocs = processing ? chunkingTotalDocs : computedStats.totalDocuments;
+                          return (
+                            <div className="flex flex-col items-center">
+                              <div className="relative w-32 h-32">
+                                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                  <defs>
+                                    <linearGradient id="chunking-progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                      <stop offset="0%" stopColor="#3B82F6" />
+                                      <stop offset="100%" stopColor="#60A5FA" />
+                                    </linearGradient>
+                                  </defs>
+                                  <circle cx="50" cy="50" r="42" fill="none" stroke="#E7E5E4" strokeWidth="10" />
+                                  <circle 
+                                    cx="50" cy="50" r="42" fill="none" strokeWidth="10" strokeLinecap="round"
+                                    stroke="url(#chunking-progress-gradient)"
+                                    style={{
+                                      strokeDasharray: 2 * Math.PI * 42,
+                                      strokeDashoffset: 2 * Math.PI * 42 - (displayRate / 100) * 2 * Math.PI * 42,
+                                    }}
+                                    className={processing ? "transition-all duration-300 ease-out" : "transition-all duration-500 ease-out"}
+                                  />
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                  <span className="text-xl font-bold text-stone-800">{displayRate}%</span>
+                                  <span className="text-[11px] text-stone-500">진행률</span>
+                                </div>
+                              </div>
+                              <span className="mt-1 text-xs text-stone-600 font-medium">{displayCompletedDocs}/{displayTotalDocs} 문서</span>
                             </div>
-                          </div>
-                          <span className="mt-1 text-xs text-stone-600 font-medium">{stats.chunkedDocuments}/{stats.totalDocuments} 문서</span>
-                        </div>
+                          );
+                        })()}
                         {/* 성공률 도넛 */}
                         <div className="flex flex-col items-center">
                           <div className="relative w-32 h-32">
@@ -1280,17 +1629,17 @@ export default function ChunkingPage() {
                                 stroke="url(#chunking-success-gradient)"
                                 style={{
                                   strokeDasharray: 2 * Math.PI * 42,
-                                  strokeDashoffset: 2 * Math.PI * 42 - ((stats.chunkingSuccessRate ?? 0) / 100) * 2 * Math.PI * 42,
+                                  strokeDashoffset: 2 * Math.PI * 42 - ((computedStats.chunkingSuccessRate ?? 0) / 100) * 2 * Math.PI * 42,
                                 }}
                                 className="transition-all duration-500 ease-out"
                               />
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                              <span className="text-xl font-bold text-stone-800">{stats.chunkingSuccessRate ?? 0}%</span>
+                              <span className="text-xl font-bold text-stone-800">{computedStats.chunkingSuccessRate ?? 0}%</span>
                               <span className="text-[11px] text-stone-500">성공률</span>
                             </div>
                           </div>
-                          <span className="mt-1 text-xs text-stone-600 font-medium">{stats.chunkedDocuments}/{stats.chunkedDocuments + stats.failedDocuments || 0} 성공</span>
+                          <span className="mt-1 text-xs text-stone-600 font-medium">{computedStats.chunkedDocuments}/{computedStats.chunkedDocuments + computedStats.failedDocuments || 0} 성공</span>
                         </div>
                       </div>
                       {/* 청킹 KPI */}
@@ -1298,58 +1647,71 @@ export default function ChunkingPage() {
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/50 backdrop-blur-sm border border-white/60">
                           <FileText className="w-3 h-3 text-blue-500" />
                           <span className="text-[11px] text-stone-600">텍스트</span>
-                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{stats.textChunks}</span>
+                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{computedStats.textChunks}</span>
                         </div>
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/50 backdrop-blur-sm border border-white/60">
                           <Table className="w-3 h-3 text-purple-500" />
                           <span className="text-[11px] text-stone-600">표</span>
-                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{stats.tableChunks}</span>
+                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{computedStats.tableChunks}</span>
                         </div>
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/50 backdrop-blur-sm border border-white/60">
                           <Hash className="w-3 h-3 text-amber-500" />
                           <span className="text-[11px] text-stone-600">토큰</span>
-                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{formatTokens(stats.totalTokens)}</span>
+                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{formatTokens(computedStats.totalTokens)}</span>
                         </div>
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/50 backdrop-blur-sm border border-white/60">
                           <AlertCircle className="w-3 h-3 text-red-500" />
                           <span className="text-[11px] text-stone-600">실패</span>
-                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{stats.failedDocuments}</span>
+                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{computedStats.failedDocuments}</span>
                         </div>
                       </div>
                     </div>
 
                     {/* 우측 소카드 - 임베딩 */}
                     <div className="flex-1 rounded-xl p-3 flex flex-col bg-white/40 backdrop-blur-md border border-white/60 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9),0_2px_8px_0_rgba(0,0,0,0.04)]">
-                      <span className="text-[11px] font-semibold text-stone-700 mb-2">임베딩</span>
+                      <span className="text-[11px] font-semibold text-stone-700 mb-2">임베딩 {embeddingProcessing && <span className="text-blue-500 animate-pulse">처리 중...</span>}</span>
                       <div className="flex gap-2 justify-center flex-1 items-center">
-                        {/* 진행률 도넛 */}
-                        <div className="flex flex-col items-center">
-                          <div className="relative w-32 h-32">
-                            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                              <defs>
-                                <linearGradient id="embedding-progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                  <stop offset="0%" stopColor="#3B82F6" />
-                                  <stop offset="100%" stopColor="#60A5FA" />
-                                </linearGradient>
-                              </defs>
-                              <circle cx="50" cy="50" r="42" fill="none" stroke="#E7E5E4" strokeWidth="10" />
-                              <circle 
-                                cx="50" cy="50" r="42" fill="none" strokeWidth="10" strokeLinecap="round"
-                                stroke="url(#embedding-progress-gradient)"
-                                style={{
-                                  strokeDasharray: 2 * Math.PI * 42,
-                                  strokeDashoffset: 2 * Math.PI * 42 - (stats.embeddingRate / 100) * 2 * Math.PI * 42,
-                                }}
-                                className="transition-all duration-500 ease-out"
-                              />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                              <span className="text-xl font-bold text-stone-800">{stats.embeddingRate}%</span>
-                              <span className="text-[11px] text-stone-500">진행률</span>
+                        {/* 진행률 도넛 - 진행 중일 때는 직접 상태값 사용 */}
+                        {(() => {
+                          const displayRate = embeddingProcessing && embeddingProgress.total > 0
+                            ? Math.round((embeddingProgress.current / embeddingProgress.total) * 100)
+                            : computedStats.embeddingRate;
+                          const displayEmbeddedChunks = embeddingProcessing 
+                            ? embeddingProgress.current 
+                            : computedStats.embeddedChunks;
+                          const displayTotalChunks = embeddingProcessing && embeddingProgress.total > 0
+                            ? embeddingProgress.total
+                            : computedStats.totalChunks;
+                          return (
+                            <div className="flex flex-col items-center">
+                              <div className="relative w-32 h-32">
+                                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                  <defs>
+                                    <linearGradient id="embedding-progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                      <stop offset="0%" stopColor="#3B82F6" />
+                                      <stop offset="100%" stopColor="#60A5FA" />
+                                    </linearGradient>
+                                  </defs>
+                                  <circle cx="50" cy="50" r="42" fill="none" stroke="#E7E5E4" strokeWidth="10" />
+                                  <circle 
+                                    cx="50" cy="50" r="42" fill="none" strokeWidth="10" strokeLinecap="round"
+                                    stroke="url(#embedding-progress-gradient)"
+                                    style={{
+                                      strokeDasharray: 2 * Math.PI * 42,
+                                      strokeDashoffset: 2 * Math.PI * 42 - (displayRate / 100) * 2 * Math.PI * 42,
+                                    }}
+                                    className={embeddingProcessing ? "transition-all duration-300 ease-out" : "transition-all duration-500 ease-out"}
+                                  />
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                  <span className="text-xl font-bold text-stone-800">{displayRate}%</span>
+                                  <span className="text-[11px] text-stone-500">진행률</span>
+                                </div>
+                              </div>
+                              <span className="mt-1 text-xs text-stone-600 font-medium">{displayEmbeddedChunks.toLocaleString()}/{displayTotalChunks.toLocaleString()} 청크</span>
                             </div>
-                          </div>
-                          <span className="mt-1 text-xs text-stone-600 font-medium">{stats.embeddedChunks}/{stats.totalChunks} 청크</span>
-                        </div>
+                          );
+                        })()}
                         {/* 성공률 도넛 */}
                         <div className="flex flex-col items-center">
                           <div className="relative w-32 h-32">
@@ -1366,13 +1728,13 @@ export default function ChunkingPage() {
                                 stroke="url(#embedding-success-gradient)"
                                 style={{
                                   strokeDasharray: 2 * Math.PI * 42,
-                                  strokeDashoffset: 2 * Math.PI * 42 - ((stats.embeddingSuccessRate ?? 0) / 100) * 2 * Math.PI * 42,
+                                  strokeDashoffset: 2 * Math.PI * 42 - ((computedStats.embeddingSuccessRate ?? 0) / 100) * 2 * Math.PI * 42,
                                 }}
                                 className="transition-all duration-500 ease-out"
                               />
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                              <span className="text-xl font-bold text-stone-800">{stats.embeddingSuccessRate ?? 0}%</span>
+                              <span className="text-xl font-bold text-stone-800">{computedStats.embeddingSuccessRate ?? 0}%</span>
                               <span className="text-[11px] text-stone-500">성공률</span>
                             </div>
                           </div>
@@ -1384,7 +1746,7 @@ export default function ChunkingPage() {
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/50 backdrop-blur-sm border border-white/60">
                           <Zap className="w-3 h-3 text-blue-500" />
                           <span className="text-[11px] text-stone-600">현재</span>
-                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{stats.currentEmbeddingBatch || 0}</span>
+                          <span className="text-[11px] font-semibold text-stone-800 ml-auto">{computedStats.currentEmbeddingBatch || 0}</span>
                         </div>
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/50 backdrop-blur-sm border border-white/60">
                           <CheckCircle2 className="w-3 h-3 text-emerald-500" />
@@ -1454,28 +1816,37 @@ export default function ChunkingPage() {
                   </div>
                 </button>
                 
-                <button
-                  onClick={handleEmbeddingClick}
-                  disabled={embeddingProcessing || (stats?.totalChunks || 0) === 0}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 rounded-xl transition-all text-left h-[70px] backdrop-blur-sm border",
-                    (stats?.totalChunks || 0) > 0
-                      ? "bg-violet-50/80 hover:bg-violet-100/80 text-violet-700 border-violet-200/50 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)]"
-                      : "bg-stone-100/80 text-stone-400 cursor-not-allowed border-stone-200/50"
-                  )}
-                >
-                  {embeddingProcessing ? (
+                {embeddingProcessing ? (
+                  <button
+                    onClick={cancelEmbedding}
+                    className="w-full flex items-center gap-3 px-3 rounded-xl transition-all text-left h-[70px] backdrop-blur-sm border bg-red-50/80 hover:bg-red-100/80 text-red-700 border-red-200/50"
+                  >
                     <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
-                  ) : (
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium block">임베딩 처리 중...</span>
+                      <span className="text-xs opacity-70">클릭하여 취소</span>
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleEmbeddingClick}
+                    disabled={(stats?.totalChunks || 0) === 0}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 rounded-xl transition-all text-left h-[70px] backdrop-blur-sm border",
+                      (stats?.totalChunks || 0) > 0
+                        ? "bg-violet-50/80 hover:bg-violet-100/80 text-violet-700 border-violet-200/50 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.6)]"
+                        : "bg-stone-100/80 text-stone-400 cursor-not-allowed border-stone-200/50"
+                    )}
+                  >
                     <Zap className="w-5 h-5 flex-shrink-0" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium block">임베딩 생성</span>
-                    <span className="text-xs opacity-70">
-                      {stats?.totalChunks || 0}개 청크 {isHuggingFaceModel && "(로컬)"}
-                    </span>
-                  </div>
-                </button>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium block">임베딩 생성</span>
+                      <span className="text-xs opacity-70">
+                        {stats?.totalChunks || 0}개 청크 {isHuggingFaceModel && "(로컬)"}
+                      </span>
+                    </div>
+                  </button>
+                )}
                 
                 <button
                   onClick={handleOpenExportModal}
@@ -1780,14 +2151,25 @@ export default function ChunkingPage() {
                         ChromaDB 미설치. 임베딩은 JSON 파일에 저장됩니다.
                       </p>
                     )}
-                    <button
-                      onClick={handleMigrateToChromaDb}
-                      disabled={migrating || !chromaDbStatus.connected}
-                      className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 transition-colors disabled:opacity-50 text-xs"
-                    >
-                      {migrating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Database className="w-3 h-3" />}
-                      <span className="font-medium">JSON → ChromaDB 마이그레이션</span>
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleMigrateToChromaDb}
+                        disabled={migrating || !chromaDbStatus.connected}
+                        className="flex-1 flex items-center justify-center gap-2 p-2 rounded-lg bg-violet-50 hover:bg-violet-100 text-violet-700 transition-colors disabled:opacity-50 text-xs"
+                      >
+                        {migrating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Database className="w-3 h-3" />}
+                        <span className="font-medium">마이그레이션</span>
+                      </button>
+                      <button
+                        onClick={handleClearEmbeddings}
+                        disabled={clearingEmbeddings || !chromaDbStatus.connected || chromaDbStatus.total_embeddings === 0}
+                        className="flex-1 flex items-center justify-center gap-2 p-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 transition-colors disabled:opacity-50 text-xs"
+                        title="모든 임베딩 삭제 (모델 불일치 시 사용)"
+                      >
+                        {clearingEmbeddings ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                        <span className="font-medium">초기화</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2120,7 +2502,7 @@ export default function ChunkingPage() {
                 <div className="flex justify-between text-sm">
                   <span className="text-stone-600">예상 비용</span>
                   <span className="font-medium text-amber-600">
-                    ~${((stats?.totalTokens || 0) / 1_000_000 * (embeddingSettings.model === "openai-large" ? 0.13 : 0.02)).toFixed(4)}
+                    ~${((computedStats?.totalTokens || 0) / 1_000_000 * (embeddingSettings.model === "openai-large" ? 0.13 : 0.02)).toFixed(4)}
                   </span>
                 </div>
               </div>
@@ -2502,11 +2884,13 @@ function EmbeddingCostModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                           borderRadius: "8px",
                           fontSize: "12px"
                         }}
-                        formatter={(value: number, name: string) => {
-                          if (name === "cost" || name === "비용") return [formatCost(value), "비용"];
-                          if (name === "cumulativeCost" || name === "누적 비용") return [formatCost(value), "누적 비용"];
-                          return [value, name];
-                        }}
+                        formatter={((value: any, name: any) => {
+                          const v = value ?? 0;
+                          const n = name ?? "";
+                          if (n === "cost" || n === "비용") return [formatCost(v), "비용"];
+                          if (n === "cumulativeCost" || n === "누적 비용") return [formatCost(v), "누적 비용"];
+                          return [v, n];
+                        }) as any}
                       />
                       <Legend 
                         wrapperStyle={{ fontSize: "11px" }}

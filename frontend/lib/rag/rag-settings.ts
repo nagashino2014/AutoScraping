@@ -70,6 +70,9 @@ export interface LLMSettings {
   };
 }
 
+// 검색 전략
+export type RetrievalStrategy = "basic" | "hybrid" | "advanced";
+
 // ============================================================
 // 카테고리 2: 벡터 검색 설정
 // ============================================================
@@ -101,11 +104,43 @@ export interface VectorSearchSettings {
     model: string;                  // 리랭킹 모델
     topN: number;                   // 리랭킹 후 최종 결과 수
   };
+  // 고급 검색 설정 (Advanced Retrieval Pipeline)
+  advanced: {
+    strategy: RetrievalStrategy;           // 검색 전략
+    // Query Expansion
+    enableQueryExpansion: boolean;         // 질의 확장 활성화
+    numExpandedQueries: number;            // 확장 쿼리 수 (기본 5)
+    // HyDE (Hypothetical Document Embeddings)
+    enableHyde: boolean;                   // HyDE 활성화
+    numHypotheticalDocs: number;           // 가상 문서 수 (기본 3)
+    // Hybrid Search 세부 설정
+    enableHybrid: boolean;                 // 하이브리드 검색 활성화
+    semanticWeight: number;                // 시맨틱 가중치 (0~1)
+    lexicalWeight: number;                 // 어휘(BM25) 가중치 (0~1)
+    // Reranking 세부 설정
+    enableReranking: boolean;              // Cross-Encoder 리랭킹 활성화
+    rerankTopN: number;                    // 리랭킹 후 결과 수
+    rerankerModel: string;                 // 리랭커 모델명
+  };
 }
 
 // ============================================================
 // 카테고리 3: 이슈 발굴 설정
 // ============================================================
+
+/** 동적 평가 기준 */
+export interface ScoringCriteria {
+  id: string;
+  label: string;                    // 화면 표시명
+  description: string;              // LLM에 주입될 설명
+  examples?: {                      // 좋은/나쁜 사례 (프롬프트 품질 향상)
+    high: string[];
+    low: string[];
+  };
+  weight: number;                   // 0.0 ~ 1.0
+  enabled: boolean;
+}
+
 export interface DiscoverySettings {
   // 클러스터링
   clustering: {
@@ -113,6 +148,7 @@ export interface DiscoverySettings {
     numClusters: number;             // 클러스터 수 (K-Means용)
     minClusterSize: number;          // 최소 클러스터 크기
     distanceMetric: "cosine" | "euclidean";  // 거리 측정
+    sensitivity: number;             // 클러스터링 민감도 (0=느슨, 1=엄격)
   };
   // 이슈 추출
   issueExtraction: {
@@ -120,17 +156,24 @@ export interface DiscoverySettings {
     maxIssues: number;               // 최대 발굴 이슈 수, 기본 15
     minScoreThreshold: number;       // 최소 중요도 점수, 기본 0.6
   };
-  // 중요도 가중치
+  // 중요도 가중치 (기존 호환용)
   scoreWeights: {
     legalMandatory: number;          // 법적 강제성, 기본 0.40
     novelty: number;                 // 신규성, 기본 0.25
     impact: number;                  // 파급력, 기본 0.20
     international: number;           // 국제 동향, 기본 0.15
   };
-  // 키워드 부스팅
+  // 동적 평가 기준 (신규)
+  scoringCriteria: ScoringCriteria[];
+  // 키워드 필터
   keywordBoosting: {
     keywords: string[];              // 가중치 부여 키워드 목록
     boostFactor: number;             // 부스트 계수, 기본 1.5
+  };
+  // 포함/제외 키워드 (신규)
+  keywordFilters: {
+    mustInclude: string[];           // 반드시 포함 (가중치 2배)
+    mustExclude: string[];           // 제외 (검색에서 배제)
   };
 }
 
@@ -287,6 +330,19 @@ export const DEFAULT_RAG_SETTINGS: RAGSettings = {
       model: "cohere-rerank-v3",
       topN: 5,
     },
+    advanced: {
+      strategy: "hybrid",
+      enableQueryExpansion: false,
+      numExpandedQueries: 5,
+      enableHyde: false,
+      numHypotheticalDocs: 3,
+      enableHybrid: true,
+      semanticWeight: 0.5,
+      lexicalWeight: 0.5,
+      enableReranking: true,
+      rerankTopN: 15,
+      rerankerModel: "BAAI/bge-reranker-v2-m3",
+    },
   },
   discovery: {
     clustering: {
@@ -294,6 +350,7 @@ export const DEFAULT_RAG_SETTINGS: RAGSettings = {
       numClusters: 15,
       minClusterSize: 5,
       distanceMetric: "cosine",
+      sensitivity: 0.5,
     },
     issueExtraction: {
       minIssues: 5,
@@ -306,9 +363,59 @@ export const DEFAULT_RAG_SETTINGS: RAGSettings = {
       impact: 0.20,
       international: 0.15,
     },
+    scoringCriteria: [
+      {
+        id: "legal_mandatory",
+        label: "법적 강제성",
+        description: "이 이슈가 기업에게 의무를 부과하거나, 위반 시 제재(과태료, 영업정지 등)가 따르는지 평가하십시오.",
+        examples: {
+          high: ["의무 규정", "과태료 부과", "허가 취소"],
+          low: ["권고 사항", "자율 준수", "가이드라인"],
+        },
+        weight: 0.40,
+        enabled: true,
+      },
+      {
+        id: "novelty",
+        label: "신규성",
+        description: "이 이슈가 새로운 규제나 정책인지, 기존 규제의 개정인지 평가하십시오.",
+        examples: {
+          high: ["신규 제정", "첫 시행", "새로운 기준"],
+          low: ["기존 유지", "단순 재공고", "경미한 수정"],
+        },
+        weight: 0.25,
+        enabled: true,
+      },
+      {
+        id: "impact",
+        label: "파급력",
+        description: "이 이슈가 영향을 미치는 산업/기업의 범위와 강도를 평가하십시오.",
+        examples: {
+          high: ["전 산업", "대규모 투자 필요", "생산 중단"],
+          low: ["특정 업종", "소규모 조정", "행정 절차"],
+        },
+        weight: 0.20,
+        enabled: true,
+      },
+      {
+        id: "international",
+        label: "국제 동향",
+        description: "이 이슈가 국제 기준이나 협약과 관련되어 있는지 평가하십시오.",
+        examples: {
+          high: ["EU 규정 연동", "파리협정", "CBAM"],
+          low: ["국내 고유", "지역 특화", "단일 부처"],
+        },
+        weight: 0.15,
+        enabled: true,
+      },
+    ],
     keywordBoosting: {
       keywords: [],
       boostFactor: 1.5,
+    },
+    keywordFilters: {
+      mustInclude: [],
+      mustExclude: [],
     },
   },
   analysis: {

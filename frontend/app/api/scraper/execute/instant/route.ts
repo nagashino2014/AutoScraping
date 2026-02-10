@@ -6,7 +6,8 @@
 
 import { NextResponse } from "next/server";
 import { readScraperTargets, type Board, type CollectionTargets, type SiteSearchConfig, type BrowserConfig as BrowserSettings } from "@/lib/scraper/targets-store";
-import { exportToXlsx, cleanupTestFiles, type ScrapedArticle } from "@/lib/scraper/xlsx-export";
+import { exportToJson, cleanupTestFiles, type ScrapedArticle } from "@/lib/scraper/xlsx-export";
+import { syncInstantScrapeToDB } from "@/lib/scraper/scraper-db";
 import * as cheerio from "cheerio";
 import fs from "node:fs";
 import path from "node:path";
@@ -1127,7 +1128,7 @@ export async function POST(req: Request) {
   const logs: string[] = [];
   const articles: ScrapedArticle[] = [];
   const downloadedFiles: string[] = [];
-  let xlsxPath = "";
+  let jsonPath = "";
 
   // 다운로드 설정에서 테스트 저장 경로 읽기
   const downloadSettings = await readDownloadSettings();
@@ -1157,6 +1158,9 @@ export async function POST(req: Request) {
     if (!board) {
       return NextResponse.json({ error: "Board not found" }, { status: 404 });
     }
+
+    const org = targetsData.orgs.find((o) => o.org_id === board.org_id);
+    const orgName = org?.org_name || board.org_id;
 
     logs.push(`[INFO] 보드명: ${board.board_name}`);
     logs.push(`[INFO] 목록 URL: ${board.list_url}`);
@@ -1379,18 +1383,18 @@ export async function POST(req: Request) {
     logs.push("");
     logs.push(`── ✅ 스크래핑 완료: ${articles.length}건 ──`);
 
-    // XLSX 파일 저장
+    // JSON 파일 저장 (ExtractedData 경로에 직접 저장)
     if (articles.length > 0) {
       logs.push("");
-      logs.push("── 📄 XLSX 파일 저장 ──");
+      logs.push("── 📄 JSON 파일 저장 (ExtractedData) ──");
       
-      const exportResult = exportToXlsx(articles, board.board_name, SAVE_BASE_DIR);
+      const exportResult = exportToJson(articles, board.board_name, orgName, board.board_id);
       
       if (exportResult.success) {
-        xlsxPath = exportResult.filePath;
+        jsonPath = exportResult.filePath;
         logs.push(`[SUCCESS] 저장 완료: ${exportResult.filePath}`);
       } else {
-        logs.push(`[ERROR] XLSX 저장 실패: ${exportResult.error}`);
+        logs.push(`[ERROR] JSON 저장 실패: ${exportResult.error}`);
       }
     }
 
@@ -1451,6 +1455,29 @@ export async function POST(req: Request) {
       }
     }
 
+    // DB 통계 동기화 (수집 현황 대시보드용)
+    if (articles.length > 0) {
+      try {
+        const dbSyncResult = await syncInstantScrapeToDB({
+          boardId: board_id,
+          orgId: board.org_id,
+          articles: articles.map(a => ({
+            title: a.title,
+            link: a.link,
+            date: a.date,
+            content: a.content,
+            attachments: a.attachments,
+          })),
+          downloadedFiles,
+        });
+        logs.push("");
+        logs.push(`[DB-SYNC] 수집 현황 DB 동기화 완료: ${dbSyncResult.docsAdded}건 추가, ${dbSyncResult.attachmentsAdded}건 첨부`);
+      } catch (dbError) {
+        console.error("[DB-SYNC] 통계 DB 동기화 실패:", dbError);
+        logs.push(`[DB-SYNC] 수집 현황 DB 동기화 실패 (JSON 저장은 정상)`);
+      }
+    }
+
     logs.push("");
     logs.push("========================================");
     logs.push("       🎉 즉시 실행 완료");
@@ -1458,7 +1485,7 @@ export async function POST(req: Request) {
     logs.push(`[SUMMARY]`);
     logs.push(`  - 수집 게시글: ${articles.length}건`);
     logs.push(`  - 다운로드 첨부파일: ${downloadedFiles.length}건`);
-    logs.push(`  - XLSX 파일: ${xlsxPath || "(없음)"}`);
+    logs.push(`  - JSON 파일: ${jsonPath || "(없음)"}`);
     logs.push(`  - 첨부파일 경로: ${ATTACHMENT_DIR}`);
 
     return NextResponse.json({
@@ -1467,7 +1494,7 @@ export async function POST(req: Request) {
       boardName: board.board_name,
       articlesCount: articles.length,
       attachmentsCount: downloadedFiles.length,
-      xlsxPath,
+      jsonPath,
       attachmentDir: ATTACHMENT_DIR,
       downloadedFiles,
       logs: logs.join("\n"),
@@ -1494,17 +1521,17 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const body = await req.json();
-    const { xlsxPath, attachmentDir } = body;
+    const { xlsxPath, jsonPath, attachmentDir } = body;
 
     // 다운로드 설정에서 테스트 저장 경로 읽기
     const downloadSettings = await readDownloadSettings();
     const { documentsPath: DEFAULT_SAVE_DIR, attachmentsPath: DEFAULT_ATTACHMENT_DIR } = resolveTestPath(downloadSettings);
 
-    // xlsxPath가 없으면 설정된 테스트 디렉토리 사용
-    const xlsxTarget = xlsxPath || DEFAULT_SAVE_DIR;
+    // 데이터 파일 경로: jsonPath > xlsxPath > 기본 디렉토리
+    const dataFileTarget = jsonPath || xlsxPath || DEFAULT_SAVE_DIR;
     const attachTarget = attachmentDir || DEFAULT_ATTACHMENT_DIR;
 
-    const result = cleanupTestFiles(xlsxTarget, attachTarget);
+    const result = cleanupTestFiles(dataFileTarget, attachTarget);
 
     return NextResponse.json({
       success: result.success,

@@ -9,6 +9,7 @@
  */
 
 import * as cheerio from "cheerio";
+import { parseStringPromise } from "xml2js";
 import {
   getDbAsync,
   generateDocId,
@@ -67,6 +68,43 @@ export interface WebConfig {
     years?: number[];
   };
   collect_body?: boolean;
+
+  // 외부 상세 링크 추적 (상세 페이지에서 외부 사이트로의 링크를 따라가 본문/첨부 수집)
+  external_detail?: {
+    enabled: boolean;
+    // 외부 링크 감지 방법 (우선순위: url_selector → label_selector → url_pattern)
+    url_selector?: string;       // CSS 선택자 (예: "a[href*='law.go.kr/DRF']")
+    url_pattern?: string;        // URL 정규식 패턴 (예: "law\\.go\\.kr/DRF")
+    label_selector?: string;     // 링크 라벨 선택자 (예: "dt:contains('법령상세링크')")
+
+    // 외부 페이지 콘텐츠 처리 모드
+    mode: "html" | "api_xml";    // HTML 파싱 vs XML API 응답 파싱
+
+    // HTML 모드용
+    content_selector?: string;   // 외부 페이지 본문 선택자
+    attachments_selector?: string;
+
+    // API XML 모드용 (law.go.kr DRF 전용)
+    api_xml?: {
+      type_param?: string;       // URL의 type 파라미터를 변경 (예: "XML")
+      content_fields?: string[]; // 본문으로 사용할 XML 필드 목록
+      attachment_fields?: {      // 첨부파일 관련 XML 필드
+        url_field: string;       // 다운로드 URL 필드
+        name_field: string;      // 파일명 필드
+      }[];
+    };
+
+    // URL 변환 (DRF API URL → 공개 페이지 URL 등)
+    url_transform?: {
+      extract_param: string;     // URL 쿼리 파라미터에서 추출할 값 (예: "ID")
+      template: string;          // 변환 URL 템플릿 (예: "https://www.law.go.kr/LSW/admRulInfoR.do?admRulSeq={ID}")
+    };
+
+    // 중간 상세 페이지에서 메타데이터 추가 추출
+    metadata_selectors?: {
+      [key: string]: string;     // 필드명: CSS 선택자
+    };
+  };
 }
 
 export interface ScrapingItem {
@@ -267,12 +305,14 @@ export function checkCollectionRange(
       
       const itemYear = itemDate.getFullYear();
       
-      // 대상 연도 목록에 포함되어 있으면 수집
-      if (range.years.includes(itemYear)) return true;
-      
       // 대상 연도 중 가장 오래된 연도보다 이전이면 중단
       const minYear = Math.min(...range.years);
       if (itemYear < minYear) return "stop";
+      
+      // 대상 연도 목록에 포함되지 않으면 건너뛰기
+      if (!range.years.includes(itemYear)) return false;
+      
+      return true;
       
       return false;
     }
@@ -474,6 +514,7 @@ export function parseListPage(
 export interface DetailPageResult {
   content: string;
   attachments: { fileName: string; downloadUrl: string }[];
+  metadata?: { [key: string]: string };  // 외부 상세 링크 메타데이터
 }
 
 /**
@@ -504,6 +545,251 @@ function looksLikeAttachmentName(text: string): boolean {
   ];
   if (exts.some((e) => t.includes(e))) return true;
   return /\(\s*[\d.]+\s*[kmg]b\s*\)\s*$/i.test(text || "");
+}
+
+// ============================================================
+// 외부 상세 링크 추적 함수
+// ============================================================
+
+/**
+ * URL에서 jsessionid를 제거 (다른 사이트의 세션 ID가 외부 요청에 포함되지 않도록)
+ * 예: /path;jsessionid=ABC123?param=value → /path?param=value
+ */
+function stripJsessionId(url: string): string {
+  return url.replace(/;jsessionid=[^?&]*/gi, "");
+}
+
+/**
+ * 상세 페이지 HTML에서 외부 상세 링크 URL 추출
+ * 우선순위: url_selector → label_selector → url_pattern
+ */
+function extractExternalDetailUrl(
+  $: cheerio.CheerioAPI,
+  baseUrl: string,
+  config: NonNullable<WebConfig["external_detail"]>
+): string | null {
+  // 방법 1: CSS 선택자로 직접 추출 (가장 확실)
+  if (config.url_selector) {
+    const href = $(config.url_selector).first().attr("href");
+    if (href) {
+      console.log(`[extractExternalDetailUrl] url_selector 매칭: ${href.slice(0, 80)}...`);
+      return stripJsessionId(resolveUrl(baseUrl, href));
+    }
+  }
+
+  // 방법 2: 라벨 주변에서 링크 추출
+  // <dl>/<dt>/<dd> 구조 (mcee.go.kr) 및 <table>/<th>/<td> 구조 모두 지원
+  if (config.label_selector) {
+    const $label = $(config.label_selector).first();
+    if ($label.length > 0) {
+      const $link = $label.next("dd").find("a[href]")           // <dt> → 인접 <dd> 내 <a>
+        .add($label.closest("tr").find("td a[href]"))           // <th>/<td> 구조 fallback
+        .add($label.parent().find("a[href]"));                  // 일반 부모 탐색 fallback
+      const href = $link.first().attr("href");
+      if (href) {
+        console.log(`[extractExternalDetailUrl] label_selector 매칭: ${href.slice(0, 80)}...`);
+        return stripJsessionId(resolveUrl(baseUrl, href));
+      }
+    }
+  }
+
+  // 방법 3: URL 패턴 매칭 (모든 <a> 태그에서 검색)
+  if (config.url_pattern) {
+    const re = new RegExp(config.url_pattern);
+    let found: string | null = null;
+    $("a[href]").each((_, el) => {
+      const href = $(el).attr("href") || "";
+      if (re.test(href)) {
+        console.log(`[extractExternalDetailUrl] url_pattern 매칭: ${href.slice(0, 80)}...`);
+        found = stripJsessionId(resolveUrl(baseUrl, href));
+        return false; // break
+      }
+    });
+    if (found) return found;
+  }
+
+  console.log(`[extractExternalDetailUrl] 외부 링크 미발견`);
+  return null;
+}
+
+/**
+ * 외부 상세 페이지를 XML API로 조회 (law.go.kr DRF 전용)
+ * type=HTML → type=XML 변환 후 구조화된 데이터 파싱
+ */
+async function fetchExternalDetailAsXml(
+  url: string,
+  config: NonNullable<WebConfig["external_detail"]>
+): Promise<{ content: string; attachments: DetailPageResult["attachments"] }> {
+  // type 파라미터를 XML로 변환
+  let xmlUrl = url;
+  if (config.api_xml?.type_param) {
+    xmlUrl = url.replace(/([?&])type=[^&]*/i, `$1type=${config.api_xml.type_param}`);
+    // type 파라미터가 없으면 추가
+    if (xmlUrl === url && !url.includes("type=")) {
+      xmlUrl += (url.includes("?") ? "&" : "?") + `type=${config.api_xml.type_param}`;
+    }
+  }
+
+  console.log(`[fetchExternalDetailAsXml] XML 요청: ${xmlUrl.slice(0, 100)}...`);
+
+  const xmlText = await fetchHtml(xmlUrl);
+
+  // XML 파싱 실패 시 빈 결과 반환
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = await parseStringPromise(xmlText, {
+      explicitArray: false,
+      ignoreAttrs: false,
+      mergeAttrs: true,
+      trim: true,
+      normalize: true,
+      normalizeTags: false,
+    });
+  } catch (err) {
+    console.log(`[fetchExternalDetailAsXml] XML 파싱 실패: ${err instanceof Error ? err.message : String(err)}`);
+    return { content: "", attachments: [] };
+  }
+
+  // 루트 요소 추출 (행정규칙, 법령 등)
+  const rootCandidates = ["행정규칙", "법령", "자치법규", "판례", "헌재결정례"];
+  let root: Record<string, unknown> | null = null;
+  for (const key of rootCandidates) {
+    if (parsed[key] && typeof parsed[key] === "object") {
+      root = parsed[key] as Record<string, unknown>;
+      break;
+    }
+  }
+  // 최상위 키가 1개뿐이면 그 값을 루트로 사용
+  if (!root) {
+    const keys = Object.keys(parsed);
+    if (keys.length === 1 && typeof parsed[keys[0]] === "object") {
+      root = parsed[keys[0]] as Record<string, unknown>;
+    }
+  }
+  if (!root) {
+    console.log(`[fetchExternalDetailAsXml] 루트 요소 미발견`);
+    return { content: "", attachments: [] };
+  }
+
+  // 본문 추출 (조문 필드들 결합)
+  const contentFields = config.api_xml?.content_fields || ["조문내용"];
+  let content = "";
+  for (const field of contentFields) {
+    const value = root[field];
+    if (value && typeof value === "string") {
+      content += value + "\n";
+    } else if (value && typeof value === "object") {
+      // 배열이거나 중첩 객체인 경우 JSON 문자열로 변환
+      content += JSON.stringify(value, null, 2) + "\n";
+    }
+  }
+  content = content.trim();
+  console.log(`[fetchExternalDetailAsXml] 본문 추출: ${content.length}자`);
+
+  // 첨부파일 추출
+  const attachments: DetailPageResult["attachments"] = [];
+  for (const mapping of config.api_xml?.attachment_fields || []) {
+    const fileUrl = root[mapping.url_field];
+    const fileName = root[mapping.name_field];
+    if (fileUrl && typeof fileUrl === "string" && fileUrl.trim()) {
+      // 복수 파일이 구분자로 나뉘어 있을 수 있음
+      const urls = fileUrl.split(/[,;|\n]/).map(u => u.trim()).filter(Boolean);
+      const names = (typeof fileName === "string" ? fileName : "").split(/[,;|\n]/).map(n => n.trim()).filter(Boolean);
+
+      for (let i = 0; i < urls.length; i++) {
+        attachments.push({
+          fileName: names[i] || `attachment_${i + 1}`,
+          downloadUrl: urls[i],
+        });
+      }
+    }
+  }
+  console.log(`[fetchExternalDetailAsXml] 첨부파일 ${attachments.length}개 발견`);
+
+  return { content, attachments };
+}
+
+/**
+ * 외부 상세 페이지를 HTML로 조회 (범용 모드)
+ */
+async function fetchExternalDetailAsHtml(
+  url: string,
+  config: NonNullable<WebConfig["external_detail"]>
+): Promise<{ content: string; attachments: DetailPageResult["attachments"] }> {
+  console.log(`[fetchExternalDetailAsHtml] HTML 요청: ${url.slice(0, 100)}...`);
+
+  const html = await fetchHtml(url);
+  const $ = cheerio.load(html);
+
+  // 본문 추출
+  let content = "";
+  if (config.content_selector) {
+    const $content = $(config.content_selector).first();
+    if ($content.length > 0) {
+      $content.find("script, style, nav, header, footer").remove();
+      content = cleanText($content.text());
+    }
+  }
+  if (!content) {
+    // fallback: body 텍스트
+    $("script, style, nav, header, footer").remove();
+    content = cleanText($("body").text()).slice(0, 10000);
+  }
+
+  // 첨부파일 추출
+  const attachments: DetailPageResult["attachments"] = [];
+  const seenUrls = new Set<string>();
+
+  const attachSelector = config.attachments_selector ||
+    "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.docx'], a[href*='.xls'], a[href*='.xlsx'], a[href*='download'], a[href*='fileDown']";
+
+  $(attachSelector).each((_, el) => {
+    const $a = $(el);
+    const href = $a.attr("href") || "";
+    if (!href) return;
+
+    const downloadUrl = resolveUrl(url, href);
+    if (seenUrls.has(downloadUrl)) return;
+    seenUrls.add(downloadUrl);
+
+    let fileName = cleanText($a.text());
+    if (!fileName) {
+      const imgAlt = $a.find("img").first().attr("alt") || "";
+      try {
+        const urlParams = new URLSearchParams(href.split("?")[1] || "");
+        const flNm = urlParams.get("flNm");
+        if (flNm) {
+          const ext = imgAlt.match(/HWP/i) ? ".hwp" : imgAlt.match(/PDF/i) ? ".pdf" : imgAlt.match(/DOC/i) ? ".doc" : "";
+          fileName = flNm + ext;
+        } else {
+          fileName = imgAlt || href.split("/").pop()?.split("?")[0] || "unknown";
+        }
+      } catch {
+        fileName = imgAlt || href.split("/").pop()?.split("?")[0] || "unknown";
+      }
+    }
+    attachments.push({ fileName, downloadUrl });
+  });
+
+  console.log(`[fetchExternalDetailAsHtml] 본문 ${content.length}자, 첨부 ${attachments.length}개`);
+  return { content, attachments };
+}
+
+/**
+ * 상세 페이지 HTML에서 메타데이터 추출
+ */
+function extractMetadataFromDetailPage(
+  $: cheerio.CheerioAPI,
+  selectors: { [key: string]: string }
+): { [key: string]: string } {
+  const metadata: { [key: string]: string } = {};
+  for (const [key, selector] of Object.entries(selectors)) {
+    const text = cleanText($(selector).first().text());
+    if (text) {
+      metadata[key] = text;
+    }
+  }
+  return metadata;
 }
 
 /**
@@ -703,7 +989,71 @@ export async function parseDetailPage(
     }
   }
   
-  return { content, attachments };
+  // ============================================================
+  // 외부 상세 링크 추적 (external_detail)
+  // ============================================================
+  let metadata: { [key: string]: string } | undefined;
+  
+  if (config.external_detail?.enabled) {
+    console.log(`[parseDetailPage] 외부 상세 링크 추적 활성화됨 (mode: ${config.external_detail.mode})`);
+    
+    // 중간 상세 페이지에서 메타데이터 추출
+    if (config.external_detail.metadata_selectors) {
+      metadata = extractMetadataFromDetailPage($, config.external_detail.metadata_selectors);
+      if (Object.keys(metadata).length > 0) {
+        console.log(`[parseDetailPage] 메타데이터 추출: ${JSON.stringify(metadata)}`);
+      }
+    }
+    
+    // 외부 URL 추출
+    let externalUrl = extractExternalDetailUrl($, url, config.external_detail);
+    
+    // URL 변환 (DRF API URL → 공개 페이지 URL 등)
+    if (externalUrl && config.external_detail.url_transform) {
+      try {
+        const urlObj = new URL(externalUrl);
+        const paramValue = urlObj.searchParams.get(config.external_detail.url_transform.extract_param);
+        if (paramValue) {
+          externalUrl = config.external_detail.url_transform.template.replace(
+            `{${config.external_detail.url_transform.extract_param}}`, paramValue
+          );
+          console.log(`[parseDetailPage] URL 변환됨: ${externalUrl.slice(0, 120)}...`);
+        }
+      } catch (e) {
+        console.log(`[parseDetailPage] URL 변환 실패: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    
+    if (externalUrl) {
+      try {
+        if (config.external_detail.mode === "api_xml") {
+          // XML API 모드 (law.go.kr DRF 등)
+          const xmlResult = await fetchExternalDetailAsXml(externalUrl, config.external_detail);
+          if (xmlResult.content) {
+            content = xmlResult.content;
+          }
+          if (xmlResult.attachments.length > 0) {
+            attachments.push(...xmlResult.attachments);
+          }
+        } else {
+          // HTML 모드 (범용)
+          const htmlResult = await fetchExternalDetailAsHtml(externalUrl, config.external_detail);
+          if (htmlResult.content) {
+            content = htmlResult.content;
+          }
+          if (htmlResult.attachments.length > 0) {
+            attachments.push(...htmlResult.attachments);
+          }
+        }
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.log(`[parseDetailPage] 외부 상세 링크 처리 실패: ${errorMessage}`);
+        // 외부 링크 실패 시에도 중간 페이지에서 추출한 내용은 유지
+      }
+    }
+  }
+  
+  return { content, attachments, metadata };
 }
 
 // ============================================================
@@ -869,6 +1219,7 @@ export async function runScraper(options: ScrapingOptions): Promise<ScrapeResult
         // 상세 페이지 처리
         let content = "";
         let attachments: DetailPageResult["attachments"] = [];
+        let detailMetadata: { [key: string]: string } | undefined;
         
         if (webConfig.collect_body || webConfig.attachments?.enabled) {
           try {
@@ -877,6 +1228,7 @@ export async function runScraper(options: ScrapingOptions): Promise<ScrapeResult
             const detail = await parseDetailPage(item.link, webConfig);
             content = detail.content;
             attachments = detail.attachments;
+            detailMetadata = detail.metadata;
             console.log(`[runScraper]            ✓ 상세 완료: 본문 ${content.length}자, 첨부 ${attachments.length}개`);
           } catch (err: unknown) {
             const errorMessage = err instanceof Error ? err.message : String(err);
@@ -902,6 +1254,7 @@ export async function runScraper(options: ScrapingOptions): Promise<ScrapeResult
           metadata: {
             author: item.author,
             raw_date: item.date,
+            ...detailMetadata,
           },
         };
         

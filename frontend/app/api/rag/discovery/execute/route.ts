@@ -17,6 +17,8 @@ import {
   DEFAULT_DISCOVERY_CONFIG,
 } from "@/lib/rag/discovery-store";
 import { loadRAGSettings } from "@/lib/rag/rag-settings";
+import { loadProfile, generateProfileContext, SiteProfile } from "@/lib/rag/site-profile";
+import { generateOptionsContext } from "@/lib/rag/analysis-options";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -25,6 +27,8 @@ const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
 interface ExecuteRequest {
   name?: string;
+  profileId?: string;  // 사업장 프로파일 ID (선택)
+  analysisOptions?: Record<string, string[]>;  // 분석 옵션 (카테고리별 선택된 옵션 ID)
   filter?: {
     dateRange?: { start: string; end: string };
     orgs?: string[];
@@ -35,12 +39,8 @@ interface ExecuteRequest {
     numIssues?: number;
     numClusters?: number;
     minClusterSize?: number;
-    scoreWeights?: {
-      legalMandatory: number;
-      novelty: number;
-      impact: number;
-      international: number;
-    };
+    scoreWeights?: Record<string, number>;
+    scoringCriteria?: Array<{ id: string; label: string; description: string; weight: number }>;
   };
 }
 
@@ -60,8 +60,29 @@ export async function POST(request: NextRequest) {
         // 요청 파싱
         const body: ExecuteRequest = await request.json();
         
+        // 프로파일 로드 (선택적)
+        let profile: SiteProfile | null = null;
+        let profileContext: string = "";
+        if (body.profileId) {
+          profile = loadProfile(body.profileId);
+          if (profile) {
+            profileContext = generateProfileContext(profile);
+            send({
+              type: "profile_loaded",
+              profileName: profile.name,
+            });
+          }
+        }
+        
+        // 분석 옵션 컨텍스트 생성
+        let optionsContext: string = "";
+        if (body.analysisOptions) {
+          optionsContext = generateOptionsContext(body.analysisOptions);
+        }
+        
         // 세션 생성
-        const sessionName = body.name || `이슈 발굴 ${new Date().toLocaleString("ko-KR")}`;
+        const sessionName = body.name || 
+          (profile ? `${profile.name} - 이슈 발굴` : `이슈 발굴 ${new Date().toLocaleString("ko-KR")}`);
         const config = {
           ...DEFAULT_DISCOVERY_CONFIG,
           ...body.config,
@@ -120,7 +141,9 @@ export async function POST(request: NextRequest) {
         
         // Step 3: LLM 기반 요약 및 평가 (선택적)
         const ragSettings = loadRAGSettings();
-        const llmApiKey = ragSettings.llm.apiKeys.openai;
+        
+        // 환경 변수에서 API 키 자동 로드 (우선순위: 환경변수 > 설정파일)
+        const llmApiKey = process.env.OPENAI_API_KEY || ragSettings.llm.apiKeys.openai;
         const llmModel = ragSettings.llm.models.discovery;
         
         let issues = discoveryResult.issues;
@@ -141,7 +164,7 @@ export async function POST(request: NextRequest) {
             });
             
             try {
-              const llmResult = await summarizeWithLLM(issue, llmApiKey, llmModel);
+              const llmResult = await summarizeWithLLM(issue, llmApiKey, llmModel, profileContext, optionsContext, body.config?.scoringCriteria);
               if (llmResult) {
                 issues[i] = {
                   ...issue,
@@ -268,10 +291,42 @@ function buildWhereClause(filter?: ExecuteRequest["filter"]): any {
 async function summarizeWithLLM(
   issue: any,
   apiKey: string,
-  model: string
+  model: string,
+  profileContext?: string,
+  optionsContext?: string,
+  scoringCriteria?: Array<{ id: string; label: string; description: string; weight: number }>
 ): Promise<{ title: string; summary: string; scores: any; inputTokens: number; outputTokens: number } | null> {
-  const prompt = `다음 정책/규제 클러스터를 분석해 주세요.
+  // 프로파일 컨텍스트가 있으면 포함
+  const profileSection = profileContext ? `
+## 사업장 프로파일 (분석 관점)
+${profileContext}
 
+이 사업장 관점에서 해당 이슈의 영향도와 대응 필요성을 평가해 주세요.
+` : "";
+
+  // 분석 옵션 컨텍스트가 있으면 포함
+  const optionsSection = optionsContext ? `
+${optionsContext}
+` : "";
+
+  // 동적 평가 기준 (scoringCriteria가 있으면 사용, 없으면 기본 4개 사용)
+  let criteriaListText: string;
+  let scoresJsonTemplate: string;
+  if (scoringCriteria && scoringCriteria.length > 0) {
+    criteriaListText = scoringCriteria.map(c => `   - ${c.id}: ${c.label} (${c.description})`).join("\n");
+    const scoresObj: Record<string, number> = {};
+    scoringCriteria.forEach(c => { scoresObj[c.id] = 0.0; });
+    scoresJsonTemplate = JSON.stringify(scoresObj);
+  } else {
+    criteriaListText = `   - legalMandatory: 법적 강제성
+   - novelty: 신규성
+   - impact: 파급력
+   - international: 국제 동향`;
+    scoresJsonTemplate = `{"legalMandatory": 0.0, "novelty": 0.0, "impact": 0.0, "international": 0.0}`;
+  }
+
+  const prompt = `다음 정책/규제 클러스터를 분석해 주세요.
+${profileSection}${optionsSection}
 ## 키워드
 ${(issue.keywords || []).slice(0, 10).join(", ")}
 
@@ -283,15 +338,12 @@ ${(issue.sources || []).map((s: any) => `- ${s.orgName} / ${s.boardName}`).join(
 
 ## 요청
 1. 이슈 제목 (20자 이내, 핵심만)
-2. 요약 (2-3문장)
+2. 요약 (2-3문장)${profileContext ? '\n3. 사업장 영향 분석 (1문장)' : ''}
 3. 중요도 점수 (각 0.0~1.0):
-   - legalMandatory: 법적 강제성
-   - novelty: 신규성
-   - impact: 파급력
-   - international: 국제 동향
+${criteriaListText}
 
 JSON으로 응답:
-{"title": "...", "summary": "...", "scores": {"legalMandatory": 0.0, "novelty": 0.0, "impact": 0.0, "international": 0.0}}`;
+{"title": "...", "summary": "...", ${profileContext ? '"siteImpact": "...",' : ''}"scores": ${scoresJsonTemplate}}`;
 
   try {
     const modelName = model.includes("5-mini") ? "gpt-4o-mini" : "gpt-4o";

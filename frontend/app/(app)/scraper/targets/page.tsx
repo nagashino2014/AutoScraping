@@ -11,38 +11,28 @@ import {
   Globe,
   HelpCircle,
   Image as ImageIcon,
-  Megaphone,
-  Newspaper,
   Pencil,
   Plus,
   RefreshCw,
-  Scale,
   Save,
-  ScrollText,
   Trash2,
   Workflow,
 } from "lucide-react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
+// 타입, 유틸리티, 컴포넌트 import
+import type { Organization, Board, JsonFileInfo } from "./types";
+import { jsonFetch } from "./utils";
+import { DocTypeIcon } from "./components";
+
+// 로컬 타입 정의 (아직 types.ts에 없는 것들)
 type OrgStatus = "active" | "inactive";
 type CollectionMode = "web_scraping" | "api_only" | "hybrid";
 type OrganizationType = "국가기관" | "유관기관" | "협회 및 학회";
-
 type OrgPolicy = { rps: number; timeout_sec: number };
-type Organization = {
-  org_id: string;
-  org_name: string;
-  base_url: string;
-  status: OrgStatus;
-  default_policy: OrgPolicy;
-  notes?: string;
-  collection_mode?: CollectionMode;
-  org_type?: OrganizationType;
-  logo_path?: string;
-  api_profile?: Record<string, unknown>;
-};
 
+// 로컬 타입 정의 (page에서 사용하는 추가 타입)
 type BoardAccessMode = "api" | "static_html" | "dynamic_js" | "login_required";
 type BoardMode = "web_scraping" | "api" | "hybrid";
 type DedupKey = "url" | "id" | "hash";
@@ -76,94 +66,6 @@ type ScheduleConfig = {
   hour?: string;
   minute?: string;
 };
-
-type Board = {
-  board_id: string;
-  org_id: string;
-  board_name: string;
-  access_mode: BoardAccessMode;
-  list_url?: string;
-  doc_type?: string;
-  domain_tags?: string[];
-  enabled: boolean;
-
-  board_mode?: BoardMode;
-  schedule_cron?: string;
-  schedule_timezone?: string;
-  schedule_config?: ScheduleConfig;
-  dedup_key?: DedupKey;
-  collection_range?: CollectionRange;
-  collection_targets?: CollectionTargets;
-  published_date_rule?: Record<string, unknown>;
-  web_config?: Record<string, unknown>;
-  api_config?: Record<string, unknown>;
-  hybrid_config?: Record<string, unknown>;
-  site_search_config?: {
-    form_selector?: string;
-    submit_selector?: string;
-    submit_type: "form" | "url_param" | "ajax";
-    options: {
-      type: "select" | "text" | "date" | "radio" | "checkbox";
-      name: string;
-      label: string;
-      selector: string;
-      options?: { value: string; label: string }[];
-      placeholder?: string;
-      default_value?: string;
-      selected_value?: string;
-    }[];
-  };
-  attachment_config?: {
-    pattern_type: "standard_href" | "onclick_fndownload" | "onclick_javascript" | "file_area_button" | "auto";
-    container_selector?: string;
-    link_selector?: string;
-    filename_selector?: string;
-    onclick_function?: string;
-    download_url_pattern?: string;
-  };
-  // 헤드리스 브라우저 설정 (dynamic_js 모드에서 사용)
-  browser_config?: {
-    browser_type?: "chromium" | "chrome" | "msedge";
-    headless?: boolean;
-    wait_time?: number;
-    wait_for_selector?: string;
-  };
-};
-
-function DocTypeIcon({ doc_type }: { doc_type?: string }) {
-  const t = (doc_type ?? "").trim();
-  if (!t) return <FileText className="w-4 h-4 text-stone-500" />;
-  if (t === "보도자료") return <Newspaper className="w-4 h-4 text-blue-700" />;
-  if (t === "공지") return <Megaphone className="w-4 h-4 text-amber-700" />;
-  if (t === "고시·훈령·예규") return <ScrollText className="w-4 h-4 text-emerald-700" />;
-  if (t === "입법예고") return <Megaphone className="w-4 h-4 text-orange-700" />;
-  if (t === "법령") return <Scale className="w-4 h-4 text-indigo-700" />;
-  if (t === "기술문서") return <FileText className="w-4 h-4 text-rose-700" />;
-  if (t === "정책") return <FileText className="w-4 h-4 text-teal-700" />;
-  if (t === "연보·월보") return <FileText className="w-4 h-4 text-cyan-700" />;
-  if (t === "통계자료") return <FileText className="w-4 h-4 text-purple-700" />;
-  if (t === "산업동향") return <FileText className="w-4 h-4 text-fuchsia-700" />;
-  return <FileText className="w-4 h-4 text-stone-500" />;
-}
-
-async function jsonFetch<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-  const ct = res.headers.get("content-type") ?? "";
-  if (!ct.toLowerCase().includes("application/json")) {
-    // 로그인 리다이렉트(HTML) 등 JSON이 아닌 응답을 조기에 감지
-    const text = await res.text().catch(() => "");
-    throw new Error(text ? "non_json_response" : "invalid_response");
-  }
-  const data = (await res.json().catch(() => ({}))) as any;
-  if (!res.ok) {
-    const msg = data?.error ? String(data.error) : "request_failed";
-    throw new Error(msg);
-  }
-  return data as T;
-}
 
 export default function ScraperTargetsPage() {
   const [loading, setLoading] = useState(false);
@@ -490,6 +392,16 @@ export default function ScraperTargetsPage() {
   const [downloadUrlDetectionLog, setDownloadUrlDetectionLog] = useState<string>("");
   const [webConfigText, setWebConfigText] = useState<string>("");
   const [webConfigRefinePrompt, setWebConfigRefinePrompt] = useState<string>("");
+  
+  // 외부 상세 링크 설정 state
+  const [externalDetailEnabled, setExternalDetailEnabled] = useState(false);
+  const [externalDetailUrlSelector, setExternalDetailUrlSelector] = useState("");
+  const [externalDetailMode, setExternalDetailMode] = useState<"html" | "api_xml">("html");
+  const [externalDetailContentSelector, setExternalDetailContentSelector] = useState("");
+  const [externalDetailAttachmentsSelector, setExternalDetailAttachmentsSelector] = useState("");
+  const [externalDetailUrlTransformEnabled, setExternalDetailUrlTransformEnabled] = useState(false);
+  const [externalDetailExtractParam, setExternalDetailExtractParam] = useState("");
+  const [externalDetailTemplate, setExternalDetailTemplate] = useState("");
   const [scrapingTestLog, setScrapingTestLog] = useState<string>("");
   const [scrapingTesting, setScrapingTesting] = useState(false);
   const [webConfigGenerating, setWebConfigGenerating] = useState(false);
@@ -1139,7 +1051,19 @@ export default function ScraperTargetsPage() {
     setScrapingTesting(true);
     setScrapingTestLog("스크래핑 테스트 시작...\n");
     try {
-      const configToUse = currentMode === "hybrid" ? hybridConfigText : webConfigText;
+      let configToUse = currentMode === "hybrid" ? hybridConfigText : webConfigText;
+      
+      // 외부 상세 링크 설정을 config에 병합
+      if (externalDetailEnabled && configToUse) {
+        try {
+          const parsed = JSON.parse(configToUse);
+          const merged = mergeExternalDetailToWebConfig(parsed);
+          configToUse = JSON.stringify(merged, null, 2);
+        } catch {
+          // JSON 파싱 실패 시 그대로 사용
+        }
+      }
+      
       const res = await fetch("/api/scraper/targets/boards/test-scraping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1211,11 +1135,12 @@ export default function ScraperTargetsPage() {
         throw new Error(data.error || "config 생성 실패");
       }
       if (data.web_config) {
-        setWebConfigText(
-          typeof data.web_config === "string"
-            ? data.web_config
-            : JSON.stringify(data.web_config, null, 2)
-        );
+        // 생성된 config에 external_detail UI 상태 병합
+        let generatedConfig = typeof data.web_config === "string"
+          ? JSON.parse(data.web_config)
+          : data.web_config;
+        generatedConfig = mergeExternalDetailToWebConfig(generatedConfig) || generatedConfig;
+        setWebConfigText(JSON.stringify(generatedConfig, null, 2));
       }
     } catch (err: any) {
       alert(`config 생성 오류: ${err.message}`);
@@ -1365,6 +1290,35 @@ export default function ScraperTargetsPage() {
       nextDraft.published_date_rule ? JSON.stringify(nextDraft.published_date_rule, null, 2) : ""
     );
     setWebConfigText(nextDraft.web_config ? JSON.stringify(nextDraft.web_config, null, 2) : "");
+    
+    // 외부 상세 링크 설정 복원
+    const extDetail = (nextDraft.web_config as any)?.external_detail;
+    if (extDetail?.enabled) {
+      setExternalDetailEnabled(true);
+      setExternalDetailUrlSelector(extDetail.url_selector || "");
+      setExternalDetailMode(extDetail.mode || "html");
+      setExternalDetailContentSelector(extDetail.content_selector || "");
+      setExternalDetailAttachmentsSelector(extDetail.attachments_selector || "");
+      if (extDetail.url_transform) {
+        setExternalDetailUrlTransformEnabled(true);
+        setExternalDetailExtractParam(extDetail.url_transform.extract_param || "");
+        setExternalDetailTemplate(extDetail.url_transform.template || "");
+      } else {
+        setExternalDetailUrlTransformEnabled(false);
+        setExternalDetailExtractParam("");
+        setExternalDetailTemplate("");
+      }
+    } else {
+      setExternalDetailEnabled(false);
+      setExternalDetailUrlSelector("");
+      setExternalDetailMode("html");
+      setExternalDetailContentSelector("");
+      setExternalDetailAttachmentsSelector("");
+      setExternalDetailUrlTransformEnabled(false);
+      setExternalDetailExtractParam("");
+      setExternalDetailTemplate("");
+    }
+    
     setApiConfigText(nextDraft.api_config ? JSON.stringify(nextDraft.api_config, null, 2) : "");
     setHybridConfigText(
       nextDraft.hybrid_config ? JSON.stringify(nextDraft.hybrid_config, null, 2) : ""
@@ -1601,6 +1555,31 @@ export default function ScraperTargetsPage() {
       return obj as Record<string, unknown>;
     } catch {
       throw new Error(`${fieldLabel} JSON 형식이 올바르지 않습니다.`);
+    }
+  };
+
+  // web_config에 external_detail 설정 병합
+  const mergeExternalDetailToWebConfig = (config: Record<string, unknown> | undefined): Record<string, unknown> | undefined => {
+    if (!config) return config;
+    if (externalDetailEnabled) {
+      const extDetail: Record<string, unknown> = {
+        enabled: true,
+        url_selector: externalDetailUrlSelector,
+        mode: externalDetailMode,
+        content_selector: externalDetailContentSelector || undefined,
+        attachments_selector: externalDetailAttachmentsSelector || undefined,
+      };
+      if (externalDetailUrlTransformEnabled && externalDetailExtractParam && externalDetailTemplate) {
+        extDetail.url_transform = {
+          extract_param: externalDetailExtractParam,
+          template: externalDetailTemplate,
+        };
+      }
+      return { ...config, external_detail: extDetail };
+    } else {
+      // 비활성화 시 external_detail 제거
+      const { external_detail, ...rest } = config;
+      return rest;
     }
   };
 
@@ -4407,6 +4386,145 @@ export default function ScraperTargetsPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* 외부 상세 링크 스크래핑 설정 */}
+                      <div className="lg:col-span-2 p-4 rounded-2xl bg-white/50 border border-white/60">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-1.5">
+                            <label className="text-sm font-extrabold text-stone-800">외부 링크 스크래핑</label>
+                            <div className="group relative">
+                              <HelpCircle className="w-3.5 h-3.5 text-stone-400 cursor-help" />
+                              <div className="hidden group-hover:block absolute left-0 bottom-full mb-1 z-50 w-80 p-3 rounded-xl bg-stone-900 text-white text-xs shadow-lg">
+                                <div className="font-bold mb-1.5">외부 링크 스크래핑</div>
+                                <div className="text-stone-300 leading-relaxed">
+                                  게시글 상세 페이지에 외부 사이트 링크가 있고, 해당 외부 페이지에서 본문과 첨부파일을 수집해야 하는 경우 사용합니다.
+                                </div>
+                                <div className="mt-2 text-stone-400 font-bold">예시:</div>
+                                <ul className="mt-1 space-y-1 text-stone-300">
+                                  <li>환경부 고시·훈령·예규 → 국가법령정보센터 링크</li>
+                                  <li>정부 부처 게시판 → 법령정보센터 링크</li>
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={externalDetailEnabled}
+                              onChange={(e) => setExternalDetailEnabled(e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                          </label>
+                        </div>
+
+                        {externalDetailEnabled && (
+                          <div className="space-y-3">
+                            {/* 외부 링크 선택자 */}
+                            <div>
+                              <label className="text-xs font-bold text-stone-600 mb-1 block">외부 링크 CSS 선택자</label>
+                              <input
+                                type="text"
+                                value={externalDetailUrlSelector}
+                                onChange={(e) => setExternalDetailUrlSelector(e.target.value)}
+                                className="ui-input text-xs font-mono w-full"
+                                placeholder="예: a[href*='law.go.kr/DRF'], a.external-link"
+                              />
+                              <div className="text-[10px] text-stone-400 mt-0.5">상세 페이지에서 외부 링크를 찾을 CSS 선택자</div>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                              {/* 처리 모드 */}
+                              <div>
+                                <label className="text-xs font-bold text-stone-600 mb-1 block">처리 모드</label>
+                                <select
+                                  value={externalDetailMode}
+                                  onChange={(e) => setExternalDetailMode(e.target.value as "html" | "api_xml")}
+                                  className="ui-input text-xs w-full"
+                                >
+                                  <option value="html">HTML 파싱</option>
+                                  <option value="api_xml">API XML 파싱</option>
+                                </select>
+                              </div>
+
+                              {/* 본문 선택자 */}
+                              <div>
+                                <label className="text-xs font-bold text-stone-600 mb-1 block">본문 CSS 선택자</label>
+                                <input
+                                  type="text"
+                                  value={externalDetailContentSelector}
+                                  onChange={(e) => setExternalDetailContentSelector(e.target.value)}
+                                  className="ui-input text-xs font-mono w-full"
+                                  placeholder="예: .view_con, article, #content"
+                                />
+                              </div>
+                            </div>
+
+                            {/* 첨부파일 선택자 */}
+                            <div>
+                              <label className="text-xs font-bold text-stone-600 mb-1 block">첨부파일 CSS 선택자</label>
+                              <input
+                                type="text"
+                                value={externalDetailAttachmentsSelector}
+                                onChange={(e) => setExternalDetailAttachmentsSelector(e.target.value)}
+                                className="ui-input text-xs font-mono w-full"
+                                placeholder="예: a[href*='flDownload'], a[href*='download']"
+                              />
+                              <div className="text-[10px] text-stone-400 mt-0.5">외부 페이지에서 첨부파일 다운로드 링크를 찾을 선택자 (비워두면 기본 선택자 사용)</div>
+                            </div>
+
+                            {/* URL 변환 설정 */}
+                            <div className="p-3 rounded-xl bg-stone-50/50 border border-stone-200/50">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-1.5">
+                                  <label className="text-xs font-bold text-stone-600">URL 변환</label>
+                                  <div className="group relative">
+                                    <HelpCircle className="w-3 h-3 text-stone-400 cursor-help" />
+                                    <div className="hidden group-hover:block absolute left-0 bottom-full mb-1 z-50 w-72 p-2.5 rounded-xl bg-stone-900 text-white text-[10px] shadow-lg">
+                                      외부 링크 URL을 다른 형태로 변환해야 할 때 사용합니다.
+                                      예: DRF API URL에서 ID를 추출하여 공개 웹 페이지 URL로 변환
+                                    </div>
+                                  </div>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={externalDetailUrlTransformEnabled}
+                                    onChange={(e) => setExternalDetailUrlTransformEnabled(e.target.checked)}
+                                    className="sr-only peer"
+                                  />
+                                  <div className="w-8 h-4 bg-stone-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                              </div>
+
+                              {externalDetailUrlTransformEnabled && (
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[10px] font-semibold text-stone-500 mb-0.5 block">추출 파라미터</label>
+                                    <input
+                                      type="text"
+                                      value={externalDetailExtractParam}
+                                      onChange={(e) => setExternalDetailExtractParam(e.target.value)}
+                                      className="ui-input text-xs font-mono w-full"
+                                      placeholder="예: ID, admRulSeq"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-semibold text-stone-500 mb-0.5 block">변환 URL 템플릿</label>
+                                    <input
+                                      type="text"
+                                      value={externalDetailTemplate}
+                                      onChange={(e) => setExternalDetailTemplate(e.target.value)}
+                                      className="ui-input text-xs font-mono w-full"
+                                      placeholder="예: https://www.law.go.kr/LSW/admRulInfoR.do?admRulSeq={ID}"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -5888,7 +6006,7 @@ export default function ScraperTargetsPage() {
                             ),
                           };
                           if (mode === "web_scraping") {
-                            next.web_config = parseJsonOrEmpty(webConfigText, "web_config");
+                            next.web_config = mergeExternalDetailToWebConfig(parseJsonOrEmpty(webConfigText, "web_config"));
                             next.api_config = undefined;
                             next.hybrid_config = undefined;
                           } else if (mode === "api") {
@@ -5968,7 +6086,7 @@ export default function ScraperTargetsPage() {
                             published_date_rule: parseJsonOrEmpty(publishedDateRuleText, "published_date_rule"),
                           };
                           if (mode === "web_scraping") {
-                            next.web_config = parseJsonOrEmpty(webConfigText, "web_config");
+                            next.web_config = mergeExternalDetailToWebConfig(parseJsonOrEmpty(webConfigText, "web_config"));
                             next.api_config = undefined;
                             next.hybrid_config = undefined;
                             // 사이트 내 검색 옵션 저장 (웹 스크래핑 모드)

@@ -109,12 +109,21 @@ def cluster_embeddings(
         centroid = centroids[cluster_id]
         distances = np.linalg.norm(cluster_embeddings - centroid, axis=1)
         
-        # 가장 가까운 3개 청크를 대표로 선정
-        closest_indices = np.argsort(distances)[:3]
-        representative_chunks = [cluster_chunks[i] for i in closest_indices]
+        # 가장 가까운 5개 청크를 대표 후보로 선정
+        closest_indices = np.argsort(distances)[:5]
+        representative_candidates = [cluster_chunks[i] for i in closest_indices]
         
-        # 키워드 추출 (간단한 TF 기반)
-        keywords = extract_keywords_simple(cluster_chunks)
+        # 키워드 추출 (개선된 TF-IDF 기반) - 대표 청크 선정에 사용하기 위해 먼저 추출
+        keywords = extract_keywords_enhanced(cluster_chunks)
+        
+        # Cross-Encoder로 대표 청크 재선정 (사용 가능한 경우)
+        representative_chunks = select_representative_chunks(
+            representative_candidates,
+            keywords,
+            top_n=3
+        )
+        if not representative_chunks:
+            representative_chunks = representative_candidates[:3]
         
         cluster_results.append(ClusterResult(
             cluster_id=cluster_id,
@@ -164,6 +173,132 @@ def extract_keywords_simple(chunks: List[ChunkData], top_n: int = 10) -> List[st
     counter = Counter(words)
     
     return [word for word, _ in counter.most_common(top_n)]
+
+
+def extract_keywords_enhanced(chunks: List[ChunkData], top_n: int = 10) -> List[str]:
+    """
+    개선된 키워드 추출 (TF-IDF 유사 방식)
+    
+    - 문서 빈도를 고려하여 특정 클러스터에 특화된 키워드 추출
+    - 명사구 패턴 매칭으로 복합 키워드 추출
+    """
+    from collections import Counter
+    import re
+    import math
+    
+    # 모든 텍스트
+    all_text = " ".join(chunk.content for chunk in chunks)
+    
+    # 불용어
+    stopwords = {
+        "있다", "하다", "되다", "이다", "등", "및", "위해", "대한", "또는", "관련",
+        "따라", "통해", "의해", "경우", "이상", "이하", "해당", "따른", "대해",
+        "있는", "하는", "되는", "것이", "수행", "기준", "내용", "항목", "사항",
+        "년도", "기관", "관한", "위한", "시행", "규정", "법률", "제도", "정책",
+        "것으로", "것을", "것은", "것이", "바와", "함께", "대하여", "통하여",
+    }
+    
+    # 단어 추출 (2-5글자 한글)
+    words = re.findall(r'[가-힣]{2,5}', all_text)
+    words = [w for w in words if w not in stopwords]
+    
+    # 단어 빈도
+    word_freq = Counter(words)
+    
+    # 문서별 빈도 (IDF 계산용)
+    doc_freq = Counter()
+    for chunk in chunks:
+        chunk_words = set(re.findall(r'[가-힣]{2,5}', chunk.content))
+        for word in chunk_words:
+            if word not in stopwords:
+                doc_freq[word] += 1
+    
+    # TF-IDF 유사 점수 계산
+    num_docs = len(chunks)
+    scores = {}
+    for word, tf in word_freq.items():
+        df = doc_freq.get(word, 1)
+        # IDF: 모든 문서에 나타나는 단어는 낮은 점수
+        idf = math.log(num_docs / df + 1)
+        # 단어 길이 보너스 (3-4글자 선호)
+        length_bonus = 1.2 if 3 <= len(word) <= 4 else 1.0
+        scores[word] = tf * idf * length_bonus
+    
+    # 복합 키워드 추출 (명사+명사 패턴)
+    compound_patterns = [
+        r'([가-힣]{2,4})규제',
+        r'([가-힣]{2,4})법',
+        r'([가-힣]{2,4})정책',
+        r'배출([가-힣]{2,3})',
+        r'([가-힣]{2,4})기준',
+        r'([가-힣]{2,4})의무',
+    ]
+    
+    for pattern in compound_patterns:
+        matches = re.findall(pattern, all_text)
+        for match in matches:
+            if match not in stopwords:
+                # 복합 키워드에 보너스
+                if match in scores:
+                    scores[match] *= 1.3
+    
+    # 점수순 정렬
+    sorted_keywords = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    
+    return [word for word, _ in sorted_keywords[:top_n]]
+
+
+def select_representative_chunks(
+    candidates: List[ChunkData],
+    cluster_keywords: List[str],
+    top_n: int = 3
+) -> List[ChunkData]:
+    """
+    Cross-Encoder를 사용하여 클러스터 대표 청크 선정
+    
+    Args:
+        candidates: 대표 후보 청크들
+        cluster_keywords: 클러스터 키워드
+        top_n: 선정할 대표 청크 수
+        
+    Returns:
+        선정된 대표 청크들
+    """
+    if len(candidates) <= top_n:
+        return candidates
+    
+    try:
+        from .reranker import is_reranker_available, rerank_chunks
+        
+        if is_reranker_available() and cluster_keywords:
+            # 클러스터 키워드를 쿼리로 사용
+            query = " ".join(cluster_keywords[:5])
+            
+            # 청크를 딕셔너리 형태로 변환
+            chunk_dicts = [
+                {"id": c.id, "content": c.content, "metadata": c.metadata}
+                for c in candidates
+            ]
+            
+            # Cross-Encoder로 재순위화
+            reranked = rerank_chunks(query, chunk_dicts, top_n=top_n)
+            
+            # 원래 ChunkData 형태로 복원
+            reranked_ids = [r["id"] for r in reranked]
+            result = []
+            for chunk_id in reranked_ids:
+                for c in candidates:
+                    if c.id == chunk_id:
+                        result.append(c)
+                        break
+            
+            return result if result else candidates[:top_n]
+            
+    except Exception as e:
+        print(f"[Discovery] Representative selection fallback: {e}")
+    
+    # 폴백: 원래 순서 유지
+    return candidates[:top_n]
 
 
 # ============================================================

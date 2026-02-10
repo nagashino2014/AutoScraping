@@ -6,7 +6,7 @@ import os
 import asyncio
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
@@ -66,6 +66,18 @@ class BatchExtractRequest(BaseModel):
     config: Optional[ExtractionConfigRequest] = None
 
 
+class TableInfo(BaseModel):
+    """표 정보 (API 응답용)"""
+    table_index: int
+    page_num: int
+    row_count: int
+    col_count: int
+    rows: List[List[str]]  # 실제 데이터
+    is_merged: bool = False
+    page_span: Optional[List[int]] = None
+    merge_confidence: float = 0.0
+
+
 class ExtractResponse(BaseModel):
     """추출 응답"""
     success: bool
@@ -80,6 +92,7 @@ class ExtractResponse(BaseModel):
     extraction_method: Optional[str] = None
     processing_time_ms: int = 0
     error_message: Optional[str] = None
+    tables: List[TableInfo] = []  # 추출된 표 데이터
 
 
 class BatchExtractResponse(BaseModel):
@@ -233,8 +246,25 @@ async def extract_file(request: ExtractRequest):
     # 추출 실행
     result = await service.extract_file_async(request.file_path)
     
+    # 표 데이터 수집 (pages에서 모든 표 추출)
+    tables_info: List[TableInfo] = []
+    table_idx = 0
+    for page in result.pages:
+        for table in page.tables:
+            tables_info.append(TableInfo(
+                table_index=table_idx,
+                page_num=table.page_num if table.page_num else page.page_num,
+                row_count=table.row_count,
+                col_count=table.col_count,
+                rows=table.rows,
+                is_merged=table.is_merged,
+                page_span=table.page_span,
+                merge_confidence=table.merge_confidence,
+            ))
+            table_idx += 1
+    
     return ExtractResponse(
-        success=result.status == ExtractionStatus.COMPLETED,
+        success=result.status in (ExtractionStatus.COMPLETED, ExtractionStatus.LLM_FALLBACK),
         file_path=result.file_path,
         status=result.status.value,
         text=result.text,
@@ -245,7 +275,8 @@ async def extract_file(request: ExtractRequest):
         quality_score=result.quality_score,
         extraction_method=result.extraction_method.value if result.extraction_method else None,
         processing_time_ms=result.processing_time_ms,
-        error_message=result.error_message
+        error_message=result.error_message,
+        tables=tables_info,
     )
 
 
@@ -1005,11 +1036,21 @@ async def upsert_vectors(request: VectorizeRequest):
 async def search_vectors(request: SearchRequest):
     """벡터 유사도 검색"""
     try:
+        print(f"[VECTORDB] Search request: n_results={request.n_results}, filter={request.filter}")
+        print(f"[VECTORDB] Query embedding length: {len(request.query_embedding)}")
+        
         result = search_similar(
             query_embedding=request.query_embedding,
             n_results=request.n_results,
             where=request.filter
         )
+        
+        print(f"[VECTORDB] Search result: success={result.get('success')}, count={result.get('count')}")
+        if result.get("results"):
+            for i, r in enumerate(result["results"][:3]):
+                print(f"[VECTORDB]   Result {i+1}: distance={r.get('distance')}, similarity={r.get('similarity')}")
+        else:
+            print(f"[VECTORDB]   No results found. Error: {result.get('error')}")
         
         return {
             "success": result["success"],
@@ -1138,6 +1179,106 @@ async def reconstruct_table_api(request: TableReconstructRequest):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# 필터링된 데이터 조회 API
+# ============================================================================
+
+class FilteredGetRequest(BaseModel):
+    """필터링 조회 요청"""
+    where: Optional[dict] = None
+    include: Optional[list] = []
+    limit: int = 100000  # 기본 limit 증가
+
+
+class FilteredCountRequest(BaseModel):
+    """필터링 카운트 요청"""
+    where: Optional[dict] = None
+
+
+@app.post("/vectordb/count-filtered")
+async def count_filtered_vectors(request: FilteredCountRequest):
+    """필터 조건에 맞는 벡터 개수 조회 (ID만 가져와 카운트)"""
+    try:
+        from app.vectordb import get_collection, CHROMADB_AVAILABLE
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다.", "count": 0}
+        
+        collection = get_collection()
+        if collection is None:
+            return {"success": False, "error": "컬렉션 초기화 실패", "count": 0}
+        
+        # where 절이 없으면 collection.count() 사용
+        if not request.where:
+            total_count = collection.count()
+            return {
+                "success": True,
+                "count": total_count,
+                "filtered": False
+            }
+        
+        # where 절이 있으면 get()으로 ID만 가져와 카운트
+        # ChromaDB get()의 limit을 매우 크게 설정하여 모든 결과 가져오기
+        result = collection.get(
+            where=request.where,
+            include=[],  # ID만 가져오기 (documents, embeddings 제외)
+            limit=1000000  # 충분히 큰 값
+        )
+        
+        count = len(result.get("ids", []))
+        
+        return {
+            "success": True,
+            "count": count,
+            "filtered": True
+        }
+        
+    except Exception as e:
+        print(f"[VectorDB] count-filtered error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e), "count": 0}
+
+
+@app.post("/vectordb/get-filtered")
+async def get_filtered_vectors(request: FilteredGetRequest):
+    """필터 조건에 맞는 벡터 조회"""
+    try:
+        from app.vectordb import get_collection, CHROMADB_AVAILABLE
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다."}
+        
+        collection = get_collection()
+        if collection is None:
+            return {"success": False, "error": "컬렉션 초기화 실패"}
+        
+        # where 절이 있으면 필터링, 없으면 전체 조회
+        if request.where:
+            result = collection.get(
+                where=request.where,
+                limit=request.limit,
+                include=request.include if request.include else []
+            )
+        else:
+            result = collection.get(
+                limit=request.limit,
+                include=request.include if request.include else []
+            )
+        
+        return {
+            "success": True,
+            "ids": result.get("ids", []),
+            "documents": result.get("documents", []) if "documents" in (request.include or []) else [],
+            "metadatas": result.get("metadatas", []) if "metadatas" in (request.include or []) else [],
+            "count": len(result.get("ids", []))
+        }
+        
+    except Exception as e:
+        print(f"[VectorDB] get-filtered error: {e}")
+        return {"success": False, "error": str(e), "count": 0}
 
 
 # ============================================================================
@@ -1496,6 +1637,719 @@ async def discover_issues_sync(request: DiscoveryRequest):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# RAG 심층 분석 API
+# ============================================================================
+
+class RAGSearchRequest(BaseModel):
+    """RAG 검색 요청"""
+    query: str = Field(..., description="검색 쿼리")
+    n_results: int = Field(default=10, description="결과 수")
+    where: Optional[dict] = Field(default=None, description="메타데이터 필터")
+
+
+@app.post("/rag/search")
+async def rag_search(request: RAGSearchRequest):
+    """
+    RAG용 벡터 검색
+    
+    텍스트 쿼리를 임베딩하여 유사한 문서를 검색합니다.
+    컬렉션의 임베딩 차원에 맞는 모델을 자동 선택합니다.
+    """
+    try:
+        from app.vectordb import get_collection, CHROMADB_AVAILABLE
+        import os
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다."}
+        
+        collection = get_collection()
+        if collection is None:
+            return {"success": False, "error": "컬렉션 초기화 실패"}
+        
+        # 컬렉션 차원 확인 (샘플 데이터에서 확인)
+        collection_dim = 3072  # 기본값
+        try:
+            if collection.count() > 0:
+                sample = collection.peek(limit=1)
+                if sample.get("embeddings") and len(sample["embeddings"]) > 0:
+                    collection_dim = len(sample["embeddings"][0])
+        except Exception as e:
+            print(f"[RAG] 차원 확인 실패, 기본값 사용: {e}")
+        
+        use_openai = collection_dim > 1024
+        
+        # 쿼리 임베딩 생성
+        try:
+            if use_openai:
+                # OpenAI 임베딩 사용
+                api_key = os.environ.get("OPENAI_API_KEY")
+                if not api_key:
+                    return {"success": False, "error": "OpenAI API 키가 설정되지 않았습니다."}
+                
+                import httpx
+                model_name = "text-embedding-3-large" if collection_dim >= 3072 else "text-embedding-3-small"
+                
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        "https://api.openai.com/v1/embeddings",
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {api_key}"
+                        },
+                        json={
+                            "model": model_name,
+                            "input": request.query
+                        }
+                    )
+                    
+                    if response.status_code != 200:
+                        return {"success": False, "error": f"OpenAI API 오류: {response.status_code}"}
+                    
+                    data = response.json()
+                    query_embedding = data["data"][0]["embedding"]
+            else:
+                # HuggingFace 모델 사용
+                model = get_embedding_model("ko-sroberta")
+                query_embedding = model.encode([request.query])[0].tolist()
+                
+        except Exception as e:
+            print(f"[RAG] Embedding error: {e}")
+            return {"success": False, "error": f"임베딩 생성 실패: {str(e)}"}
+        
+        # 벡터 검색
+        search_params = {
+            "query_embeddings": [query_embedding],
+            "n_results": request.n_results,
+            "include": ["documents", "metadatas", "distances"]
+        }
+        
+        if request.where:
+            search_params["where"] = request.where
+        
+        result = collection.query(**search_params)
+        
+        # 결과 변환
+        documents = []
+        if result.get("documents") and result["documents"][0]:
+            for i, doc in enumerate(result["documents"][0]):
+                documents.append({
+                    "id": result["ids"][0][i] if result.get("ids") else "",
+                    "content": doc,
+                    "metadata": result["metadatas"][0][i] if result.get("metadatas") else {},
+                    "distance": result["distances"][0][i] if result.get("distances") else 0,
+                })
+        
+        return {
+            "success": True,
+            "documents": documents,
+            "count": len(documents)
+        }
+        
+    except Exception as e:
+        print(f"[RAG] Search error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# RAG 고급 검색 API
+# ============================================================================
+
+class AdvancedSearchRequest(BaseModel):
+    """고급 검색 요청"""
+    query: str = Field(..., description="검색 쿼리")
+    n_results: int = Field(default=15, description="결과 수")
+    where: Optional[dict] = Field(default=None, description="메타데이터 필터")
+    strategy: str = Field(default="advanced", description="검색 전략 (basic, hybrid, advanced)")
+    config: Optional[dict] = Field(default=None, description="검색 설정 오버라이드")
+    llm_api_key: Optional[str] = Field(default=None, description="LLM API 키 (Query Expansion, HyDE용)")
+    embedding_api_key: Optional[str] = Field(default=None, description="임베딩 API 키 (OpenAI, 벡터 검색용)")
+
+
+class RetrievalConfigRequest(BaseModel):
+    """검색 설정"""
+    strategy: str = Field(default="advanced", description="검색 전략")
+    direct_top_k: int = Field(default=50, description="직접 검색 결과 수")
+    enable_query_expansion: bool = Field(default=True, description="Query Expansion 활성화")
+    num_expanded_queries: int = Field(default=5, description="확장 쿼리 수")
+    enable_hyde: bool = Field(default=True, description="HyDE 활성화")
+    num_hypothetical_docs: int = Field(default=3, description="가상 문서 수")
+    enable_hybrid: bool = Field(default=True, description="Hybrid Search 활성화")
+    semantic_weight: float = Field(default=0.5, description="시맨틱 가중치")
+    lexical_weight: float = Field(default=0.5, description="어휘 가중치")
+    enable_reranking: bool = Field(default=True, description="Reranking 활성화")
+    rerank_top_n: int = Field(default=15, description="Reranking 결과 수")
+
+
+# 전역 검색 설정 저장
+_retrieval_config: dict = {
+    "strategy": "hybrid",
+    "direct_top_k": 50,
+    "enable_query_expansion": False,  # 기본적으로 비활성화 (API 키 필요)
+    "num_expanded_queries": 5,
+    "enable_hyde": False,  # 기본적으로 비활성화 (API 키 필요)
+    "num_hypothetical_docs": 3,
+    "enable_hybrid": True,
+    "semantic_weight": 0.5,
+    "lexical_weight": 0.5,
+    "enable_reranking": True,
+    "rerank_top_n": 15,
+}
+
+
+@app.post("/rag/advanced-search")
+async def rag_advanced_search(request: AdvancedSearchRequest):
+    """
+    고급 RAG 검색
+    
+    Query Expansion, HyDE, Hybrid Search, Cross-Encoder Reranking을 지원하는 고급 검색
+    """
+    try:
+        from app.vectordb import get_collection, CHROMADB_AVAILABLE
+        from app.advanced_retrieval import AdvancedRetriever, RetrievalConfig, RetrievalStrategy
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다."}
+        
+        collection = get_collection()
+        if collection is None:
+            return {"success": False, "error": "컬렉션 초기화 실패"}
+        
+        # 설정 준비
+        strategy_map = {
+            "basic": RetrievalStrategy.BASIC,
+            "hybrid": RetrievalStrategy.HYBRID,
+            "advanced": RetrievalStrategy.ADVANCED,
+        }
+        strategy = strategy_map.get(request.strategy, RetrievalStrategy.HYBRID)
+        
+        # 전역 설정과 요청 설정 병합
+        merged_config = {**_retrieval_config}
+        if request.config:
+            merged_config.update(request.config)
+        merged_config["strategy"] = strategy
+        
+        config = RetrievalConfig(
+            strategy=strategy,
+            direct_top_k=merged_config.get("direct_top_k", 50),
+            enable_query_expansion=merged_config.get("enable_query_expansion", False),
+            num_expanded_queries=merged_config.get("num_expanded_queries", 5),
+            enable_hyde=merged_config.get("enable_hyde", False),
+            num_hypothetical_docs=merged_config.get("num_hypothetical_docs", 3),
+            enable_hybrid=merged_config.get("enable_hybrid", True),
+            semantic_weight=merged_config.get("semantic_weight", 0.5),
+            lexical_weight=merged_config.get("lexical_weight", 0.5),
+            enable_reranking=merged_config.get("enable_reranking", True),
+            rerank_top_n=min(merged_config.get("rerank_top_n", 15), request.n_results),
+        )
+        
+        # 검색 함수 정의 - 컬렉션의 임베딩 차원에 맞는 모델 사용
+        # 샘플 데이터에서 임베딩 차원 확인
+        collection_dim = 3072  # 기본값: OpenAI large
+        try:
+            if collection.count() > 0:
+                sample = collection.peek(limit=1)
+                if sample.get("embeddings") and len(sample["embeddings"]) > 0:
+                    collection_dim = len(sample["embeddings"][0])
+                    print(f"[RAG] 컬렉션 임베딩 차원: {collection_dim}")
+        except Exception as e:
+            print(f"[RAG] 차원 확인 실패, 기본값 사용: {e}")
+        
+        # OpenAI 임베딩 함수 (3072 차원: large, 1536 차원: small)
+        async def get_openai_embedding(text: str) -> List[float]:
+            import os
+            # 임베딩용 API 키 우선순위: embedding_api_key > 환경변수 > llm_api_key
+            api_key = request.embedding_api_key or os.environ.get("OPENAI_API_KEY") or request.llm_api_key
+            if not api_key:
+                raise ValueError("OpenAI API 키가 필요합니다. (임베딩 생성용)")
+            
+            import httpx
+            model_name = "text-embedding-3-large" if collection_dim >= 3072 else "text-embedding-3-small"
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/embeddings",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    },
+                    json={
+                        "model": model_name,
+                        "input": text
+                    }
+                )
+                
+                if response.status_code != 200:
+                    raise ValueError(f"OpenAI API 오류: {response.status_code}")
+                
+                data = response.json()
+                return data["data"][0]["embedding"]
+        
+        # 차원에 따라 적절한 임베딩 함수 선택
+        use_openai = collection_dim > 1024  # 1024보다 크면 OpenAI 사용
+        
+        async def vector_search(query: str, top_k: int, filters: Optional[dict] = None):
+            if use_openai:
+                query_embedding = await get_openai_embedding(query)
+            else:
+                embedding_model = get_embedding_model("ko-sroberta")
+                query_embedding = embedding_model.encode([query])[0].tolist()
+            
+            search_params = {
+                "query_embeddings": [query_embedding],
+                "n_results": top_k,
+                "include": ["documents", "metadatas", "distances"]
+            }
+            if filters:
+                search_params["where"] = filters
+            
+            result = collection.query(**search_params)
+            
+            chunks = []
+            if result.get("documents") and result["documents"][0]:
+                for i, doc in enumerate(result["documents"][0]):
+                    chunks.append({
+                        "id": result["ids"][0][i] if result.get("ids") else "",
+                        "content": doc,
+                        "metadata": result["metadatas"][0][i] if result.get("metadatas") else {},
+                        "score": 1 - result["distances"][0][i] if result.get("distances") else 0,
+                    })
+            return chunks
+        
+        async def embed_text(text: str):
+            if use_openai:
+                return await get_openai_embedding(text)
+            else:
+                embedding_model = get_embedding_model("ko-sroberta")
+                return embedding_model.encode([text])[0].tolist()
+        
+        # Retriever 생성 및 검색
+        retriever = AdvancedRetriever(
+            vector_search_fn=vector_search,
+            embedding_fn=embed_text,
+            llm_api_key=request.llm_api_key,
+            config=config
+        )
+        
+        result = await retriever.retrieve(
+            query=request.query,
+            filters=request.where,
+            strategy=strategy
+        )
+        
+        return {
+            "success": True,
+            "documents": result.chunks[:request.n_results],
+            "count": len(result.chunks),
+            "strategy": result.strategy_used,
+            "stages": result.stages_completed,
+            "token_usage": result.token_usage,
+            "timing_ms": result.timing_ms,
+        }
+        
+    except Exception as e:
+        print(f"[RAG] Advanced search error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/rag/retrieval-config")
+async def get_retrieval_config():
+    """검색 설정 조회"""
+    return {
+        "success": True,
+        "config": _retrieval_config
+    }
+
+
+@app.put("/rag/retrieval-config")
+async def update_retrieval_config(config: RetrievalConfigRequest):
+    """검색 설정 업데이트"""
+    global _retrieval_config
+    
+    _retrieval_config = {
+        "strategy": config.strategy,
+        "direct_top_k": config.direct_top_k,
+        "enable_query_expansion": config.enable_query_expansion,
+        "num_expanded_queries": config.num_expanded_queries,
+        "enable_hyde": config.enable_hyde,
+        "num_hypothetical_docs": config.num_hypothetical_docs,
+        "enable_hybrid": config.enable_hybrid,
+        "semantic_weight": config.semantic_weight,
+        "lexical_weight": config.lexical_weight,
+        "enable_reranking": config.enable_reranking,
+        "rerank_top_n": config.rerank_top_n,
+    }
+    
+    return {
+        "success": True,
+        "config": _retrieval_config,
+        "message": "검색 설정이 업데이트되었습니다."
+    }
+
+
+@app.get("/rag/reranker-status")
+async def get_reranker_status():
+    """Reranker 상태 확인"""
+    try:
+        from app.reranker import get_reranker_stats, is_reranker_available
+        
+        stats = get_reranker_stats()
+        return {
+            "success": True,
+            "available": stats["available"],
+            "loaded": stats["loaded"],
+            "model_name": stats["model_name"],
+            "device": stats["device"]
+        }
+    except ImportError:
+        return {
+            "success": True,
+            "available": False,
+            "loaded": False,
+            "model_name": None,
+            "device": None,
+            "error": "reranker 모듈을 불러올 수 없습니다."
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# 백그라운드 작업 관리 API
+# ============================================================================
+
+from .job_store import (
+    create_job, load_job, delete_job, cancel_job as cancel_job_store,
+    list_active_jobs, list_jobs_by_type, has_running_job, cleanup_old_jobs,
+    JobType, JobStatus, job_to_dict, request_cancellation
+)
+from .embedding_worker import start_embedding_worker, cancel_embedding_worker
+
+
+class CreateJobRequest(BaseModel):
+    """작업 생성 요청"""
+    type: str = Field(..., description="작업 유형 (embedding, chunking, analysis)")
+    params: dict = Field(default_factory=dict, description="작업 파라미터")
+    metadata: Optional[dict] = Field(None, description="메타데이터")
+
+
+class JobResponse(BaseModel):
+    """작업 응답"""
+    success: bool
+    job: Optional[dict] = None
+    error: Optional[str] = None
+    message: Optional[str] = None
+
+
+@app.get("/jobs")
+async def get_jobs(
+    type: Optional[str] = None,
+    active: bool = Query(False, description="활성 작업만 조회"),
+    limit: int = Query(10, description="최대 개수")
+):
+    """작업 목록 조회"""
+    try:
+        if active:
+            jobs = list_active_jobs()
+        elif type:
+            job_type = JobType(type)
+            jobs = list_jobs_by_type(job_type, limit)
+        else:
+            jobs = list_active_jobs()
+        
+        return {"success": True, "jobs": jobs}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/jobs")
+async def create_new_job(request: CreateJobRequest):
+    """새 작업 생성"""
+    try:
+        job_type = JobType(request.type)
+        
+        # 디버그: 전달받은 파라미터 출력
+        print(f"[Jobs] Received params: {request.params}")
+        
+        # 동일 유형의 실행 중인 작업 확인
+        if has_running_job(job_type):
+            return {
+                "success": False,
+                "error": f"이미 실행 중인 {request.type} 작업이 있습니다."
+            }
+        
+        # 작업 생성
+        job = create_job(job_type, request.params, request.metadata)
+        
+        # 백그라운드 워커 시작
+        if job_type == JobType.EMBEDDING:
+            # 임베딩 설정 추출
+            settings = request.params.get("settings", {})
+            print(f"[Jobs] Settings: {settings}")
+            model = settings.get("model", "ko-sroberta")
+            print(f"[Jobs] Selected model: {model}")
+            
+            # 작업 파라미터에 모델 추가
+            job.params["model"] = model
+            
+            # API 키도 전달
+            api_key = request.params.get("api_key")
+            if api_key:
+                job.params["api_key"] = api_key
+            
+            # 변경된 파라미터 저장
+            from .job_store import save_job
+            save_job(job)
+            
+            start_embedding_worker(job.id)
+        
+        return {
+            "success": True,
+            "job": {
+                "id": job.id,
+                "type": job.type.value,
+                "status": job.status.value,
+                "createdAt": job.created_at,
+            }
+        }
+    except ValueError as e:
+        return {"success": False, "error": f"잘못된 작업 유형: {request.type}"}
+    except Exception as e:
+        print(f"[Jobs] Create error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/jobs/{job_id}")
+async def get_job_status(job_id: str):
+    """작업 상태 조회"""
+    try:
+        job = load_job(job_id)
+        
+        if not job:
+            return {"success": False, "error": "작업을 찾을 수 없습니다."}
+        
+        return {"success": True, "job": job_to_dict(job)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.delete("/jobs/{job_id}")
+async def cancel_or_delete_job(
+    job_id: str,
+    action: str = Query("cancel", description="cancel 또는 delete")
+):
+    """작업 취소 또는 삭제"""
+    try:
+        job = load_job(job_id)
+        
+        if not job:
+            return {"success": False, "error": "작업을 찾을 수 없습니다."}
+        
+        if action == "delete":
+            if job.status == JobStatus.RUNNING:
+                return {"success": False, "error": "실행 중인 작업은 삭제할 수 없습니다."}
+            
+            deleted = delete_job(job_id)
+            return {
+                "success": deleted,
+                "message": "작업이 삭제되었습니다." if deleted else "삭제 실패"
+            }
+        
+        # 취소
+        if job.status not in (JobStatus.RUNNING, JobStatus.PENDING):
+            return {"success": False, "error": "이미 완료된 작업입니다."}
+        
+        # 워커에게 취소 요청
+        if job.type == JobType.EMBEDDING:
+            cancel_embedding_worker(job_id)
+        
+        # 상태 업데이트
+        cancelled_job = cancel_job_store(job_id)
+        
+        return {
+            "success": True,
+            "job": job_to_dict(cancelled_job) if cancelled_job else None,
+            "message": "작업 취소가 요청되었습니다."
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@app.delete("/jobs")
+async def cleanup_jobs(max_age_days: int = Query(7, description="정리할 작업 최대 기간 (일)")):
+    """오래된 작업 정리"""
+    try:
+        deleted_count = cleanup_old_jobs(max_age_days)
+        return {"success": True, "deleted": deleted_count}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# 사업장 프로파일 벡터DB API
+# ============================================================================
+
+class ProfileVectorUpsertRequest(BaseModel):
+    """프로파일 벡터 추가 요청"""
+    chunks: List[Dict[str, Any]] = Field(..., description="청크 목록 (id, embedding, content, metadata)")
+
+class ProfileVectorSearchRequest(BaseModel):
+    """프로파일 벡터 검색 요청"""
+    query_embedding: List[float] = Field(..., description="쿼리 임베딩 벡터")
+    n_results: int = Field(default=10, description="결과 수")
+    profile_id: Optional[str] = Field(default=None, description="특정 프로파일로 제한")
+    industry_code: Optional[str] = Field(default=None, description="업종 코드로 제한")
+
+class ProfileVectorDeleteRequest(BaseModel):
+    """프로파일 벡터 삭제 요청"""
+    ids: Optional[List[str]] = Field(default=None, description="삭제할 청크 ID 목록")
+    profile_id: Optional[str] = Field(default=None, description="프로파일 ID로 삭제")
+
+
+@app.post("/profile-vectordb/upsert")
+async def upsert_profile_vectors(request: ProfileVectorUpsertRequest):
+    """사업장 프로파일 벡터 추가/업데이트"""
+    try:
+        from app.vectordb import add_profile_embeddings, CHROMADB_AVAILABLE
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다."}
+        
+        if not request.chunks:
+            return {"success": False, "error": "청크가 없습니다."}
+        
+        ids = []
+        embeddings = []
+        documents = []
+        metadatas = []
+        
+        for chunk in request.chunks:
+            ids.append(chunk.get("id", ""))
+            embeddings.append(chunk.get("embedding", []))
+            documents.append(chunk.get("content", ""))
+            metadatas.append(chunk.get("metadata", {}))
+        
+        result = add_profile_embeddings(ids, embeddings, documents, metadatas)
+        return result
+        
+    except Exception as e:
+        print(f"[ProfileVectorDB] Upsert error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/profile-vectordb/search")
+async def search_profile_vectors(request: ProfileVectorSearchRequest):
+    """사업장 프로파일 벡터 검색"""
+    try:
+        from app.vectordb import search_profile_similar, CHROMADB_AVAILABLE
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다.", "results": []}
+        
+        # 필터 조건 구성
+        where = None
+        conditions = []
+        
+        if request.profile_id:
+            conditions.append({"profile_id": request.profile_id})
+        if request.industry_code:
+            conditions.append({"industry_code": request.industry_code})
+        
+        if len(conditions) == 1:
+            where = conditions[0]
+        elif len(conditions) > 1:
+            where = {"$and": conditions}
+        
+        result = search_profile_similar(
+            query_embedding=request.query_embedding,
+            n_results=request.n_results,
+            where=where
+        )
+        
+        return result
+        
+    except Exception as e:
+        print(f"[ProfileVectorDB] Search error: {e}")
+        return {"success": False, "error": str(e), "results": []}
+
+
+@app.delete("/profile-vectordb/delete")
+async def delete_profile_vectors(request: ProfileVectorDeleteRequest):
+    """사업장 프로파일 벡터 삭제"""
+    try:
+        from app.vectordb import delete_profile_embeddings, CHROMADB_AVAILABLE
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다."}
+        
+        if request.ids:
+            result = delete_profile_embeddings(ids=request.ids)
+        elif request.profile_id:
+            result = delete_profile_embeddings(where={"profile_id": request.profile_id})
+        else:
+            return {"success": False, "error": "ids 또는 profile_id가 필요합니다."}
+        
+        return result
+        
+    except Exception as e:
+        print(f"[ProfileVectorDB] Delete error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/profile-vectordb/stats")
+async def get_profile_vector_stats():
+    """사업장 프로파일 벡터DB 통계"""
+    try:
+        from app.vectordb import get_profile_collection_stats, CHROMADB_AVAILABLE
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다."}
+        
+        return get_profile_collection_stats()
+        
+    except Exception as e:
+        print(f"[ProfileVectorDB] Stats error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/profile-vectordb/profile/{profile_id}")
+async def get_profile_vectors(profile_id: str):
+    """특정 프로파일의 모든 벡터 조회"""
+    try:
+        from app.vectordb import get_profile_embeddings_by_profile, CHROMADB_AVAILABLE
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다."}
+        
+        return get_profile_embeddings_by_profile(profile_id)
+        
+    except Exception as e:
+        print(f"[ProfileVectorDB] Get profile vectors error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/profile-vectordb/clear")
+async def clear_profile_vectors():
+    """사업장 프로파일 벡터DB 초기화"""
+    try:
+        from app.vectordb import clear_profile_collection, CHROMADB_AVAILABLE
+        
+        if not CHROMADB_AVAILABLE:
+            return {"success": False, "error": "ChromaDB가 설치되지 않았습니다."}
+        
+        return clear_profile_collection()
+        
+    except Exception as e:
+        print(f"[ProfileVectorDB] Clear error: {e}")
+        return {"success": False, "error": str(e)}
 
 
 # ============================================================================

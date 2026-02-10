@@ -41,6 +41,24 @@ interface TableInfo {
   headers: string[];
   rows: string[][];
   type: "markdown" | "semantic";  // 테이블 형식 구분
+  // Cross-page 병합 메타데이터
+  isMergedTable?: boolean;
+  mergeSourcePages?: number[];
+  mergeSourceCount?: number;
+  mergeConfidence?: number;
+  originalTableIndices?: number[];
+  headerSignature?: string;
+}
+
+// 추출된 테이블 메타데이터 (JSON 파일에서 읽음)
+export interface ExtractedTableMeta {
+  table_index: number;
+  page_num?: number;
+  is_merged?: boolean;
+  page_span?: number[];
+  original_table_indices?: number[];
+  merge_confidence?: number;
+  header_signature?: string;
 }
 
 // ============================================================================
@@ -807,6 +825,7 @@ interface TableChunkResult {
 
 /**
  * 테이블을 청크로 분할 (마크다운 및 시맨틱 테이블 모두 지원)
+ * Cross-page 병합 메타데이터도 전파
  */
 function chunkTable(
   tableInfo: TableInfo,
@@ -822,6 +841,19 @@ function chunkTable(
   
   const totalRows = rows.length;
   
+  // Cross-page 병합 메타데이터 준비
+  const mergeMetadata: Partial<ChunkMetadata> = {};
+  if (tableInfo.isMergedTable) {
+    mergeMetadata.is_merged_table = true;
+    mergeMetadata.merge_source_pages = tableInfo.mergeSourcePages;
+    mergeMetadata.merge_source_count = tableInfo.mergeSourceCount;
+    mergeMetadata.merge_confidence = tableInfo.mergeConfidence;
+    mergeMetadata.original_table_indices = tableInfo.originalTableIndices 
+      ? JSON.stringify(tableInfo.originalTableIndices) 
+      : undefined;
+    mergeMetadata.header_signature = tableInfo.headerSignature;
+  }
+  
   // 행이 없는 경우 (시맨틱 테이블 파싱 실패 등) 원본 콘텐츠 그대로 사용
   if (totalRows === 0) {
     chunks.push(originalContent);
@@ -836,6 +868,7 @@ function chunkTable(
       row_end: 0,
       is_first_chunk: true,
       is_last_chunk: true,
+      ...mergeMetadata,
     });
     return { chunks, metadata };
   }
@@ -848,7 +881,13 @@ function chunkTable(
     const chunkRows = rows.slice(rowStart, rowEnd);
     
     // 자연어 설명 생성 (LLM이 이해하기 쉬운 형태)
-    let content = `[표: ${title || tableId}] (${rowStart + 1}~${rowEnd}행 / 전체 ${totalRows}행)\n`;
+    let content = `[표: ${title || tableId}] (${rowStart + 1}~${rowEnd}행 / 전체 ${totalRows}행)`;
+    
+    // 병합된 표인 경우 추가 정보 표시
+    if (tableInfo.isMergedTable && tableInfo.mergeSourcePages) {
+      content += ` [병합됨: ${tableInfo.mergeSourcePages.length}페이지에 걸침]`;
+    }
+    content += "\n";
     
     if (headers.length > 0) {
       content += `이 표의 열: ${headers.join(", ")}\n`;
@@ -891,6 +930,7 @@ function chunkTable(
       row_end: rowEnd,
       is_first_chunk: chunkIdx === 0,
       is_last_chunk: chunkIdx === totalChunks - 1,
+      ...mergeMetadata,
     });
   }
   

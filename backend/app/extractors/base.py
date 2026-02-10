@@ -1126,6 +1126,14 @@ class TableData:
     col_count: int = 0
     confidence: float = 0.0                    # 추출 신뢰도
     extraction_method: str = ""                # 추출 방법 (line_detection, pdfplumber 등)
+    
+    # Cross-page Table Merging 지원 필드
+    page_num: int = 0                          # 표가 시작된 페이지 번호
+    page_span: Optional[List[int]] = None      # 표가 걸쳐있는 페이지 목록 (예: [1, 2, 3])
+    is_merged: bool = False                    # Cross-page 병합된 표 여부
+    original_table_indices: Optional[List[int]] = None  # 병합 전 원본 표 인덱스들
+    header_signature: str = ""                 # 헤더 시그니처 해시 (병합 식별용)
+    merge_confidence: float = 0.0              # 병합 신뢰도 (0.0~1.0)
 
 
 @dataclass

@@ -9,7 +9,7 @@
 
 param(
     [string]$TaskName = "WebScraper-GitHub-Sync",
-    [string]$Hour = "10",
+    [string]$Hour = "09",
     [string]$Minute = "00",
     [switch]$Remove,
     [switch]$RunNow
