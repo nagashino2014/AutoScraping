@@ -23,7 +23,8 @@ fi
 if [ -d "/app/data-defaults" ]; then
 
   # [1] Git 관리 설정 파일 — 항상 최신으로 업데이트
-  CONFIG_FILES="scraper-targets.json scraper-schedules.json embedding-settings.json model-mappings.json download-settings.json users.json"
+  # 주의: scraper-schedules.json은 런타임에 생성/수정되므로 여기에 포함하지 않음
+  CONFIG_FILES="scraper-targets.json embedding-settings.json model-mappings.json download-settings.json users.json"
   for cf in $CONFIG_FILES; do
     if [ -f "/app/data-defaults/$cf" ]; then
       cp -f "/app/data-defaults/$cf" "/app/data/$cf"
@@ -46,7 +47,7 @@ if [ -d "/app/data-defaults" ]; then
     target="/app/data/$filename"
     # 이미 위에서 처리한 설정 파일/디렉토리는 스킵
     case "$filename" in
-      scraper-targets.json|scraper-schedules.json|embedding-settings.json) continue ;;
+      scraper-targets.json|embedding-settings.json) continue ;;
       model-mappings.json|download-settings.json|users.json) continue ;;
       site-profiles|APISet) continue ;;
     esac
