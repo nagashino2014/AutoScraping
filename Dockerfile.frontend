@@ -90,6 +90,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
+# sql.js WASM 파일 복사 (standalone 빌드에 포함되지 않는 문제 해결)
+COPY --from=deps /app/node_modules/sql.js/dist/sql-wasm.wasm ./node_modules/sql.js/dist/sql-wasm.wasm
+
 # Playwright 브라우저 복사
 COPY --from=deps /root/.cache/ms-playwright /root/.cache/ms-playwright
 
