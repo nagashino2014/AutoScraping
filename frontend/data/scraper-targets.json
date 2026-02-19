@@ -3598,17 +3598,17 @@
       ],
       "enabled": true,
       "board_mode": "web_scraping",
-      "schedule_cron": "10 21 * * *",
+      "schedule_cron": "0 18 * * *",
       "schedule_timezone": "Asia/Tokyo",
       "schedule_config": {
-        "scheduleMode": "period",
+        "scheduleMode": "cycle",
         "startDate": "2026-01-16",
         "cycleType": "interval",
         "monthlyDay": "1",
         "weeklyDay": "mon",
         "intervalDays": "1",
-        "hour": "21",
-        "minute": "10"
+        "hour": "18",
+        "minute": "0"
       },
       "dedup_key": "url",
       "published_date_rule": {

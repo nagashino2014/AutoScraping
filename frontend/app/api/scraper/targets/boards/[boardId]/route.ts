@@ -10,11 +10,16 @@ import {
   writeScraperSchedules,
   type ScraperSchedule,
 } from "@/lib/scraper/schedule-store";
+import {
+  updateScheduleJob,
+  removeScheduleJob,
+} from "@/lib/scraper/scheduler";
 
 /**
  * 보드별 자동 스케줄 생성/업데이트
  * - 보드에 schedule_cron이 설정되면 해당 보드 전용 스케줄을 자동 생성
  * - 이미 존재하면 업데이트, 없으면 새로 생성
+ * - 파일 저장 후 in-memory 스케줄러도 즉시 갱신
  */
 function syncBoardSchedule(board: Board, orgName: string) {
   if (!board.schedule_cron) return;
@@ -40,20 +45,21 @@ function syncBoardSchedule(board: Board, orgName: string) {
     enabled: board.enabled,
   };
 
+  let finalSchedule: ScraperSchedule;
   let nextSchedules: ScraperSchedule[];
   if (existingIdx >= 0) {
-    // 기존 스케줄 업데이트 (실행 정책은 기존 값 유지)
     const existing = schedData.schedules[existingIdx];
-    nextSchedules = [...schedData.schedules];
-    nextSchedules[existingIdx] = {
+    finalSchedule = {
       ...schedule,
       max_runtime_sec: existing.max_runtime_sec,
       concurrency: existing.concurrency,
       retry_policy: existing.retry_policy,
       rate_limit: existing.rate_limit,
     };
+    nextSchedules = [...schedData.schedules];
+    nextSchedules[existingIdx] = finalSchedule;
   } else {
-    // 새 스케줄 생성
+    finalSchedule = schedule;
     nextSchedules = [...schedData.schedules, schedule];
   }
 
@@ -61,6 +67,13 @@ function syncBoardSchedule(board: Board, orgName: string) {
     schedules: nextSchedules,
     runs: schedData.runs,
   });
+
+  try {
+    updateScheduleJob(finalSchedule);
+    console.log(`[Scheduler] ✓ 스케줄 즉시 반영: ${scheduleName} (${board.schedule_cron})`);
+  } catch (e) {
+    console.error(`[Scheduler] 스케줄 즉시 반영 실패:`, e);
+  }
 }
 
 /**
@@ -76,6 +89,13 @@ function removeBoardSchedule(boardId: string) {
     schedules: schedData.schedules.filter((s) => s.schedule_id !== scheduleId),
     runs: schedData.runs.filter((r) => r.schedule_id !== scheduleId),
   });
+
+  try {
+    removeScheduleJob(scheduleId);
+    console.log(`[Scheduler] ✓ 스케줄 즉시 제거: ${scheduleId}`);
+  } catch (e) {
+    console.error(`[Scheduler] 스케줄 즉시 제거 실패:`, e);
+  }
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ boardId: string }> }) {

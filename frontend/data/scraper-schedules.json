@@ -63,7 +63,7 @@
       "targets": [
         "mcee_board1"
       ],
-      "cron": "22 22 * * *",
+      "cron": "0 18 * * *",
       "timezone": "Asia/Tokyo",
       "max_runtime_sec": 1800,
       "concurrency": {
