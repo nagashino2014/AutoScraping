@@ -65,13 +65,23 @@ export type DedupKeyType = "url" | "id" | "hash";
 function getDbPath(): string {
   const cwd = process.cwd();
   const isFrontendCwd = path.basename(cwd).toLowerCase() === "frontend";
-  const baseDir = isFrontendCwd ? cwd : path.join(cwd, "frontend");
-  const dataDir = path.join(baseDir, "data");
-  
+
+  let dataDir: string;
+  if (isFrontendCwd) {
+    dataDir = path.join(cwd, "data");
+  } else {
+    const frontendDir = path.join(cwd, "frontend");
+    if (fs.existsSync(frontendDir) && fs.statSync(frontendDir).isDirectory()) {
+      dataDir = path.join(frontendDir, "data");
+    } else {
+      dataDir = path.join(cwd, "data");
+    }
+  }
+
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
-  
+
   return path.join(dataDir, "scraper.db");
 }
 

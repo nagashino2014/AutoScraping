@@ -1759,21 +1759,17 @@ function BoardDetailModal({
 // 컴포넌트: 보드 상태 테이블
 // ============================================================
 
-function BoardStatusTable({
+function BoardStatusTableInner({
   boards,
   loading,
   filter,
-  onFilterChange,
   searchQuery,
-  onSearchChange,
   onBoardClick,
 }: {
   boards: BoardStatusItem[];
   loading: boolean;
   filter: string;
-  onFilterChange: (v: string) => void;
   searchQuery: string;
-  onSearchChange: (v: string) => void;
   onBoardClick: (board: BoardStatusItem) => void;
 }) {
   const statusConfig: Record<
@@ -1806,44 +1802,7 @@ function BoardStatusTable({
   });
 
   return (
-    <div className="glass-panel rounded-2xl overflow-hidden">
-      {/* 헤더 */}
-      <div className="p-4 border-b border-white/30 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-base font-bold text-stone-800">보드별 현황</h3>
-          <span className="text-xs text-stone-500">({filteredBoards.length}개)</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* 검색 */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
-            <input
-              type="text"
-              placeholder="검색..."
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-9 pr-3 py-1.5 text-sm bg-white/60 border border-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
-            />
-          </div>
-          {/* 필터 */}
-          <div className="relative">
-            <select
-              value={filter}
-              onChange={(e) => onFilterChange(e.target.value)}
-              className="appearance-none pl-3 pr-8 py-1.5 text-sm bg-white/60 border border-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
-            >
-              <option value="all">전체 상태</option>
-              <option value="active">정상</option>
-              <option value="running">실행 중</option>
-              <option value="warning">경고</option>
-              <option value="error">에러</option>
-              <option value="disabled">비활성</option>
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
-          </div>
-        </div>
-      </div>
-
+    <>
       {/* 테이블 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -1941,7 +1900,7 @@ function BoardStatusTable({
           </tbody>
         </table>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -3166,6 +3125,7 @@ export default function ScraperStatusPage() {
     setLoadingBoards(true);
     setLoadingRunning(true);
     setLoadingErrors(true);
+    setLoadingSchedules(true);
     
     fetchSummary();
     fetchTimeline();
@@ -3173,6 +3133,7 @@ export default function ScraperStatusPage() {
     fetchBoards();
     fetchRunningJobs();
     fetchErrorLogs();
+    fetchSchedules();
   };
 
   // Running Jobs만 새로고침
@@ -3315,10 +3276,13 @@ export default function ScraperStatusPage() {
     const interval = setInterval(() => {
       fetchSummary();
       fetchRunningJobs();
+      fetchBoards();
+      fetchTimeline();
+      fetchErrorLogs();
     }, dashboardSettings.autoRefreshInterval * 1000);
     
     return () => clearInterval(interval);
-  }, [dashboardSettings.autoRefreshInterval, fetchSummary, fetchRunningJobs]);
+  }, [dashboardSettings.autoRefreshInterval, fetchSummary, fetchRunningJobs, fetchBoards, fetchTimeline, fetchErrorLogs]);
 
   return (
     <div className="space-y-6">
@@ -3450,44 +3414,89 @@ export default function ScraperStatusPage() {
 
       {/* 보드별 현황 섹션 */}
       {dashboardSettings.showBoardsTable && (
-      <div className="space-y-4">
-        {/* 뷰 모드 토글 */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 p-1 bg-white/50 rounded-lg">
-            <button
-              onClick={() => setViewMode("table")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewMode === "table"
-                  ? "bg-white text-emerald-700 shadow-sm"
-                  : "text-stone-500 hover:text-stone-700"
-              }`}
-            >
-              <Table className="w-4 h-4" />
-              테이블
-            </button>
-            <button
-              onClick={() => setViewMode("group")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewMode === "group"
-                  ? "bg-white text-emerald-700 shadow-sm"
-                  : "text-stone-500 hover:text-stone-700"
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              기관별
-            </button>
+      <div className="glass-panel rounded-2xl overflow-hidden">
+        {/* 헤더: 타이틀 + 뷰모드 토글 + 검색 + 필터 */}
+        <div className="p-4 border-b border-white/30 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-bold text-stone-800">보드별 현황</h3>
+            <span className="text-xs text-stone-500">
+              ({(viewMode === "table"
+                ? boardsData.filter((b) => {
+                    const matchesFilter = boardFilter === "all" || b.status === boardFilter;
+                    const matchesSearch =
+                      searchQuery === "" ||
+                      b.board_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      b.org_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      b.board_id.toLowerCase().includes(searchQuery.toLowerCase());
+                    return matchesFilter && matchesSearch;
+                  })
+                : boardsData
+              ).length}개)
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* 뷰 모드 토글 */}
+            <div className="flex items-center gap-1 p-1 bg-white/50 rounded-lg">
+              <button
+                onClick={() => setViewMode("table")}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === "table"
+                    ? "bg-white text-emerald-700 shadow-sm"
+                    : "text-stone-500 hover:text-stone-700"
+                }`}
+              >
+                <Table className="w-3.5 h-3.5" />
+                테이블
+              </button>
+              <button
+                onClick={() => setViewMode("group")}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  viewMode === "group"
+                    ? "bg-white text-emerald-700 shadow-sm"
+                    : "text-stone-500 hover:text-stone-700"
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                기관별
+              </button>
+            </div>
+            {/* 검색 */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+              <input
+                type="text"
+                placeholder="검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-3 py-1.5 text-sm bg-white/60 border border-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+              />
+            </div>
+            {/* 필터 */}
+            <div className="relative">
+              <select
+                value={boardFilter}
+                onChange={(e) => setBoardFilter(e.target.value)}
+                className="appearance-none pl-3 pr-8 py-1.5 text-sm bg-white/60 border border-white/70 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/30 cursor-pointer"
+              >
+                <option value="all">전체 상태</option>
+                <option value="active">정상</option>
+                <option value="running">실행 중</option>
+                <option value="warning">경고</option>
+                <option value="error">에러</option>
+                <option value="disabled">비활성</option>
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+            </div>
           </div>
         </div>
 
         {/* 테이블 뷰 또는 기관별 그룹 뷰 */}
         {viewMode === "table" ? (
-          <BoardStatusTable
+          <BoardStatusTableInner
             boards={boardsData}
             loading={loadingBoards}
             filter={boardFilter}
-            onFilterChange={setBoardFilter}
             searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
             onBoardClick={setSelectedBoard}
           />
         ) : (
