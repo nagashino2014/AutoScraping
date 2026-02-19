@@ -8,6 +8,7 @@
 import * as XLSX from "xlsx";
 import fs from "node:fs";
 import path from "node:path";
+import { storage } from "@/lib/storage";
 
 export interface ScrapedArticle {
   title: string;
@@ -123,15 +124,13 @@ export function exportToXlsx(
  * @param boardId 보드 ID (메타데이터용)
  * @returns 저장 결과
  */
-export function exportToJson(
+export async function exportToJson(
   articles: ScrapedArticle[],
   boardName: string,
   orgName: string,
   boardId?: string
-): ExportResult {
+): Promise<ExportResult> {
   try {
-    // 저장 경로: save/ExtractedData/{기관명}/{보드명}/{YYYY-MM}/
-    const cwd = process.cwd();
     const today = new Date();
     const dateStr = today.toISOString().split("T")[0].replace(/-/g, "");
     const monthStr = today.toISOString().slice(0, 7); // YYYY-MM
@@ -139,12 +138,9 @@ export function exportToJson(
     const safeOrgName = orgName.replace(/[\\/:*?"<>|]/g, "_");
     const safeBoardName = boardName.replace(/[\\/:*?"<>|]/g, "_");
 
-    const outputDir = path.join(cwd, "save", "ExtractedData", safeOrgName, safeBoardName, monthStr);
-    fs.mkdirSync(outputDir, { recursive: true });
-
-    // 파일명: {일자}_{보드명}_제목&본문.json
+    // storage 추상화 레이어용 키: ExtractedData/{기관명}/{보드명}/{YYYY-MM}/{파일명}
     const fileName = `${dateStr}_${safeBoardName}_제목&본문.json`;
-    const filePath = path.join(outputDir, fileName);
+    const storageKey = `ExtractedData/${safeOrgName}/${safeBoardName}/${monthStr}/${fileName}`;
 
     // 본문 텍스트 생성 (청킹 파이프라인 호환용)
     const textParts: string[] = [];
@@ -167,13 +163,14 @@ export function exportToJson(
         board_id: boardId || "",
         board_name: boardName,
         org_name: orgName,
-        source_file: filePath,
+        source_file: storageKey,
         file_format: "scraping_json",
         status: "completed",
         articles_count: articles.length,
         char_count: fullText.length,
         extraction_method: "web_scraping",
         extracted_at: today.toISOString(),
+        storage_backend: storage.backend,
       },
       content: {
         text: fullText,
@@ -189,11 +186,16 @@ export function exportToJson(
       })),
     };
 
-    fs.writeFileSync(filePath, JSON.stringify(jsonData, null, 2), "utf-8");
+    const jsonString = JSON.stringify(jsonData, null, 2);
+    await storage.upload(storageKey, jsonString, "application/json");
+
+    // 로컬 경로 (호환성용): local 모드에서는 resolveLocalPath로 해석됨
+    const cwd = process.cwd();
+    const localPath = path.join(cwd, "save", storageKey);
 
     return {
       success: true,
-      filePath,
+      filePath: storage.backend === "r2" ? storageKey : localPath,
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);

@@ -18,6 +18,7 @@ import {
   extractLawmakingAttachments,
   BrowserConfig,
 } from "@/lib/scraper/browser";
+import { storage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5분 제한
@@ -1388,7 +1389,7 @@ export async function POST(req: Request) {
       logs.push("");
       logs.push("── 📄 JSON 파일 저장 (ExtractedData) ──");
       
-      const exportResult = exportToJson(articles, board.board_name, orgName, board.board_id);
+      const exportResult = await exportToJson(articles, board.board_name, orgName, board.board_id);
       
       if (exportResult.success) {
         jsonPath = exportResult.filePath;
@@ -1453,6 +1454,31 @@ export async function POST(req: Request) {
       } else {
         logs.push(`[INFO] 복원 필요 파일 없음`);
       }
+    }
+
+    // R2 모드: 첨부파일을 R2에 업로드 후 로컬 삭제
+    if (downloadedFiles.length > 0 && storage.backend === "r2") {
+      logs.push("");
+      logs.push("── ☁️ R2 업로드 ──");
+      const cwd = process.cwd();
+      let r2UploadSuccess = 0;
+      let r2UploadFail = 0;
+
+      for (const localFile of downloadedFiles) {
+        try {
+          if (!fs.existsSync(localFile)) continue;
+          let r2Key = path.relative(cwd, localFile).replace(/\\/g, "/");
+          if (r2Key.startsWith("save/")) r2Key = r2Key.slice(5);
+          const fileBuffer = fs.readFileSync(localFile);
+          await storage.upload(r2Key, fileBuffer);
+          fs.unlinkSync(localFile);
+          r2UploadSuccess++;
+        } catch (r2Err) {
+          r2UploadFail++;
+          console.error(`[R2 Upload] 실패, 로컬 파일 유지: ${localFile}`, r2Err);
+        }
+      }
+      logs.push(`[R2] 업로드: 성공 ${r2UploadSuccess}, 실패 ${r2UploadFail}`);
     }
 
     // DB 통계 동기화 (수집 현황 대시보드용)

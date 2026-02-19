@@ -21,6 +21,7 @@ import {
   BrowserConfig,
   extractAllZipsInDirectory,
 } from "@/lib/scraper/browser";
+import { storage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -3031,7 +3032,7 @@ export async function GET(req: NextRequest) {
           send({ type: "log", message: "💾 JSON 파일 저장 중 (ExtractedData)..." });
 
           console.log(`[JSON-EXPORT] exportToJson 호출 시작...`);
-          const exportResult = exportToJson(articles, board.board_name, orgName, board.board_id);
+          const exportResult = await exportToJson(articles, board.board_name, orgName, board.board_id);
           console.log(`[JSON-EXPORT] exportToJson 결과: success=${exportResult.success}, filePath=${exportResult.filePath}, error=${exportResult.error || 'none'}`);
 
           if (exportResult.success) {
@@ -3379,6 +3380,31 @@ export async function GET(req: NextRequest) {
           } else {
             send({ type: "log", message: `   ✅ 복원 필요 파일 없음` });
           }
+        }
+
+        // R2 모드: 첨부파일을 R2에 업로드 후 로컬 삭제
+        if (downloadedFiles.length > 0 && storage.backend === "r2") {
+          send({ type: "log", message: "" });
+          send({ type: "log", message: "☁️ 첨부파일 R2 업로드 중..." });
+          const cwd = process.cwd();
+          let r2UploadSuccess = 0;
+          let r2UploadFail = 0;
+
+          for (const localFile of downloadedFiles) {
+            try {
+              if (!fs.existsSync(localFile)) continue;
+              let r2Key = path.relative(cwd, localFile).replace(/\\/g, "/");
+              if (r2Key.startsWith("save/")) r2Key = r2Key.slice(5);
+              const fileBuffer = fs.readFileSync(localFile);
+              await storage.upload(r2Key, fileBuffer);
+              fs.unlinkSync(localFile);
+              r2UploadSuccess++;
+            } catch (r2Err) {
+              r2UploadFail++;
+              console.error(`[R2 Upload] 실패, 로컬 파일 유지: ${localFile}`, r2Err);
+            }
+          }
+          send({ type: "log", message: `   ✅ R2 업로드: 성공 ${r2UploadSuccess}, 실패 ${r2UploadFail}` });
         }
 
         // 다운로드 완료 후 DB 첨부파일 정보 업데이트
