@@ -171,13 +171,48 @@ function targetsFilePath() {
   return path.join(cwd, "data", "scraper-targets.json");
 }
 
+/**
+ * data-defaults 폴백 경로 탐색
+ * Docker 이미지에 내장된 기본 설정 파일 위치를 반환한다.
+ * (Railway 볼륨 유실 시 자동 복원용)
+ */
+function dataDefaultsFilePath(filename: string): string | null {
+  const cwd = process.cwd();
+  const candidates = [
+    path.join(cwd, "data-defaults", filename),
+    path.join("/app", "data-defaults", filename),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
 export function readScraperTargets(): ScraperTargetsFile {
   const p = targetsFilePath();
-  if (!fs.existsSync(p)) {
-    return { orgs: [], boards: [], updated_at: new Date().toISOString() };
+
+  if (fs.existsSync(p)) {
+    const raw = fs.readFileSync(p, "utf8");
+    return JSON.parse(raw) as ScraperTargetsFile;
   }
-  const raw = fs.readFileSync(p, "utf8");
-  return JSON.parse(raw) as ScraperTargetsFile;
+
+  // 볼륨 유실 대비: data-defaults 에서 자동 복원
+  const fallback = dataDefaultsFilePath("scraper-targets.json");
+  if (fallback) {
+    console.warn(`[targets-store] 파일 없음 → data-defaults 복원: ${p}`);
+    try {
+      const raw = fs.readFileSync(fallback, "utf8");
+      const data = JSON.parse(raw) as ScraperTargetsFile;
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+      console.warn("[targets-store] ✓ 복원 완료");
+      return data;
+    } catch (e) {
+      console.error("[targets-store] data-defaults 복원 실패:", e);
+    }
+  }
+
+  return { orgs: [], boards: [], updated_at: new Date().toISOString() };
 }
 
 export function writeScraperTargets(next: Omit<ScraperTargetsFile, "updated_at">) {

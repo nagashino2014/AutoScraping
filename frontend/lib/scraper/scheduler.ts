@@ -215,10 +215,58 @@ export function initializeScheduler(): void {
       registerCronJob(schedule);
     }
 
+    // 설정 파일 무결성 주기적 체크 (매 6시간)
+    cron.schedule("0 */6 * * *", () => {
+      verifyConfigIntegrity();
+    });
+
     isInitialized = true;
     console.log("[Scheduler] 스케줄러 초기화 완료 ✓");
   } catch (err) {
     console.error("[Scheduler] 초기화 실패:", err);
+  }
+}
+
+/**
+ * 설정 파일 무결성 검증 — data-defaults 에서 복원
+ * Railway 볼륨 유실 시 스케줄러가 자동으로 감지하여 서비스 중단을 방지한다.
+ */
+function verifyConfigIntegrity(): void {
+  const fs = require("node:fs") as typeof import("node:fs");
+  const pathMod = require("node:path") as typeof import("node:path");
+
+  const cwd = process.cwd();
+  const dataDefaultsDir = pathMod.join(cwd, "data-defaults");
+  if (!fs.existsSync(dataDefaultsDir)) return;
+
+  const dataDir = pathMod.join(cwd, "data");
+  const CONFIG_FILES = [
+    "scraper-targets.json",
+    "scraper-schedules.json",
+    "embedding-settings.json",
+    "model-mappings.json",
+    "download-settings.json",
+    "users.json",
+  ];
+
+  let restored = 0;
+  for (const file of CONFIG_FILES) {
+    const src = pathMod.join(dataDefaultsDir, file);
+    const dest = pathMod.join(dataDir, file);
+    if (fs.existsSync(src) && !fs.existsSync(dest)) {
+      try {
+        fs.mkdirSync(dataDir, { recursive: true });
+        fs.copyFileSync(src, dest);
+        restored++;
+        console.warn(`[Integrity] 누락 파일 복원: ${file}`);
+      } catch (e) {
+        console.error(`[Integrity] 복원 실패: ${file}`, e);
+      }
+    }
+  }
+
+  if (restored > 0) {
+    console.warn(`[Integrity] ${restored}개 설정 파일 복원 완료`);
   }
 }
 
