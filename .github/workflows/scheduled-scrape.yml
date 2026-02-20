@@ -78,77 +78,62 @@ jobs:
             exit 0
           fi
 
-          # 현재 KST 시간 계산
-          KST_HOUR=$(TZ='Asia/Seoul' date +%H)
-          KST_MIN=$(TZ='Asia/Seoul' date +%M)
+          # cron 표현식으로 보드를 직접 매핑 (러너 지연에 영향받지 않음)
+          CRON="${{ github.event.schedule }}"
           KST_DOW=$(TZ='Asia/Seoul' date +%u)  # 1=Monday, 7=Sunday
+          KST_NOW=$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M:%S')
 
-          echo "Current KST: ${KST_HOUR}:${KST_MIN}, Day of week: ${KST_DOW}"
+          echo "Triggered by cron: '${CRON}'"
+          echo "Current KST: ${KST_NOW}, Day of week: ${KST_DOW}"
 
           BOARDS=""
 
-          # 시간대별 보드 매핑 (불규칙 시간에 맞춰 조정)
-          # 각 시간대에 ±5분 여유를 둠
-          case "${KST_HOUR}" in
-            06)
-              # KST 06:47 - law_board1
-              if [ "${KST_MIN}" -ge 42 ] && [ "${KST_MIN}" -le 52 ]; then
-                BOARDS="law_board1"
+          case "${CRON}" in
+            "47 21 * * *")
+              # KST 06:47 - 국가법령정보센터
+              BOARDS="law_board1"
+              ;;
+            "13 22 * * *")
+              # KST 07:13 - 국민참여입법센터 (+ 월요일: 기후에너지환경부 보드 2,3,4)
+              BOARDS="moleg_board1"
+              if [ "${KST_DOW}" -eq 1 ]; then
+                BOARDS="${BOARDS},mcee_board2,mcee_board3,mcee_board4"
               fi
               ;;
-            07)
-              # KST 07:13 - moleg_board1 (+ 월요일: mcee_board2,3,4)
-              if [ "${KST_MIN}" -ge 8 ] && [ "${KST_MIN}" -le 18 ]; then
-                BOARDS="moleg_board1"
-                if [ "${KST_DOW}" -eq 1 ]; then
-                  BOARDS="${BOARDS},mcee_board2,mcee_board3,mcee_board4"
-                fi
-              # KST 07:38 - keiti_board1
-              elif [ "${KST_MIN}" -ge 33 ] && [ "${KST_MIN}" -le 43 ]; then
-                BOARDS="keiti_board1"
+            "38 22 * * *")
+              # KST 07:38 - 한국환경산업기술원
+              BOARDS="keiti_board1"
+              ;;
+            "7 23 * * *")
+              # KST 08:07 - 국립환경과학원
+              BOARDS="nier_board1"
+              ;;
+            "33 23 * * *")
+              # KST 08:33 - 온실가스종합정보센터
+              BOARDS="gir_board1"
+              ;;
+            "3 0 * * *")
+              # KST 09:03 - 온실가스종합정보센터2, 산업통상자원부 (+ 월요일: 기후에너지환경부 보드 5)
+              BOARDS="gir_board2,motie_board2"
+              if [ "${KST_DOW}" -eq 1 ]; then
+                BOARDS="${BOARDS},mcee_board5"
               fi
               ;;
-            08)
-              # KST 08:07 - nier_board1
-              if [ "${KST_MIN}" -ge 2 ] && [ "${KST_MIN}" -le 12 ]; then
-                BOARDS="nier_board1"
-              # KST 08:33 - gir_board1
-              elif [ "${KST_MIN}" -ge 28 ] && [ "${KST_MIN}" -le 38 ]; then
-                BOARDS="gir_board1"
-              fi
+            "3 4 * * *")
+              # KST 13:03 - 한국환경공단
+              BOARDS="keco_board1"
               ;;
-            09)
-              # KST 09:03 - gir_board2, motie_board2 (+ 월요일: mcee_board5)
-              if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
-                BOARDS="gir_board2,motie_board2"
-                if [ "${KST_DOW}" -eq 1 ]; then
-                  BOARDS="${BOARDS},mcee_board5"
-                fi
-              fi
+            "47 6 * * *")
+              # KST 15:47 - 산업통상자원부
+              BOARDS="motie_board1"
               ;;
-            13)
-              # KST 13:03 - keco_board1
-              if [ "${KST_MIN}" -ge 0 ] && [ "${KST_MIN}" -le 10 ]; then
-                BOARDS="keco_board1"
-              fi
+            "52 11 * * *")
+              # KST 20:52 - 한국전력공사
+              BOARDS="kepco_board1"
               ;;
-            15)
-              # KST 15:47 - motie_board1
-              if [ "${KST_MIN}" -ge 42 ] && [ "${KST_MIN}" -le 52 ]; then
-                BOARDS="motie_board1"
-              fi
-              ;;
-            20)
-              # KST 20:52 - kepco_board1
-              if [ "${KST_MIN}" -ge 47 ] && [ "${KST_MIN}" -le 57 ]; then
-                BOARDS="kepco_board1"
-              fi
-              ;;
-            22)
-              # KST 22:19 - mcee_board1
-              if [ "${KST_MIN}" -ge 14 ] && [ "${KST_MIN}" -le 24 ]; then
-                BOARDS="mcee_board1"
-              fi
+            "19 13 * * *")
+              # KST 22:19 - 기후에너지환경부
+              BOARDS="mcee_board1"
               ;;
           esac
 
@@ -159,7 +144,7 @@ jobs:
           else
             echo "boards=" >> $GITHUB_OUTPUT
             echo "should_run=false" >> $GITHUB_OUTPUT
-            echo "No boards to scrape at this time"
+            echo "No boards matched for cron: '${CRON}'"
           fi
 
   # 스크래핑 실행 (재시도 로직 포함)
