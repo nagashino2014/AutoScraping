@@ -1,36 +1,28 @@
 # GitHub Actions 스케줄 스크래핑 워크플로우
 #
-# 설정된 스케줄에 따라 자동으로 스크래핑을 실행하고
-# 결과를 Artifact로 저장합니다.
+# 이 파일은 Railway 앱의 스케줄 설정 변경 시 자동 생성됩니다.
+# 직접 수정하지 마세요. 앱의 스케줄 관리 UI에서 변경해 주세요.
 #
-# 개선 사항 (2026-01-21):
-# - 스케줄 시간 분산: 정각(00분) 대신 불규칙한 시간 사용으로 러너 경쟁 완화
-# - 동시성 제어: concurrency 설정으로 워크플로우 순차 실행
-# - 재시도 로직: 러너 할당 실패 시 자동 재시도
+# 마지막 생성: 2026-02-20T04:14:52.744Z
 
 name: Scheduled Scraping
 
 on:
-  # 스케줄 트리거 (UTC 시간 기준, KST = UTC + 9)
-  # 정각(00분, 30분)을 피하고 불규칙한 시간 사용
   schedule:
-    # 아침 그룹 (KST 06:47) - 국가법령정보센터
-    - cron: "47 21 * * *" # UTC 21:47 = KST 06:47
-    # 아침 그룹 (KST 07:13, 07:38, 08:07)
-    - cron: "13 22 * * *" # UTC 22:13 = KST 07:13
-    - cron: "38 22 * * *" # UTC 22:38 = KST 07:38
-    - cron: "7 23 * * *" # UTC 23:07 = KST 08:07
-    # 추가 아침 (KST 08:33, 09:03)
-    - cron: "33 23 * * *" # UTC 23:33 = KST 08:33
-    - cron: "3 0 * * *" # UTC 00:03 = KST 09:03
-    # 낮 그룹 (KST 13:03, 15:47)
-    - cron: "3 4 * * *" # UTC 04:03 = KST 13:03
-    - cron: "47 6 * * *" # UTC 06:47 = KST 15:47
-    # 저녁 그룹 (KST 20:52, 22:19)
-    - cron: "52 11 * * *" # UTC 11:52 = KST 20:52
-    - cron: "19 13 * * *" # UTC 13:19 = KST 22:19
+    - cron: "0 0 * * *"  # KST 09:00 - 산업통상자원부 - 1232
+    - cron: "50 6 * * *"  # KST 15:50 - 산업통상자원부 - 보도참고자료
+    - cron: "0 9 * * *"  # KST 18:00 - 기후에너지환경부 - 보도·설명
+    - cron: "55 11 * * *"  # KST 20:55 - 한국전력공사 - 보도설명자료
+    - cron: "0 19 * * *"  # KST 04:00 - 한국환경공단 - 보도자료
+    - cron: "0 19 * * 6"  # KST 04:00 (일) - 기후에너지환경부 - 고시·훈령·예규
+    - cron: "30 20 27 * *"  # KST 05:30 (매월 28일) - 온실가스종합정보센터 - 국가·지역 온실가스 통계
+    - cron: "50 21 * * *"  # KST 06:50 - 국가법령정보센터 - 현행법령
+    - cron: "0 22 * * 0"  # KST 07:00 (월) - 기후에너지환경부 - 공지·공고, 기후에너지환경부 - 기후정책
+    - cron: "5 22 * * *"  # KST 07:05 - 국민참여입법센터 - 입법예고(기후에너지환경부)
+    - cron: "30 22 * * *"  # KST 07:30 - 한국환경산업기술원 - 보도자료
+    - cron: "45 22 * * *"  # KST 07:45 - 국립환경과학원 - 보도·해명자료
+    - cron: "5 23 * * *"  # KST 08:05 - 온실가스종합정보센터 - 보도자료
 
-  # 수동 트리거
   workflow_dispatch:
     inputs:
       board_ids:
@@ -50,14 +42,11 @@ on:
 env:
   NODE_VERSION: "20"
 
-# 동시성 제어: 같은 워크플로우는 순차 실행
-# 새 실행이 대기열에 들어가고, 이전 실행 완료 후 시작
 concurrency:
   group: scraping-workflow
   cancel-in-progress: false
 
 jobs:
-  # 스케줄 시간에 따라 실행할 보드 결정
   determine-boards:
     runs-on: ubuntu-latest
     outputs:
@@ -78,62 +67,65 @@ jobs:
             exit 0
           fi
 
-          # cron 표현식으로 보드를 직접 매핑 (러너 지연에 영향받지 않음)
           CRON="${{ github.event.schedule }}"
-          KST_DOW=$(TZ='Asia/Seoul' date +%u)  # 1=Monday, 7=Sunday
           KST_NOW=$(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M:%S')
-
           echo "Triggered by cron: '${CRON}'"
-          echo "Current KST: ${KST_NOW}, Day of week: ${KST_DOW}"
+          echo "Current KST: ${KST_NOW}"
 
           BOARDS=""
 
           case "${CRON}" in
-            "47 21 * * *")
-              # KST 06:47 - 국가법령정보센터
-              BOARDS="law_board1"
+            "0 0 * * *")
+              # KST 09:00 - 산업통상자원부 - 1232
+              BOARDS="motie_board2"
               ;;
-            "13 22 * * *")
-              # KST 07:13 - 국민참여입법센터 (+ 월요일: 기후에너지환경부 보드 2,3,4)
-              BOARDS="moleg_board1"
-              if [ "${KST_DOW}" -eq 1 ]; then
-                BOARDS="${BOARDS},mcee_board2,mcee_board3,mcee_board4"
-              fi
-              ;;
-            "38 22 * * *")
-              # KST 07:38 - 한국환경산업기술원
-              BOARDS="keiti_board1"
-              ;;
-            "7 23 * * *")
-              # KST 08:07 - 국립환경과학원
-              BOARDS="nier_board1"
-              ;;
-            "33 23 * * *")
-              # KST 08:33 - 온실가스종합정보센터
-              BOARDS="gir_board1"
-              ;;
-            "3 0 * * *")
-              # KST 09:03 - 온실가스종합정보센터2, 산업통상자원부 (+ 월요일: 기후에너지환경부 보드 5)
-              BOARDS="gir_board2,motie_board2"
-              if [ "${KST_DOW}" -eq 1 ]; then
-                BOARDS="${BOARDS},mcee_board5"
-              fi
-              ;;
-            "3 4 * * *")
-              # KST 13:03 - 한국환경공단
-              BOARDS="keco_board1"
-              ;;
-            "47 6 * * *")
-              # KST 15:47 - 산업통상자원부
+            "50 6 * * *")
+              # KST 15:50 - 산업통상자원부 - 보도참고자료
               BOARDS="motie_board1"
               ;;
-            "52 11 * * *")
-              # KST 20:52 - 한국전력공사
+            "0 9 * * *")
+              # KST 18:00 - 기후에너지환경부 - 보도·설명
+              BOARDS="mcee_board1"
+              ;;
+            "55 11 * * *")
+              # KST 20:55 - 한국전력공사 - 보도설명자료
               BOARDS="kepco_board1"
               ;;
-            "19 13 * * *")
-              # KST 22:19 - 기후에너지환경부
-              BOARDS="mcee_board1"
+            "0 19 * * *")
+              # KST 04:00 - 한국환경공단 - 보도자료
+              BOARDS="keco_board1"
+              ;;
+            "0 19 * * 6")
+              # KST 04:00 (일) - 기후에너지환경부 - 고시·훈령·예규
+              BOARDS="mcee_board4"
+              ;;
+            "30 20 27 * *")
+              # KST 05:30 (매월 28일) - 온실가스종합정보센터 - 국가·지역 온실가스 통계
+              BOARDS="gir_board2"
+              ;;
+            "50 21 * * *")
+              # KST 06:50 - 국가법령정보센터 - 현행법령
+              BOARDS="law_board1"
+              ;;
+            "0 22 * * 0")
+              # KST 07:00 (월) - 기후에너지환경부 - 공지·공고, 기후에너지환경부 - 기후정책
+              BOARDS="mcee_board2,mcee_board3"
+              ;;
+            "5 22 * * *")
+              # KST 07:05 - 국민참여입법센터 - 입법예고(기후에너지환경부)
+              BOARDS="moleg_board1"
+              ;;
+            "30 22 * * *")
+              # KST 07:30 - 한국환경산업기술원 - 보도자료
+              BOARDS="keiti_board1"
+              ;;
+            "45 22 * * *")
+              # KST 07:45 - 국립환경과학원 - 보도·해명자료
+              BOARDS="nier_board1"
+              ;;
+            "5 23 * * *")
+              # KST 08:05 - 온실가스종합정보센터 - 보도자료
+              BOARDS="gir_board1"
               ;;
           esac
 
@@ -147,12 +139,10 @@ jobs:
             echo "No boards matched for cron: '${CRON}'"
           fi
 
-  # 스크래핑 실행 (재시도 로직 포함)
   scrape:
     needs: determine-boards
     if: needs.determine-boards.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    # 러너 할당 타임아웃 설정 (기본 6시간 → 30분)
     timeout-minutes: 45
 
     steps:
@@ -174,7 +164,6 @@ jobs:
         working-directory: frontend
         run: npx playwright install chromium --with-deps
 
-      # 스크래핑 실행 (재시도 로직)
       - name: Run scraper (attempt 1)
         id: scrape1
         working-directory: frontend
@@ -193,7 +182,6 @@ jobs:
           echo "Running: npm run scrape -- ${SCRAPE_ARGS}"
           npm run scrape -- ${SCRAPE_ARGS}
 
-      # 첫 번째 시도 실패 시 30초 대기 후 재시도
       - name: Wait before retry
         if: steps.scrape1.outcome == 'failure'
         run: |
@@ -219,7 +207,6 @@ jobs:
           echo "Retry attempt: npm run scrape -- ${SCRAPE_ARGS}"
           npm run scrape -- ${SCRAPE_ARGS}
 
-      # 두 번째 시도도 실패 시 60초 대기 후 최종 재시도
       - name: Wait before final retry
         if: steps.scrape1.outcome == 'failure' && steps.scrape2.outcome == 'failure'
         run: |
@@ -265,7 +252,6 @@ jobs:
           echo "- 대상 보드: ${{ needs.determine-boards.outputs.boards }}" >> $GITHUB_STEP_SUMMARY
           echo "- 실행 시간: $(TZ='Asia/Seoul' date '+%Y-%m-%d %H:%M:%S KST')" >> $GITHUB_STEP_SUMMARY
 
-          # 재시도 횟수 표시
           ATTEMPTS=1
           if [ "${{ steps.scrape1.outcome }}" == "failure" ]; then
             ATTEMPTS=2

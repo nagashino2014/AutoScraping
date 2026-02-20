@@ -381,6 +381,21 @@
   ],
   "runs": [
     {
+      "run_id": "run_20260219115500942_j09v6n",
+      "schedule_id": "sched_kepco_board1",
+      "triggered_by": "cron",
+      "started_at": "2026-02-19T11:55:00.941Z",
+      "status": "failed",
+      "summary": "스크래핑 완료: 0건 수집, 0건 다운로드, 1개 보드 실패 (0/1 보드, 3초)",
+      "finished_at": "2026-02-19T11:55:03.772Z",
+      "metrics": {
+        "new_records": 0,
+        "skipped_duplicates": 0,
+        "failed_records": 1,
+        "duration_ms": 2831
+      }
+    },
+    {
       "run_id": "run_20260209223000982_qxmj1r",
       "schedule_id": "sched_keiti_board1",
       "triggered_by": "cron",
@@ -1683,5 +1698,5 @@
       }
     }
   ],
-  "updated_at": "2026-02-09T22:30:26.215Z"
+  "updated_at": "2026-02-19T11:55:03.773Z"
 }
