@@ -5,6 +5,7 @@ import {
   type ScraperSchedule,
 } from "@/lib/scraper/schedule-store";
 import { updateScheduleJob, removeScheduleJob } from "@/lib/scraper/scheduler";
+import { syncScheduleWorkflowToGitHub } from "@/lib/scraper/schedule-github-sync";
 
 function isValidScheduleId(schedule_id: string) {
   return /^[a-z][a-z0-9_]*$/.test(schedule_id);
@@ -69,6 +70,9 @@ export async function PUT(req: Request, ctx: { params: Promise<{ scheduleId: str
   // 스케줄러 업데이트
   updateScheduleJob(nextSchedule);
 
+  // GitHub Actions 워크플로우 동기화
+  syncScheduleWorkflowToGitHub().catch(() => {});
+
   return NextResponse.json({ ok: true, schedule: nextSchedule });
 }
 
@@ -87,6 +91,9 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ scheduleId:
 
   // 스케줄러에서 제거
   removeScheduleJob(schedule_id);
+
+  // GitHub Actions 워크플로우 동기화
+  syncScheduleWorkflowToGitHub().catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

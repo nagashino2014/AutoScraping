@@ -5,6 +5,7 @@ import {
   type ScraperSchedule,
 } from "@/lib/scraper/schedule-store";
 import { updateScheduleJob } from "@/lib/scraper/scheduler";
+import { syncScheduleWorkflowToGitHub } from "@/lib/scraper/schedule-github-sync";
 
 function isValidScheduleId(schedule_id: string) {
   // 권장 예: daily_moe_press (소문자/숫자/언더스코어)
@@ -61,6 +62,9 @@ export async function POST(req: Request) {
 
   // 스케줄러에 새 스케줄 등록
   updateScheduleJob(nextSchedule);
+
+  // GitHub Actions 워크플로우 동기화 (비동기, 실패해도 응답에 영향 없음)
+  syncScheduleWorkflowToGitHub().catch(() => {});
 
   return NextResponse.json({ ok: true, schedule: nextSchedule }, { status: 201 });
 }
