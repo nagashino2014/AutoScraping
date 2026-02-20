@@ -947,7 +947,7 @@ export async function getRunningJobs(): Promise<ScrapeLog[]> {
   return result[0].values.map((values) => {
     const row: Record<string, unknown> = {};
     columns.forEach((col, i) => row[col] = values[i]);
-    return row as ScrapeLog;
+    return row as unknown as ScrapeLog;
   });
 }
 
@@ -967,7 +967,7 @@ export async function getAllRecentLogs(limit: number = 50): Promise<ScrapeLog[]>
   return result[0].values.map((values) => {
     const row: Record<string, unknown> = {};
     columns.forEach((col, i) => row[col] = values[i]);
-    return row as ScrapeLog;
+    return row as unknown as ScrapeLog;
   });
 }
 
@@ -1126,7 +1126,7 @@ export async function getErrorList(options?: {
       const row: Record<string, unknown> = {};
       columns.forEach((col, i) => (row[col] = values[i]));
       const t = classifyErrorType(row.error_message as string | null);
-      return { ...row, error_type: t } as ScrapeLog & { error_type: ErrorType };
+      return { ...row, error_type: t } as unknown as ScrapeLog & { error_type: ErrorType };
     });
 
     const filtered = allItems.filter((i) => i.error_type === errorType);
@@ -1152,7 +1152,7 @@ export async function getErrorList(options?: {
     const row: Record<string, unknown> = {};
     columns.forEach((col, i) => (row[col] = values[i]));
     const t = classifyErrorType(row.error_message as string | null);
-    return { ...row, error_type: t } as ScrapeLog & { error_type: ErrorType };
+    return { ...row, error_type: t } as unknown as ScrapeLog & { error_type: ErrorType };
   });
 
   return { items, total };
@@ -1172,7 +1172,7 @@ export async function getScrapeLogDetail(logId: string): Promise<ScrapeLog | nul
   const row: Record<string, unknown> = {};
   columns.forEach((col, i) => row[col] = values[i]);
   
-  return row as ScrapeLog;
+  return row as unknown as ScrapeLog;
 }
 
 /**
