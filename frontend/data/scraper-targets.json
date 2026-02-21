@@ -3598,7 +3598,7 @@
       ],
       "enabled": true,
       "board_mode": "web_scraping",
-      "schedule_cron": "10 18 * * *",
+      "schedule_cron": "0 19 * * *",
       "schedule_timezone": "Asia/Tokyo",
       "schedule_config": {
         "scheduleMode": "cycle",
@@ -3607,8 +3607,8 @@
         "monthlyDay": "1",
         "weeklyDay": "mon",
         "intervalDays": "1",
-        "hour": "18",
-        "minute": "10"
+        "hour": "19",
+        "minute": "0"
       },
       "dedup_key": "url",
       "published_date_rule": {
@@ -4871,5 +4871,5 @@
       }
     }
   ],
-  "updated_at": "2026-02-21T09:04:27.790Z"
+  "updated_at": "2026-02-21T09:57:25.772Z"
 }
