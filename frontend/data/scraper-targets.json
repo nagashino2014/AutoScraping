@@ -3617,21 +3617,21 @@
         "format": "YYYY-MM-DD"
       },
       "collection_range": {
-        "type": "relative",
+        "type": "yearly",
         "period_start": "",
         "period_end": "",
         "relative_days": 30,
-        "years": []
+        "years": [2025, 2026]
       },
       "collection_targets": {
         "title_body": true,
         "attachments": {
           "enabled": true,
-          "all": true,
+          "all": false,
           "hwpx": false,
           "docx": false,
           "xlsx": false,
-          "pdf": false
+          "pdf": true
         }
       },
       "web_config": {
@@ -3656,12 +3656,13 @@
         },
         "collect_body": true,
         "collection_range": {
-          "type": "relative",
-          "days_before": 30
+          "type": "yearly",
+          "years": [2025, 2026]
         },
         "attachments": {
           "enabled": true,
-          "collect_all": true,
+          "collect_all": false,
+          "file_types": ["pdf"],
           "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
         }
       },

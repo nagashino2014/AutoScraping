@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { exec } from "node:child_process";
+import {
+  isGitHubApiAvailable,
+  updateFileOnGitHub,
+  type GitHubSyncResult as ApiSyncResult,
+} from "./github-api";
 
 export type OrgStatus = "active" | "inactive";
 export type CollectionMode = "web_scraping" | "api_only" | "hybrid";
@@ -271,59 +276,61 @@ function execGitCommand(command: string, cwd: string): Promise<string> {
 
 /**
  * scraper-targets.json 변경사항을 GitHub에 동기화
- * 
- * @param commitMessage - 커밋 메시지 (기본: "update: scraper targets settings")
- * @returns GitSyncResult
+ *
+ * 1) GITHUB_TOKEN + GITHUB_REPO가 설정되어 있으면 GitHub REST API 사용 (Railway 환경)
+ * 2) 아니면 로컬 git CLI 사용 (개발 환경)
  */
 export async function syncTargetsToGitHub(
   commitMessage: string = "update: scraper targets settings"
 ): Promise<GitSyncResult> {
+  const timestamp = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const fullMessage = `${commitMessage} (${timestamp})`;
+
+  // --- GitHub API 방식 (Railway / Docker 환경) ---
+  if (isGitHubApiAvailable()) {
+    try {
+      const p = targetsFilePath();
+      const content = fs.readFileSync(p, "utf-8");
+      const result: ApiSyncResult = await updateFileOnGitHub(
+        "frontend/data/scraper-targets.json",
+        content,
+        fullMessage
+      );
+      console.log(`[GitSync] API: ${result.message} ${result.details || ""}`);
+      return result;
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[GitSync] API 실패:", msg);
+      return { success: false, message: "GitHub API 동기화 실패", details: msg };
+    }
+  }
+
+  // --- Git CLI 방식 (로컬 개발 환경) ---
   const projectRoot = getProjectRoot();
   const targetsFile = "frontend/data/scraper-targets.json";
-  
+
   try {
-    // 1. Git 상태 확인
     const status = await execGitCommand("git status --porcelain", projectRoot);
-    
-    // scraper-targets.json이 변경되었는지 확인
+
     if (!status.includes("scraper-targets.json")) {
-      return {
-        success: true,
-        message: "변경사항 없음 - 동기화 불필요",
-      };
+      return { success: true, message: "변경사항 없음 - 동기화 불필요" };
     }
-    
-    // 2. 파일 스테이징
+
     await execGitCommand(`git add "${targetsFile}"`, projectRoot);
-    
-    // 3. 커밋
-    const timestamp = new Date().toISOString().slice(0, 19).replace("T", " ");
-    const fullMessage = `${commitMessage} (${timestamp})`;
     await execGitCommand(`git commit -m "${fullMessage}"`, projectRoot);
-    
-    // 4. 푸시
     const pushResult = await execGitCommand("git push", projectRoot);
-    
+
     return {
       success: true,
       message: "GitHub 동기화 완료",
       details: pushResult || "푸시 성공",
     };
-    
-  } catch (error: any) {
-    // 커밋할 변경사항이 없는 경우
-    if (error.message?.includes("nothing to commit")) {
-      return {
-        success: true,
-        message: "변경사항 없음 - 동기화 불필요",
-      };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("nothing to commit")) {
+      return { success: true, message: "변경사항 없음 - 동기화 불필요" };
     }
-    
-    return {
-      success: false,
-      message: "GitHub 동기화 실패",
-      details: error.message,
-    };
+    return { success: false, message: "GitHub 동기화 실패", details: msg };
   }
 }
 

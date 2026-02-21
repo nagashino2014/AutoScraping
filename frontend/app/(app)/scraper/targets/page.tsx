@@ -6087,6 +6087,34 @@ export default function ScraperTargetsPage() {
                           };
                           if (mode === "web_scraping") {
                             next.web_config = mergeExternalDetailToWebConfig(parseJsonOrEmpty(webConfigText, "web_config"));
+                            if (next.web_config && typeof next.web_config === "object") {
+                              const wc = next.web_config as Record<string, unknown>;
+                              if (boardDraft.collection_range?.type) {
+                                const cr = boardDraft.collection_range;
+                                const rc: Record<string, unknown> = { type: cr.type };
+                                if (cr.type === "period") { rc.start_date = cr.period_start || null; rc.end_date = cr.period_end || null; }
+                                else if (cr.type === "relative") { rc.days_before = cr.relative_days || 30; }
+                                else if (cr.type === "yearly") { rc.years = cr.years || []; }
+                                wc.collection_range = rc;
+                              }
+                              const att = boardDraft.collection_targets?.attachments;
+                              if (att) {
+                                const ft: string[] = [];
+                                if (!att.all && att.enabled !== false) {
+                                  if (att.hwpx) ft.push("hwpx", "hwp");
+                                  if (att.docx) ft.push("docx", "doc");
+                                  if (att.xlsx) ft.push("xlsx", "xls", "csv");
+                                  if (att.pdf) ft.push("pdf");
+                                }
+                                wc.attachments = {
+                                  ...(wc.attachments as Record<string, unknown> || {}),
+                                  enabled: att.enabled !== false,
+                                  collect_all: att.all || false,
+                                  file_types: ft.length > 0 ? ft : undefined,
+                                };
+                              }
+                              wc.collect_body = boardDraft.collection_targets?.title_body !== false;
+                            }
                             next.api_config = undefined;
                             next.hybrid_config = undefined;
                             // 사이트 내 검색 옵션 저장 (웹 스크래핑 모드)

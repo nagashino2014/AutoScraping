@@ -1721,13 +1721,23 @@ export async function runScraper(options: ScraperOptions): Promise<ScrapingResul
       throw new Error("list_url이 설정되지 않았습니다");
     }
     
-    // web_config 구성
+    // web_config 구성: collection_targets → file_types 변환
+    const attCfg = board.collection_targets?.attachments;
+    const resolvedFileTypes: string[] = [];
+    if (attCfg && !attCfg.all && attCfg.enabled !== false) {
+      if ((attCfg as Record<string, unknown>).hwpx) resolvedFileTypes.push("hwpx", "hwp");
+      if ((attCfg as Record<string, unknown>).docx) resolvedFileTypes.push("docx", "doc");
+      if ((attCfg as Record<string, unknown>).xlsx) resolvedFileTypes.push("xlsx", "xls", "csv");
+      if ((attCfg as Record<string, unknown>).pdf) resolvedFileTypes.push("pdf");
+    }
     const webConfig: WebConfig = {
       ...(board.web_config as WebConfig || {}),
       collect_body: board.collection_targets?.title_body ?? true,
       attachments: {
-        enabled: board.collection_targets?.attachments?.enabled ?? true,
-        collect_all: board.collection_targets?.attachments?.all ?? false,
+        ...(board.web_config as WebConfig || {}).attachments,
+        enabled: attCfg?.enabled ?? true,
+        collect_all: attCfg?.all ?? false,
+        file_types: resolvedFileTypes.length > 0 ? resolvedFileTypes : undefined,
       },
       collection_range: board.collection_range ? {
         type: board.collection_range.type as any,

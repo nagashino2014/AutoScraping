@@ -2,6 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { exec } from "node:child_process";
 import { readScraperSchedules, type ScraperSchedule } from "./schedule-store";
+import {
+  isGitHubApiAvailable,
+  updateMultipleFilesOnGitHub,
+} from "./github-api";
 
 // ============================================================
 // Git helpers (same pattern as targets-store.ts)
@@ -391,18 +395,55 @@ function generateWorkflowYaml(groups: CronGroup[]): string {
 
 /**
  * scraper-schedules.json에서 워크플로우 YAML을 생성하고 GitHub에 동기화
+ *
+ * 1) GITHUB_TOKEN + GITHUB_REPO가 설정되어 있으면 GitHub REST API 사용 (Railway 환경)
+ * 2) 아니면 로컬 git CLI 사용 (개발 환경)
  */
 export async function syncScheduleWorkflowToGitHub(): Promise<ScheduleSyncResult> {
+  const data = readScraperSchedules();
+  const groups = groupSchedulesByCron(data.schedules);
+  const yaml = generateWorkflowYaml(groups);
+
+  const timestamp = new Date().toISOString().slice(0, 19).replace("T", " ");
+  const commitMsg = `update: sync scraping schedules and workflow (${timestamp})`;
+
+  // --- GitHub API 방식 (Railway / Docker 환경) ---
+  if (isGitHubApiAvailable()) {
+    try {
+      const projectRoot = getProjectRoot();
+      const schedulesPath = path.join(projectRoot, "frontend", "data", "scraper-schedules.json");
+
+      const schedulesContent = fs.existsSync(schedulesPath)
+        ? fs.readFileSync(schedulesPath, "utf-8")
+        : JSON.stringify(data, null, 2);
+
+      const result = await updateMultipleFilesOnGitHub(
+        [
+          { path: "frontend/data/scraper-schedules.json", content: schedulesContent },
+          { path: ".github/workflows/scheduled-scrape.yml", content: yaml },
+        ],
+        commitMsg
+      );
+      console.log(`[ScheduleSync] API: ${result.message} ${result.details || ""}`);
+      return {
+        success: result.success,
+        message: result.message,
+        details: result.success ? `${groups.length}개 cron 트리거 생성` : result.details,
+      };
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[ScheduleSync] API 실패:", msg);
+      return { success: false, message: "GitHub API 동기화 실패", details: msg };
+    }
+  }
+
+  // --- Git CLI 방식 (로컬 개발 환경) ---
   const projectRoot = getProjectRoot();
   const workflowPath = path.join(projectRoot, ".github", "workflows", "scheduled-scrape.yml");
   const schedulesRelPath = "frontend/data/scraper-schedules.json";
   const workflowRelPath = ".github/workflows/scheduled-scrape.yml";
 
   try {
-    const data = readScraperSchedules();
-    const groups = groupSchedulesByCron(data.schedules);
-    const yaml = generateWorkflowYaml(groups);
-
     fs.mkdirSync(path.dirname(workflowPath), { recursive: true });
     fs.writeFileSync(workflowPath, yaml, "utf8");
 
@@ -422,9 +463,7 @@ export async function syncScheduleWorkflowToGitHub(): Promise<ScheduleSyncResult
       await execGitCommand(`git add "${workflowRelPath}"`, projectRoot);
     }
 
-    const timestamp = new Date().toISOString().slice(0, 19).replace("T", " ");
-    const msg = `update: sync scraping schedules and workflow (${timestamp})`;
-    await execGitCommand(`git commit -m "${msg}"`, projectRoot);
+    await execGitCommand(`git commit -m "${commitMsg}"`, projectRoot);
     await execGitCommand("git push", projectRoot);
 
     return {
@@ -432,14 +471,11 @@ export async function syncScheduleWorkflowToGitHub(): Promise<ScheduleSyncResult
       message: "GitHub 동기화 완료 (스케줄 + 워크플로우)",
       details: `${groups.length}개 cron 트리거 생성`,
     };
-  } catch (error: any) {
-    if (error.message?.includes("nothing to commit")) {
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("nothing to commit")) {
       return { success: true, message: "변경사항 없음 - 동기화 불필요" };
     }
-    return {
-      success: false,
-      message: "GitHub 동기화 실패",
-      details: error.message,
-    };
+    return { success: false, message: "GitHub 동기화 실패", details: msg };
   }
 }
