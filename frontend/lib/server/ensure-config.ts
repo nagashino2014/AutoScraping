@@ -56,7 +56,14 @@ export async function ensureConfigFiles() {
 }
 
 /**
- * scraper-targets.json 병합: 새 기관/보드만 추가, 기존 항목의 사용자 수정사항 보존
+ * scraper-targets.json 병합 전략:
+ *
+ * data-defaults(git/Docker 이미지)와 볼륨(런타임) 중 더 최신인 쪽을 기준으로 삼되,
+ * 양쪽에만 존재하는 기관/보드는 모두 포함한다.
+ *
+ * - defaults가 더 최신: git push로 설정이 변경된 경우 → 기존 보드 설정도 defaults로 갱신
+ * - 볼륨이 더 최신: Railway UI에서 변경되었으나 git sync 전에 재배포된 경우 → 볼륨 보존
+ * - 어느 쪽이든 상대방에만 있는 기관/보드는 추가
  */
 async function mergeScraperTargets(
   dataDefaultsDir: string,
@@ -77,31 +84,43 @@ async function mergeScraperTargets(
     const defaults = JSON.parse(fs.readFileSync(src, "utf-8"));
     const current = JSON.parse(fs.readFileSync(dest, "utf-8"));
 
-    const currentOrgIds = new Set((current.orgs || []).map((o: { org_id: string }) => o.org_id));
-    const currentBoardIds = new Set((current.boards || []).map((b: { board_id: string }) => b.board_id));
+    const defaultsTime = new Date(defaults.updated_at || 0).getTime();
+    const currentTime = new Date(current.updated_at || 0).getTime();
+    const defaultsIsNewer = defaultsTime > currentTime;
 
+    const base = defaultsIsNewer ? defaults : current;
+    const other = defaultsIsNewer ? current : defaults;
+    const baseLabel = defaultsIsNewer ? "defaults" : "volume";
+
+    console.log(`[Merge] 기준: ${baseLabel} (defaults=${new Date(defaultsTime).toISOString()}, volume=${new Date(currentTime).toISOString()})`);
+
+    const baseOrgIds = new Set((base.orgs || []).map((o: { org_id: string }) => o.org_id));
+    const baseBoardIds = new Set((base.boards || []).map((b: { board_id: string }) => b.board_id));
     let added = 0;
 
-    for (const org of defaults.orgs || []) {
-      if (!currentOrgIds.has(org.org_id)) {
-        current.orgs.push(org);
+    for (const org of other.orgs || []) {
+      if (!baseOrgIds.has(org.org_id)) {
+        base.orgs.push(org);
         added++;
-        console.log(`[Merge] 새 기관 추가: ${org.org_name} (${org.org_id})`);
+        console.log(`[Merge] 기관 추가 (from ${defaultsIsNewer ? "volume" : "defaults"}): ${org.org_name}`);
       }
     }
 
-    for (const board of defaults.boards || []) {
-      if (!currentBoardIds.has(board.board_id)) {
-        current.boards.push(board);
+    for (const board of other.boards || []) {
+      if (!baseBoardIds.has(board.board_id)) {
+        base.boards.push(board);
         added++;
-        console.log(`[Merge] 새 보드 추가: ${board.board_name} (${board.board_id})`);
+        console.log(`[Merge] 보드 추가 (from ${defaultsIsNewer ? "volume" : "defaults"}): ${board.board_name}`);
       }
     }
 
-    if (added > 0) {
-      current.updated_at = new Date().toISOString();
-      fs.writeFileSync(dest, JSON.stringify(current, null, 2), "utf-8");
-      console.log(`[Merge] scraper-targets.json: ${added}개 항목 추가 (기존 설정 보존)`);
+    base.updated_at = new Date().toISOString();
+    fs.writeFileSync(dest, JSON.stringify(base, null, 2), "utf-8");
+
+    if (defaultsIsNewer) {
+      console.log(`[Merge] scraper-targets.json: defaults 기준으로 갱신 (+${added}개 볼륨 항목 병합)`);
+    } else if (added > 0) {
+      console.log(`[Merge] scraper-targets.json: 볼륨 보존, ${added}개 defaults 항목 추가`);
     }
   } catch (e) {
     console.error("[Merge] scraper-targets.json 병합 실패:", e);
