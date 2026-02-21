@@ -3585,7 +3585,7 @@
       "board_id": "mcee_board1",
       "org_id": "mcee",
       "board_name": "보도·설명",
-      "access_mode": "static_html",
+      "access_mode": "dynamic_js",
       "list_url": "https://mcee.go.kr/home/web/index.do?menuId=10525",
       "doc_type": "보도자료",
       "domain_tags": [
@@ -3598,7 +3598,7 @@
       ],
       "enabled": true,
       "board_mode": "web_scraping",
-      "schedule_cron": "0 18 * * *",
+      "schedule_cron": "10 18 * * *",
       "schedule_timezone": "Asia/Tokyo",
       "schedule_config": {
         "scheduleMode": "cycle",
@@ -3608,7 +3608,7 @@
         "weeklyDay": "mon",
         "intervalDays": "1",
         "hour": "18",
-        "minute": "0"
+        "minute": "10"
       },
       "dedup_key": "url",
       "published_date_rule": {
@@ -3621,7 +3621,10 @@
         "period_start": "",
         "period_end": "",
         "relative_days": 30,
-        "years": [2025, 2026]
+        "years": [
+          2025,
+          2026
+        ]
       },
       "collection_targets": {
         "title_body": true,
@@ -3635,7 +3638,7 @@
         }
       },
       "web_config": {
-        "rendering": "static_html",
+        "rendering": "dynamic_js",
         "list": {
           "item_selector": "tbody tr",
           "container_selector": "table.table_case01",
@@ -3657,12 +3660,17 @@
         "collect_body": true,
         "collection_range": {
           "type": "yearly",
-          "years": [2025, 2026]
+          "years": [
+            2025,
+            2026
+          ]
         },
         "attachments": {
           "enabled": true,
           "collect_all": false,
-          "file_types": ["pdf"],
+          "file_types": [
+            "pdf"
+          ],
           "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
         }
       },
@@ -3783,7 +3791,7 @@
       "board_id": "mcee_board3",
       "org_id": "mcee",
       "board_name": "기후정책",
-      "access_mode": "static_html",
+      "access_mode": "dynamic_js",
       "list_url": "https://mcee.go.kr/home/web/index.do?menuId=10262",
       "doc_type": "정책",
       "domain_tags": [
@@ -3796,15 +3804,15 @@
       ],
       "enabled": true,
       "board_mode": "web_scraping",
-      "schedule_cron": "0 7 * * 1",
+      "schedule_cron": "0 19 * * *",
       "schedule_timezone": "Asia/Tokyo",
       "schedule_config": {
         "scheduleMode": "cycle",
-        "cycleType": "weekly",
+        "cycleType": "interval",
         "monthlyDay": "1",
         "weeklyDay": "mon",
         "intervalDays": "1",
-        "hour": "7",
+        "hour": "19",
         "minute": "0"
       },
       "dedup_key": "url",
@@ -3814,25 +3822,28 @@
         "format": "YYYY-MM-DD"
       },
       "collection_range": {
-        "type": "relative",
+        "type": "yearly",
         "period_start": "",
         "period_end": "",
         "relative_days": 90,
-        "years": []
+        "years": [
+          2025,
+          2026
+        ]
       },
       "collection_targets": {
         "title_body": true,
         "attachments": {
           "enabled": true,
-          "all": true,
+          "all": false,
           "hwpx": false,
           "docx": false,
           "xlsx": false,
-          "pdf": false
+          "pdf": true
         }
       },
       "web_config": {
-        "rendering": "static_html",
+        "rendering": "dynamic_js",
         "list": {
           "item_selector": "tbody tr",
           "container_selector": "table.table_case01",
@@ -3853,12 +3864,18 @@
         },
         "collect_body": true,
         "collection_range": {
-          "type": "relative",
-          "days_before": 90
+          "type": "yearly",
+          "years": [
+            2025,
+            2026
+          ]
         },
         "attachments": {
           "enabled": true,
-          "collect_all": true,
+          "collect_all": false,
+          "file_types": [
+            "pdf"
+          ],
           "selector": "a[href*='.hwp'], a[href*='.pdf'], a[href*='.doc'], a[href*='.xls'], a[href*='download'], a[href*='fileDown']"
         }
       },
@@ -4854,5 +4871,5 @@
       }
     }
   ],
-  "updated_at": "2026-02-07T11:24:28.533Z"
+  "updated_at": "2026-02-21T09:04:27.790Z"
 }
