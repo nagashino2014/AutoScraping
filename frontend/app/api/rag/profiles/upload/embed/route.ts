@@ -6,16 +6,22 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import { loadProfile, saveProfile } from "@/lib/rag/site-profile";
+import { storage, downloadJson, uploadJson } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 600; // 10분
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
-const EXTRACTED_DIR = path.join(process.cwd(), "save", "ExtractedData");
-const CHUNK_DIR = path.join(process.cwd(), "chunk");
+function extractedStorageKey(profileId: string, docId: string): string {
+  return `ExtractedData/${profileId}/${docId}_extracted.json`;
+}
+function chunkStorageKey(profileId: string, docId: string): string {
+  return `chunk/${profileId}/${docId}_chunks.json`;
+}
+function embeddingStorageKey(profileId: string, docId: string): string {
+  return `chunk/${profileId}/${docId}_embeddings.json`;
+}
 
 // 토큰 추정 함수 (한글 기준 - 보수적 계산)
 // 한글은 GPT tokenizer에서 실제로 2~3 토큰/자 사용
@@ -31,14 +37,6 @@ function estimateTokens(text: string): number {
   return Math.ceil(koreanChars * 2.5 + englishWords * 0.4 + others * 0.5);
 }
 
-// 청크 디렉토리 확인
-function ensureChunkDir(profileId: string) {
-  const dir = path.join(CHUNK_DIR, profileId);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
-}
 
 /**
  * POST: 청킹 및 임베딩 (SSE 스트리밍)
@@ -76,15 +74,16 @@ export async function POST(request: NextRequest) {
     const doc = profile.uploadedDocuments[docIndex];
 
     // 추출된 데이터 확인
-    const extractedPath = path.join(EXTRACTED_DIR, profileId, `${docId}_extracted.json`);
-    if (!fs.existsSync(extractedPath)) {
+    const extKey = extractedStorageKey(profileId, docId);
+    const extExists = await storage.exists(extKey);
+    if (!extExists) {
       return NextResponse.json(
         { success: false, error: "추출된 데이터를 찾을 수 없습니다. 먼저 텍스트 추출을 수행하세요." },
         { status: 404 }
       );
     }
 
-    const extractedData = JSON.parse(fs.readFileSync(extractedPath, "utf-8"));
+    const extractedData = await downloadJson(extKey);
     const extractedText = extractedData.text || "";
 
     if (!extractedText) {
@@ -138,9 +137,8 @@ export async function POST(request: NextRequest) {
         });
 
         // 청크 저장
-        const chunkDir = ensureChunkDir(profileId);
-        const chunkPath = path.join(chunkDir, `${docId}_chunks.json`);
-        fs.writeFileSync(chunkPath, JSON.stringify(chunks, null, 2));
+        const chunkKey = chunkStorageKey(profileId, docId);
+        await uploadJson(chunkKey, chunks);
 
         // 임베딩 생성
         await sendEvent("progress", { stage: "embedding", message: "임베딩 생성 중..." });
@@ -245,12 +243,12 @@ export async function POST(request: NextRequest) {
           embedding: r.embedding,
         }));
         
-        const embeddingPath = path.join(chunkDir, `${docId}_embeddings.json`);
-        fs.writeFileSync(embeddingPath, JSON.stringify(chunksWithEmbeddings, null, 2));
+        const embKey = embeddingStorageKey(profileId, docId);
+        await uploadJson(embKey, chunksWithEmbeddings);
         
         await sendEvent("progress", { 
           stage: "saved", 
-          message: `임베딩 파일 저장 완료: ${embeddingPath}` 
+          message: `임베딩 파일 저장 완료: ${embKey}` 
         });
 
         // 벡터DB 저장 시도 (실패해도 진행)
@@ -296,8 +294,8 @@ export async function POST(request: NextRequest) {
         // 프로파일 업데이트 (임베딩 완료로 표시)
         doc.embeddingStatus = "completed";
         doc.chunkCount = chunks.length;
-        doc.chunkPath = chunkPath;
-        doc.embeddingPath = embeddingPath;
+        doc.chunkPath = chunkKey;
+        doc.embeddingPath = embKey;
         doc.vectorDbStored = vectorDbSuccess;
         profile.uploadedDocuments[docIndex] = doc;
         saveProfile(profile);
@@ -306,8 +304,8 @@ export async function POST(request: NextRequest) {
           success: true,
           chunkCount: chunks.length,
           embeddingCount: allResults.length,
-          chunkPath,
-          embeddingPath,
+          chunkPath: chunkKey,
+          embeddingPath: embKey,
           vectorDbStored: vectorDbSuccess,
         });
       } catch (error: any) {
@@ -376,11 +374,15 @@ export async function DELETE(request: NextRequest) {
     let deletedEmbeddings = 0;
 
     // 청크 파일 삭제
-    const chunkPath = path.join(CHUNK_DIR, profileId, `${docId}_chunks.json`);
-    if (fs.existsSync(chunkPath)) {
-      const chunks = JSON.parse(fs.readFileSync(chunkPath, "utf-8"));
-      deletedChunks = chunks.length;
-      fs.unlinkSync(chunkPath);
+    const chunkKey = chunkStorageKey(profileId, docId);
+    try {
+      if (await storage.exists(chunkKey)) {
+        const chunks = await downloadJson<any[]>(chunkKey);
+        deletedChunks = chunks.length;
+        await storage.delete(chunkKey);
+      }
+    } catch {
+      // 파일이 없을 수 있음
     }
 
     // 벡터DB에서 해당 docId의 청크 삭제

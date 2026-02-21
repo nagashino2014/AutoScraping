@@ -10,6 +10,7 @@ import fs from "fs";
 import path from "path";
 import http from "http";
 import { loadProfile, saveProfile } from "@/lib/rag/site-profile";
+import { storage, uploadJson } from "@/lib/storage";
 
 export const runtime = "nodejs";
 export const maxDuration = 600; // 10분 - 대용량 파일 처리를 위해
@@ -66,15 +67,8 @@ function fetchBackend(
   });
 }
 const UPLOAD_DIR = path.join(process.cwd(), "data", "profile-uploads");
-const EXTRACTED_DIR = path.join(process.cwd(), "save", "ExtractedData");
-
-// 추출 데이터 디렉토리 확인
-function ensureExtractedDir(profileId: string) {
-  const dir = path.join(EXTRACTED_DIR, profileId);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
+function extractedStorageKey(profileId: string, docId: string): string {
+  return `ExtractedData/${profileId}/${docId}_extracted.json`;
 }
 
 /**
@@ -215,27 +209,18 @@ export async function POST(request: NextRequest) {
         });
 
         // 추출 결과 저장
-        const extractedDir = ensureExtractedDir(profileId);
-        const extractedPath = path.join(extractedDir, `${docId}_extracted.json`);
-        
-        fs.writeFileSync(
-          extractedPath,
-          JSON.stringify(
-            {
-              docId,
-              profileId,
-              originalName: doc.originalName,
-              extractedAt: new Date().toISOString(),
-              text: extractedText,
-              tables,
-              pageCount,
-              textLength: extractedText.length,
-            },
-            null,
-            2
-          )
-        );
-        console.log("[Extract] 추출 JSON 저장 완료:", extractedPath);
+        const storageKey = extractedStorageKey(profileId, docId);
+        await uploadJson(storageKey, {
+          docId,
+          profileId,
+          originalName: doc.originalName,
+          extractedAt: new Date().toISOString(),
+          text: extractedText,
+          tables,
+          pageCount,
+          textLength: extractedText.length,
+        });
+        console.log("[Extract] 추출 JSON 저장 완료:", storageKey);
 
         // 프로파일 업데이트 (최신 프로파일을 다시 로드하여 덮어쓰기 방지)
         const freshProfile = loadProfile(profileId);
@@ -243,21 +228,21 @@ export async function POST(request: NextRequest) {
           const freshDocIndex = freshProfile.uploadedDocuments.findIndex((d) => d.id === docId);
           if (freshDocIndex !== -1) {
             freshProfile.uploadedDocuments[freshDocIndex].extractionStatus = "completed";
-            freshProfile.uploadedDocuments[freshDocIndex].extractedPath = extractedPath;
+            freshProfile.uploadedDocuments[freshDocIndex].extractedPath = storageKey;
             saveProfile(freshProfile);
             console.log("[Extract] 프로파일 업데이트 완료: extractionStatus=completed");
           }
         } else {
           // 폴백: 원래 프로파일 객체 사용
           doc.extractionStatus = "completed";
-          doc.extractedPath = extractedPath;
+          doc.extractedPath = storageKey;
           profile.uploadedDocuments[docIndex] = doc;
           saveProfile(profile);
         }
 
         await sendEvent("complete", {
           success: true,
-          extractedPath,
+          extractedPath: storageKey,
           textLength: extractedText.length,
           tableCount: tables.length,
           pageCount,
@@ -357,10 +342,14 @@ export async function DELETE(request: NextRequest) {
     let deletedSourceFile = false;
 
     // 추출된 데이터 삭제
-    const extractedPath = path.join(EXTRACTED_DIR, profileId, `${docId}_extracted.json`);
-    if (fs.existsSync(extractedPath)) {
-      fs.unlinkSync(extractedPath);
-      deletedExtraction = true;
+    const extractedKey = extractedStorageKey(profileId, docId);
+    try {
+      if (await storage.exists(extractedKey)) {
+        await storage.delete(extractedKey);
+        deletedExtraction = true;
+      }
+    } catch {
+      // 파일이 없을 수 있음
     }
 
     // 원본 파일도 삭제 요청 시

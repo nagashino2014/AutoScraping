@@ -16,7 +16,7 @@ export const maxDuration = 300; // 5분 제한
 // 상수 정의
 // ============================================================
 
-const API_SAVE_DIR = "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\Test\\API";
+const API_SAVE_DIR = path.join(process.cwd(), "save", "Test", "API");
 
 // ============================================================
 // 환경변수에서 시크릿 가져오기

@@ -7,9 +7,7 @@ export const runtime = "nodejs";
 // APISet 폴더의 JSON 파일 목록 조회
 export async function GET() {
   try {
-    // 올바른 경로: C:\Users\nagas\Documents\CodingProject\Web Scraper Final\frontend\data\APISet
     const possiblePaths = [
-      "C:\\Users\\nagas\\Documents\\CodingProject\\Web Scraper Final\\frontend\\data\\APISet",
       path.join(process.cwd(), "data", "APISet"),
       path.join(process.cwd(), "frontend", "data", "APISet"),
     ];
@@ -23,8 +21,7 @@ export async function GET() {
     }
     
     if (!dataDir) {
-      // 기본 경로 생성
-      dataDir = "C:\\Users\\nagas\\Documents\\CodingProject\\Web Scraper Final\\frontend\\data\\APISet";
+      dataDir = path.join(process.cwd(), "data", "APISet");
       fs.mkdirSync(dataDir, { recursive: true });
     }
     
@@ -68,7 +65,6 @@ export async function POST(req: Request) {
     }
     
     const possiblePaths = [
-      "C:\\Users\\nagas\\Documents\\CodingProject\\Web Scraper Final\\frontend\\data\\APISet",
       path.join(process.cwd(), "data", "APISet"),
       path.join(process.cwd(), "frontend", "data", "APISet"),
     ];

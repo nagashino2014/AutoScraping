@@ -15,9 +15,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import json
 
-from .services.extraction_service import get_extraction_service, ExtractionService
+from .services.extraction_service import get_extraction_service, ExtractionService, resolve_file_path
 from .extractors.base import ExtractionStatus
-from .config import ExtractionConfig, SCRAPING_DATA_DIR
+from .config import ExtractionConfig, SCRAPING_DATA_DIR, USE_R2
 
 
 # FastAPI 앱 초기화
@@ -239,11 +239,11 @@ async def extract_file(request: ExtractRequest):
     """
     service = get_extraction_service()
     
-    # 파일 존재 확인
-    if not Path(request.file_path).exists():
+    # 파일 존재 확인 (R2 모드에서는 스토리지 키를 허용)
+    if not USE_R2 and not Path(request.file_path).exists():
         raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
     
-    # 추출 실행
+    # 추출 실행 (R2 모드에서는 extract_file 내부에서 자동 다운로드)
     result = await service.extract_file_async(request.file_path)
     
     # 표 데이터 수집 (pages에서 모든 표 추출)
@@ -289,16 +289,16 @@ async def extract_files_batch(request: BatchExtractRequest):
     """
     service = get_extraction_service()
     
-    # 파일 존재 확인
-    valid_paths = []
-    for fp in request.file_paths:
-        if Path(fp).exists():
-            valid_paths.append(fp)
+    # 파일 존재 확인 (R2 모드에서는 스토리지 키를 허용)
+    if USE_R2:
+        valid_paths = list(request.file_paths)
+    else:
+        valid_paths = [fp for fp in request.file_paths if Path(fp).exists()]
     
     if not valid_paths:
         raise HTTPException(status_code=404, detail="No valid files found")
     
-    # 배치 추출 실행
+    # 배치 추출 실행 (R2 모드에서는 extract_file 내부에서 자동 다운로드)
     results = await service.extract_files_batch(valid_paths)
     
     # 응답 생성

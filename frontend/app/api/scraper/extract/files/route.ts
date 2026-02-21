@@ -6,7 +6,7 @@
  * - board_id?: 특정 보드의 파일만 조회
  * - org_ids?: 여러 기관 ID (콤마 구분)
  * - board_ids?: 여러 보드 ID (콤마 구분)
- * - date_folder_path?: 특정 년월 폴더 경로 (전체 경로)
+ * - date_folder_path?: 특정 년월 폴더 경로 (storage key prefix)
  * 
  * 응답:
  * - files: 파일 목록
@@ -15,21 +15,17 @@
  */
 
 import { NextResponse } from "next/server";
-import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { readScraperTargets } from "@/lib/scraper/targets-store";
+import { storage } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
-// 파일 경로 기반 고유 ID 생성
 function generateFileId(orgId: string, boardId: string, relativePath: string): string {
   const hash = crypto.createHash("md5").update(relativePath).digest("hex").slice(0, 12);
   return `${orgId}_${boardId}_${hash}`;
 }
-
-// ScrapingData 폴더 경로
-const SCRAPING_DATA_PATH = path.join(process.cwd(), "save", "ScrapingData");
 
 type FileFormat = "pdf" | "hwp" | "hwpx" | "docx" | "xlsx" | "html" | "txt" | "other";
 type ExtractStatus = "pending" | "processing" | "completed" | "failed" | "llm_fallback";
@@ -57,7 +53,6 @@ interface FormatStats {
   rate: number;
 }
 
-// 파일 확장자로 형식 판별
 function getFileFormat(filename: string): FileFormat {
   const ext = path.extname(filename).toLowerCase().slice(1);
   const formatMap: Record<string, FileFormat> = {
@@ -75,7 +70,6 @@ function getFileFormat(filename: string): FileFormat {
   return formatMap[ext] || "other";
 }
 
-// 형식별 레이블
 const FORMAT_LABELS: Record<FileFormat, string> = {
   pdf: "PDF",
   hwp: "HWP",
@@ -87,162 +81,104 @@ const FORMAT_LABELS: Record<FileFormat, string> = {
   other: "기타",
 };
 
-// 디렉토리 내 모든 파일 재귀 탐색
-function scanDirectory(dirPath: string): { filePath: string; stats: fs.Stats }[] {
-  const results: { filePath: string; stats: fs.Stats }[] = [];
-  
-  if (!fs.existsSync(dirPath)) {
-    return results;
-  }
-  
-  const items = fs.readdirSync(dirPath, { withFileTypes: true });
-  
-  for (const item of items) {
-    const fullPath = path.join(dirPath, item.name);
-    
-    if (item.isDirectory()) {
-      results.push(...scanDirectory(fullPath));
-    } else if (item.isFile()) {
-      try {
-        const stats = fs.statSync(fullPath);
-        results.push({ filePath: fullPath, stats });
-      } catch (err) {
-        console.error(`Failed to stat file: ${fullPath}`, err);
-      }
-    }
-  }
-  
-  return results;
-}
-
-// 기관/보드별 파일 조회
-function getFilesForOrgBoard(
+async function getFilesForOrgBoard(
   orgId: string,
   orgName: string,
   boardId: string,
   boardName: string
-): ScrapedFile[] {
+): Promise<ScrapedFile[]> {
+  const prefix = `ScrapingData/${orgName}/${boardName}/`;
+  const items = await storage.list(prefix);
+
   const files: ScrapedFile[] = [];
-  
-  // 기관명/보드명 기반 폴더 경로
-  const boardPath = path.join(SCRAPING_DATA_PATH, orgName, boardName);
-  
-  if (!fs.existsSync(boardPath)) {
-    // 폴더가 없으면 빈 배열 반환
-    return files;
-  }
-  
-  const scannedFiles = scanDirectory(boardPath);
-  
-  for (const { filePath, stats } of scannedFiles) {
-    const filename = path.basename(filePath);
-    const relativePath = path.relative(boardPath, filePath);
-    const dateFolder = path.dirname(relativePath);
-    
-    // 숨김 파일 및 시스템 파일 제외
-    if (filename.startsWith(".") || filename.startsWith("~")) {
-      continue;
-    }
-    
-    const format = getFileFormat(filename);
-    
+  for (const item of items) {
+    if (!item.Key) continue;
+
+    const filename = item.Key.split("/").pop() || "";
+    if (!filename || filename.startsWith(".") || filename.startsWith("~")) continue;
+
+    const relKey = item.Key.slice(prefix.length);
+    const parts = relKey.split("/");
+    const dateFolder = parts.length >= 2 ? parts[0] : undefined;
+
     files.push({
-      file_id: generateFileId(orgId, boardId, relativePath),
+      file_id: generateFileId(orgId, boardId, relKey),
       org_id: orgId,
       board_id: boardId,
       org_name: orgName,
       board_name: boardName,
       original_filename: filename,
-      file_format: format,
-      file_size_bytes: stats.size,
-      file_path: filePath,
-      status: "pending", // 기본값: 추출 대기
-      date_folder: dateFolder !== "." ? dateFolder : undefined,
+      file_format: getFileFormat(filename),
+      file_size_bytes: item.Size || 0,
+      file_path: item.Key,
+      status: "pending",
+      date_folder: dateFolder,
     });
   }
-  
+
   return files;
 }
 
-// 특정 년월 폴더 경로의 파일만 조회
-function getFilesFromDateFolderPath(
-  dateFolderPath: string,
+async function getFilesFromDateFolderPath(
+  dateFolderPrefix: string,
   orgs: { org_id: string; org_name: string }[],
   boards: { board_id: string; org_id: string; board_name: string }[]
-): ScrapedFile[] {
-  const files: ScrapedFile[] = [];
-  
-  if (!fs.existsSync(dateFolderPath)) {
-    return files;
+): Promise<ScrapedFile[]> {
+  let normalizedPrefix = dateFolderPrefix.replace(/\\/g, "/");
+  const cwd = process.cwd().replace(/\\/g, "/");
+  if (normalizedPrefix.startsWith(cwd)) {
+    normalizedPrefix = normalizedPrefix.slice(cwd.length);
   }
-  
-  // 경로에서 기관명/보드명/년월폴더 추출
-  // 예: ScrapingData/기관명/보드명/2026-01
-  let orgName = "";
-  let boardName = "";
-  let dateFolder = "";
-  
-  try {
-    const relativePath = path.relative(SCRAPING_DATA_PATH, dateFolderPath);
-    const parts = relativePath.split(path.sep);
-    
-    if (parts.length >= 3) {
-      orgName = parts[0];
-      boardName = parts[1];
-      dateFolder = parts[2];
-    } else if (parts.length >= 2) {
-      // 년월 폴더가 직접 하위에 있는 경우
-      orgName = parts[0];
-      boardName = parts[1];
-    }
-  } catch (err) {
-    console.error("경로 파싱 실패:", err);
-    return files;
+  if (normalizedPrefix.startsWith("/save/")) {
+    normalizedPrefix = normalizedPrefix.slice(6);
+  } else if (normalizedPrefix.startsWith("save/")) {
+    normalizedPrefix = normalizedPrefix.slice(5);
   }
-  
-  // 기관/보드 정보 찾기
+  if (!normalizedPrefix.endsWith("/")) {
+    normalizedPrefix += "/";
+  }
+
+  const parts = normalizedPrefix.replace("ScrapingData/", "").split("/").filter(Boolean);
+  if (parts.length < 2) return [];
+
+  const orgName = parts[0];
+  const boardName = parts[1];
+  const dateFolder = parts[2] || undefined;
+
   const org = orgs.find((o) => o.org_name === orgName);
   const board = boards.find((b) => b.board_name === boardName && org && b.org_id === org.org_id);
-  
-  if (!org || !board) {
-    console.warn("기관/보드 정보를 찾을 수 없음:", { orgName, boardName });
-    return files;
-  }
-  
-  // 해당 폴더의 파일 스캔
-  const scannedFiles = scanDirectory(dateFolderPath);
-  
-  for (const { filePath, stats } of scannedFiles) {
-    const filename = path.basename(filePath);
-    
-    // 숨김 파일 및 시스템 파일 제외
-    if (filename.startsWith(".") || filename.startsWith("~")) {
-      continue;
-    }
-    
-    const format = getFileFormat(filename);
-    const boardPath = path.join(SCRAPING_DATA_PATH, orgName, boardName);
-    const relativePath = path.relative(boardPath, filePath);
-    
+  if (!org || !board) return [];
+
+  const items = await storage.list(normalizedPrefix);
+  const files: ScrapedFile[] = [];
+
+  for (const item of items) {
+    if (!item.Key) continue;
+
+    const filename = item.Key.split("/").pop() || "";
+    if (!filename || filename.startsWith(".") || filename.startsWith("~")) continue;
+
+    const boardPrefix = `ScrapingData/${orgName}/${boardName}/`;
+    const relKey = item.Key.startsWith(boardPrefix) ? item.Key.slice(boardPrefix.length) : item.Key;
+
     files.push({
-      file_id: generateFileId(org.org_id, board.board_id, relativePath),
+      file_id: generateFileId(org.org_id, board.board_id, relKey),
       org_id: org.org_id,
       board_id: board.board_id,
       org_name: orgName,
       board_name: boardName,
       original_filename: filename,
-      file_format: format,
-      file_size_bytes: stats.size,
-      file_path: filePath,
+      file_format: getFileFormat(filename),
+      file_size_bytes: item.Size || 0,
+      file_path: item.Key,
       status: "pending",
-      date_folder: dateFolder || undefined,
+      date_folder: dateFolder,
     });
   }
-  
+
   return files;
 }
 
-// 형식별 통계 계산
 function calculateFormatStats(files: ScrapedFile[]): FormatStats[] {
   const formatCounts: Record<FileFormat, { total: number; success: number; failed: number }> = {
     pdf: { total: 0, success: 0, failed: 0 },
@@ -285,51 +221,45 @@ export async function GET(req: Request) {
     const boardIds = url.searchParams.get("board_ids")?.split(",").filter(Boolean) || [];
     const dateFolderPath = url.searchParams.get("date_folder_path");
     
-    // targets 데이터 로드
     const { orgs, boards } = readScraperTargets();
     
     const allFiles: ScrapedFile[] = [];
     
-    // 특정 년월 폴더 경로 조회 (최우선)
     if (dateFolderPath) {
-      const files = getFilesFromDateFolderPath(dateFolderPath, orgs, boards);
+      const files = await getFilesFromDateFolderPath(dateFolderPath, orgs, boards);
       allFiles.push(...files);
     }
-    // 특정 보드 조회
     else if (boardId) {
       const board = boards.find((b) => b.board_id === boardId);
       const org = orgs.find((o) => o.org_id === board?.org_id);
       
       if (board && org) {
-        const files = getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
+        const files = await getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
         allFiles.push(...files);
       }
     }
-    // 특정 기관 조회
     else if (orgId) {
       const org = orgs.find((o) => o.org_id === orgId);
       
       if (org) {
         const orgBoards = boards.filter((b) => b.org_id === orgId && b.enabled);
         for (const board of orgBoards) {
-          const files = getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
+          const files = await getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
           allFiles.push(...files);
         }
       }
     }
-    // 여러 보드 조회
     else if (boardIds.length > 0) {
       for (const bId of boardIds) {
         const board = boards.find((b) => b.board_id === bId);
         const org = orgs.find((o) => o.org_id === board?.org_id);
         
         if (board && org) {
-          const files = getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
+          const files = await getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
           allFiles.push(...files);
         }
       }
     }
-    // 여러 기관 조회
     else if (orgIds.length > 0) {
       for (const oId of orgIds) {
         const org = orgs.find((o) => o.org_id === oId);
@@ -337,24 +267,22 @@ export async function GET(req: Request) {
         if (org) {
           const orgBoards = boards.filter((b) => b.org_id === oId && b.enabled);
           for (const board of orgBoards) {
-            const files = getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
+            const files = await getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
             allFiles.push(...files);
           }
         }
       }
     }
-    // 전체 조회 (모든 기관/보드)
     else {
       for (const org of orgs) {
         const orgBoards = boards.filter((b) => b.org_id === org.org_id && b.enabled);
         for (const board of orgBoards) {
-          const files = getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
+          const files = await getFilesForOrgBoard(org.org_id, org.org_name, board.board_id, board.board_name);
           allFiles.push(...files);
         }
       }
     }
     
-    // 통계 계산
     const formatStats = calculateFormatStats(allFiles);
     
     return NextResponse.json({

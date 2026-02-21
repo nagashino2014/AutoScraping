@@ -22,10 +22,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // settings를 백엔드 config 형식으로 변환
     const extractionConfig = settings || config;
     
-    // Python 백엔드의 SSE 스트림에 연결
     console.log(`[Stream API] Connecting to backend: ${BACKEND_URL}/extract/stream`);
     console.log(`[Stream API] Files: ${file_paths.length}개, is_retry: ${is_retry || false}`);
     if (extractionConfig) {

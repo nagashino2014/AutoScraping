@@ -8,6 +8,8 @@
 """
 import json
 import asyncio
+import tempfile
+import shutil
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Callable, Tuple
 from datetime import datetime
@@ -78,6 +80,70 @@ def detect_file_format(file_path: Path) -> Tuple[str, str]:
         
     except Exception:
         return extension, extension
+
+
+def resolve_file_path(file_path_str: str) -> Tuple[Path, str]:
+    """
+    스토리지 키 또는 로컬 경로를 실제 읽을 수 있는 로컬 경로로 변환.
+
+    R2 모드일 때 로컬에 파일이 없으면 R2에서 임시 파일로 다운로드합니다.
+
+    Returns:
+        (local_path, original_key):
+            local_path  — 추출기에 전달할 로컬 파일 경로
+            original_key — _save_result에서 org/board 파싱에 사용할 원본 키
+    """
+    original_key = file_path_str
+    fp = Path(file_path_str)
+
+    # 1) 절대 경로 + 존재 → 그대로
+    if fp.is_absolute() and fp.exists():
+        return fp, original_key
+
+    # 2) save/ 아래 로컬 파일 확인
+    local_candidates = [
+        SCRAPING_DATA_DIR.parent / file_path_str,           # save/{key}
+        SCRAPING_DATA_DIR / file_path_str,                   # save/ScrapingData/{key}
+    ]
+    if file_path_str.startswith("ScrapingData/"):
+        local_candidates.insert(0, SCRAPING_DATA_DIR.parent / file_path_str)
+
+    for candidate in local_candidates:
+        if candidate.exists():
+            return candidate, original_key
+
+    # 3) R2 모드: R2에서 다운로드하여 임시 파일 생성
+    if USE_R2:
+        try:
+            from ..r2_storage import download_from_r2
+            data = download_from_r2(file_path_str)
+            temp_dir = tempfile.mkdtemp(prefix="extract_r2_")
+            temp_path = Path(temp_dir) / fp.name
+            temp_path.write_bytes(data)
+            print(f"[R2 READ] {file_path_str} → {temp_path} ({len(data)} bytes)")
+            return temp_path, original_key
+        except Exception as e:
+            print(f"[R2 READ FAILED] {file_path_str}: {e}")
+
+    # 4) 폴백: 원래 경로 그대로
+    return fp, original_key
+
+
+def _parse_org_board_from_key(original_key: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    스토리지 키 또는 로컬 경로에서 기관명/보드명을 추출합니다.
+    ScrapingData/{org}/{board}/... 패턴을 인식합니다.
+    """
+    normalized = original_key.replace("\\", "/")
+    marker = "ScrapingData/"
+    idx = normalized.find(marker)
+    if idx == -1:
+        return None, None
+    remainder = normalized[idx + len(marker):]
+    parts = remainder.split("/")
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    return None, None
 
 
 class ExtractionService:
@@ -278,47 +344,58 @@ class ExtractionService:
     ) -> ExtractionResult:
         """
         단일 파일 텍스트 추출
-        
-        Args:
-            file_path: 파일 경로
-            progress_callback: 진행률 콜백 (page_num, total_pages, status)
-            
-        Returns:
-            ExtractionResult: 추출 결과
+
+        file_path는 로컬 절대 경로 또는 스토리지 키(예: ScrapingData/기관/보드/2026-02/file.pdf)
+        를 모두 허용합니다. R2 모드에서는 로컬에 파일이 없을 경우 R2에서 자동 다운로드합니다.
         """
-        file_path = Path(file_path)
-        
-        # 파일 시그니처 기반 실제 형식 감지
+        local_path, original_key = resolve_file_path(file_path)
+        temp_dir_to_clean: Optional[str] = None
+
+        if str(local_path).startswith(tempfile.gettempdir()):
+            temp_dir_to_clean = str(local_path.parent)
+
+        try:
+            return self._do_extract(local_path, original_key, progress_callback)
+        finally:
+            if temp_dir_to_clean:
+                try:
+                    shutil.rmtree(temp_dir_to_clean, ignore_errors=True)
+                except Exception:
+                    pass
+
+    def _do_extract(
+        self,
+        file_path: Path,
+        original_key: str,
+        progress_callback: Optional[Callable] = None,
+    ) -> ExtractionResult:
+        """실제 추출 로직. file_path는 로컬에 존재하는 파일 경로."""
+
         extension, actual_format = detect_file_format(file_path)
-        
-        # 확장자와 실제 형식이 다른 경우 로그 출력
+
         if extension != actual_format:
             print(f"[FORMAT MISMATCH] File '{file_path.name}': extension=.{extension}, actual={actual_format}")
-        
-        # 실제 형식 기반으로 추출기 선택
+
         extractor = self.extractors.get(actual_format)
         if not extractor:
             return ExtractionResult(
-                file_path=str(file_path),
+                file_path=original_key,
                 file_format=actual_format,
                 status=ExtractionStatus.FAILED,
                 error_message=f"Unsupported file format: {actual_format}"
             )
         
-        # 다중 엔진 비교 모드 (하이브리드 모드)
         if self.config.retry_strategy.multi_engine_comparison and actual_format == "pdf":
             result = self._extract_with_multi_engine(str(file_path), actual_format, progress_callback)
             if result:
+                result.file_path = original_key
                 if result.status != ExtractionStatus.FAILED:
-                    # 성공한 경우: 추출기 판단을 우선 존중
                     self._save_result(result)
                     return result
                 else:
-                    # 모든 엔진이 실패한 경우 - 추가 재시도 없이 바로 종료
-                    print(f"[MULTI-ENGINE] 모든 엔진 실패, 재시도 건너뜀: {Path(file_path).name}")
+                    print(f"[MULTI-ENGINE] 모든 엔진 실패, 재시도 건너뜀: {file_path.name}")
                     return result
         
-        # 일반 재시도 로직 (하이브리드 모드가 아닐 때만)
         max_retries = self.config.processing.max_retries if self.config.processing.auto_retry else 0
         last_error = None
         best_result = None
@@ -326,19 +403,18 @@ class ExtractionService:
         
         for attempt in range(max_retries + 1):
             try:
-                # 단계적 재시도 설정 적용
                 if self.config.retry_strategy.enable_progressive_retry and attempt > 0:
                     level = min(attempt, len(self.PROGRESSIVE_RETRY_LEVELS) - 1)
                     print(f"[PROGRESSIVE RETRY] Applying level {level} settings")
                     self._apply_progressive_settings(level)
                 
-                # PDF 추출기는 progress_callback 지원
                 if actual_format == "pdf" and hasattr(extractor, 'extract'):
                     result = extractor.extract(str(file_path), progress_callback)
                 else:
                     result = extractor.extract(str(file_path))
+
+                result.file_path = original_key
                 
-                # 품질 기반 자동 조정
                 if (self.config.retry_strategy.quality_based_adjustment and 
                     result.quality_details and 
                     result.quality_score < self.config.quality_validation.pass_threshold):
@@ -352,19 +428,15 @@ class ExtractionService:
                                     setattr(getattr(self.config, cat), k, v)
                         self._init_extractors()
                 
-                # 최고 결과 추적
                 if result.quality_score > best_score:
                     best_score = result.quality_score
                     best_result = result
                 
-                # 성공하면 결과 저장 후 반환
                 if result.status != ExtractionStatus.FAILED:
-                    # Cross-page 표 병합 적용
                     result = self._apply_cross_page_merge(result)
                     self._save_result(result)
                     return result
                 
-                # 실패했지만 재시도 가능한 경우
                 last_error = result.error_message
                 
             except Exception as e:
@@ -386,14 +458,12 @@ class ExtractionService:
             # 품질 점수가 있지만 임계값 미달로 실패 처리된 경우
             best_result.status = ExtractionStatus.FAILED
             best_result.error_message = f"Quality score ({best_result.quality_score:.2%}) below threshold ({self.config.quality_validation.pass_threshold:.2%})"
-            print(f"[QUALITY FAILED] {Path(file_path).name}: score={best_result.quality_score:.3f}, threshold={self.config.quality_validation.pass_threshold}")
-            # 품질 미달이어도 결과는 저장 (나중에 확인 가능하도록)
+            print(f"[QUALITY FAILED] {file_path.name}: score={best_result.quality_score:.3f}, threshold={self.config.quality_validation.pass_threshold}")
             self._save_result(best_result)
             return best_result
         
-        # 추출 자체가 실패한 경우
         return ExtractionResult(
-            file_path=str(file_path),
+            file_path=original_key,
             file_format=actual_format,
             status=ExtractionStatus.FAILED,
             error_message=f"Failed after {max_retries + 1} attempts: {last_error}"
@@ -409,7 +479,7 @@ class ExtractionService:
         """
         loop = asyncio.get_event_loop()
         
-        # 파일 크기 확인
+        # 파일 크기 확인 (R2 모드에서는 로컬 파일이 없으므로 기본 타임아웃 사용)
         file_size_mb = 0
         total_pages = 0
         image_ratio = 0.0
@@ -567,19 +637,18 @@ class ExtractionService:
         # 원본 파일 경로 기반으로 저장 경로 생성
         file_path = Path(result.file_path)
         
-        # 원본 파일 경로에서 기관명/보드명 추출 (ScrapingData 폴더 구조 기준)
-        org_name = None
-        board_name = None
+        # 기관명/보드명 추출: 스토리지 키 패턴 우선, 이후 로컬 경로 폴백
+        org_name, board_name = _parse_org_board_from_key(result.file_path)
         
-        try:
-            relative_path = file_path.relative_to(SCRAPING_DATA_DIR)
-            path_parts = relative_path.parts
-            
-            if len(path_parts) >= 2:
-                org_name = path_parts[0]
-                board_name = path_parts[1]
-        except (ValueError, IndexError):
-            pass
+        if org_name is None:
+            try:
+                relative_path = file_path.relative_to(SCRAPING_DATA_DIR)
+                path_parts = relative_path.parts
+                if len(path_parts) >= 2:
+                    org_name = path_parts[0]
+                    board_name = path_parts[1]
+            except (ValueError, IndexError):
+                pass
         
         # 결과 디렉토리 생성 (기관/보드 폴더 구조)
         date_folder = datetime.now().strftime("%Y-%m")

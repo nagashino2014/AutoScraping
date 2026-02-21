@@ -78,14 +78,103 @@ export interface WebConfig {
   };
 }
 
+// ============================================================
+// API 스크래핑 타입 정의
+// ============================================================
+
+interface DateFilter {
+  field: string;
+  start_date?: string;
+  end_date?: string;
+  format?: string;
+  relative_days?: number;
+}
+
+interface SearchFilter {
+  field: string;
+  keywords: string[];
+  match_type: "contains" | "exact" | "regex" | "any";
+}
+
+interface EndpointConfig {
+  name: string;
+  path: string;
+  method: string;
+  params?: Record<string, string>;
+  response_fields?: string[];
+  body_type?: "json" | "form" | "none";
+  body_template?: Record<string, any>;
+  id_field?: string;
+  id_param?: string;
+}
+
+interface ApiAuth {
+  type: "param" | "header" | "bearer" | "basic" | "oauth2";
+  in?: "query" | "header";
+  param_name?: string;
+  name?: string;
+  secret_ref?: string;
+  bearer_prefix?: string;
+  username_ref?: string;
+  password_ref?: string;
+  token_url?: string;
+  client_id_ref?: string;
+  client_secret_ref?: string;
+  scope?: string;
+}
+
+export interface ApiConfig {
+  primary_endpoint: EndpointConfig;
+  secondary_endpoints?: EndpointConfig[];
+  params: Record<string, string>;
+  pagination?: {
+    type: string;
+    param_name: string;
+    page_size: number;
+    max_pages: number;
+  };
+  response_fields?: string[];
+  search_filters?: SearchFilter[];
+  date_filters?: DateFilter[];
+  response_data_path?: string;
+  two_phase?: {
+    enabled: boolean;
+    field_mappings?: { source_field: string; target_param: string }[];
+    filter_mappings?: { primary_filter_idx: number; secondary_field: string }[];
+    use_filter_keywords?: boolean;
+    query_param_name?: string;
+    list_id_field?: string;
+    detail_id_param?: string;
+    max_list_items?: number;
+    max_detail_items?: number;
+    max_details?: number;
+  };
+  rate_limit?: {
+    requests_per_second?: number;
+    delay_between_requests?: number;
+    delay_between_pages?: number;
+  };
+  title_field?: string;
+}
+
+export interface ApiProfile {
+  base_url: string;
+  auth?: ApiAuth;
+  default_params?: Record<string, string>;
+  endpoints?: any[];
+}
+
 export interface Board {
   board_id: string;
   org_id: string;
   board_name: string;
   access_mode: string;
+  board_mode?: string;
+  doc_type?: string;
   list_url?: string;
   enabled: boolean;
   web_config?: WebConfig;
+  api_config?: ApiConfig;
   collection_range?: {
     type: string;
     period_start?: string;
@@ -112,6 +201,7 @@ export interface Organization {
   org_id: string;
   org_name: string;
   base_url: string;
+  api_profile?: ApiProfile;
 }
 
 export interface ScrapedArticle {
@@ -952,6 +1042,640 @@ async function downloadFile(
 }
 
 // ============================================================
+// API 스크래핑 유틸리티 함수
+// ============================================================
+
+function getEnvSecret(ref?: string): string | null {
+  if (!ref) return null;
+  if (!ref.startsWith("ENV:")) return null;
+  const key = ref.slice("ENV:".length);
+  if (!key) return null;
+  return process.env[key] ?? null;
+}
+
+function apiDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatDateForApi(date: Date, format?: string): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  switch (format) {
+    case "YYYYMMDD": return `${y}${m}${d}`;
+    case "YYYY/MM/DD": return `${y}/${m}/${d}`;
+    case "YYYY.MM.DD": return `${y}.${m}.${d}`;
+    case "YYYY-MM-DD":
+    default: return `${y}-${m}-${d}`;
+  }
+}
+
+function applyDateFilters(params: Record<string, string>, dateFilters?: DateFilter[]): Record<string, string> {
+  if (!dateFilters || dateFilters.length === 0) return params;
+  const result = { ...params };
+  const today = new Date();
+  for (const df of dateFilters) {
+    if (!df.field) continue;
+    let startDate = df.start_date;
+    let endDate = df.end_date;
+    if (df.relative_days && df.relative_days > 0) {
+      const pastDate = new Date(today);
+      pastDate.setDate(pastDate.getDate() - df.relative_days);
+      startDate = formatDateForApi(pastDate, df.format);
+      endDate = formatDateForApi(today, df.format);
+    }
+    if (df.field.toLowerCase().includes("start") || df.field.toLowerCase().includes("from")) {
+      if (startDate) result[df.field] = startDate;
+    } else if (df.field.toLowerCase().includes("end") || df.field.toLowerCase().includes("to")) {
+      if (endDate) result[df.field] = endDate;
+    } else {
+      if (startDate) result[df.field] = startDate;
+    }
+  }
+  return result;
+}
+
+function getNestedValue(obj: any, valuePath: string): any {
+  if (!obj || !valuePath) return undefined;
+  if (obj[valuePath] !== undefined) return obj[valuePath];
+  const parts = valuePath.replace(/\[(\d+)\]/g, ".$1").split(".");
+  let current = obj;
+  for (const part of parts) {
+    if (current === null || current === undefined) return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+function normalizeKey(key: string): string {
+  return String(key ?? "").replace(/[\s_]+/g, "").toLowerCase();
+}
+
+function buildDeepKeyIndex(root: any): Map<string, any[]> {
+  const index = new Map<string, any[]>();
+  const seen = new WeakSet<object>();
+  const push = (k: string, v: any) => {
+    const nk = normalizeKey(k);
+    if (!nk) return;
+    const arr = index.get(nk) ?? [];
+    arr.push(v);
+    index.set(nk, arr);
+  };
+  const walk = (node: any) => {
+    if (node === null || node === undefined || typeof node !== "object") return;
+    if (seen.has(node as object)) return;
+    seen.add(node as object);
+    if (Array.isArray(node)) { for (const it of node) walk(it); return; }
+    for (const [k, v] of Object.entries(node)) { push(k, v); walk(v); }
+  };
+  walk(root);
+  return index;
+}
+
+function extractDetailRootObject(parsed: any): any | null {
+  if (!parsed || typeof parsed !== "object") return null;
+  const candidates = ["법령", "행정규칙", "자치법규", "판례", "헌재결정례", "결정례", "영문법령"];
+  for (const key of candidates) {
+    if (parsed[key] && typeof parsed[key] === "object") return parsed[key];
+  }
+  const keys = Object.keys(parsed);
+  if (keys.length === 1) {
+    const only = parsed[keys[0]];
+    if (only && typeof only === "object") return only;
+  }
+  return null;
+}
+
+function applySearchFilters(data: any[], searchFilters?: SearchFilter[]): any[] {
+  if (!searchFilters || searchFilters.length === 0) return data;
+  return data.filter((item) => {
+    for (const filter of searchFilters) {
+      const value = getNestedValue(item, filter.field);
+      if (value === undefined || value === null) continue;
+      const strValue = String(value);
+      let matches = false;
+      switch (filter.match_type) {
+        case "exact":
+          matches = filter.keywords.some((kw) => strValue === kw);
+          break;
+        case "regex":
+          matches = filter.keywords.some((kw) => { try { return new RegExp(kw, "i").test(strValue); } catch { return false; } });
+          break;
+        case "any":
+        case "contains":
+        default:
+          matches = filter.keywords.some((kw) => strValue.toLowerCase().includes(kw.toLowerCase()));
+          break;
+      }
+      if (!matches) return false;
+    }
+    return true;
+  });
+}
+
+function filterResponseFields(data: any[], responseFields?: string[]): any[] {
+  if (!responseFields || responseFields.length === 0) return data;
+  return data.map((item) => {
+    const filtered: Record<string, any> = {};
+    const deepIndex = buildDeepKeyIndex(item);
+    for (const field of responseFields) {
+      if (item[field] !== undefined) { filtered[field] = item[field]; }
+      else {
+        const value = getNestedValue(item, field);
+        if (value !== undefined) { filtered[field] = value; }
+        else {
+          const values = deepIndex.get(normalizeKey(field));
+          if (values && values.length > 0) filtered[field] = values.length === 1 ? values[0] : values;
+        }
+      }
+    }
+    return filtered;
+  });
+}
+
+async function parseXmlResponse(xmlText: string): Promise<any> {
+  try {
+    return await parseStringPromise(xmlText, {
+      explicitArray: false, ignoreAttrs: false, mergeAttrs: true, trim: true, normalize: true, normalizeTags: false,
+    });
+  } catch (error) {
+    console.error("XML 파싱 오류:", error);
+    return { raw_xml: xmlText, parse_error: String(error) };
+  }
+}
+
+function extractDataFromResponse(response: any, dataPath?: string): any[] {
+  if (!response) return [];
+  if (dataPath) {
+    const data = getNestedValue(response, dataPath);
+    if (data !== undefined) return Array.isArray(data) ? data : [data];
+  }
+  if (Array.isArray(response)) return response;
+  if (typeof response === "object") {
+    const commonPaths = [
+      "data", "items", "results", "records", "list", "rows", "content",
+      "response", "body", "documents", "entries", "objects",
+      "data.items", "data.list", "data.results", "data.records",
+      "response.body", "response.data", "response.items",
+      "result.data", "result.items", "result.list",
+      "response.body.items.item", "response.body.items",
+      "LawSearch.law", "AdmRulSearch.admrul", "OrdinSearch.ordin",
+      "PrecSearch.prec", "DecsSearch.decis",
+      "LawService.law", "AdmRulService.admrul", "OrdinService.ordin",
+      "page.content", "page.items", "_embedded.items", "_embedded.data",
+    ];
+    for (const p of commonPaths) {
+      const data = getNestedValue(response, p);
+      if (data !== undefined && data !== null) {
+        if (Array.isArray(data)) return data;
+        if (typeof data === "object" && Object.keys(data).length > 0) {
+          const innerArray = Object.values(data).find(v => Array.isArray(v));
+          if (innerArray) return innerArray as any[];
+          return [data];
+        }
+      }
+    }
+    for (const key of Object.keys(response)) {
+      if (Array.isArray(response[key])) return response[key];
+    }
+    for (const key of Object.keys(response)) {
+      if (typeof response[key] === "object" && response[key] !== null) {
+        for (const subKey of Object.keys(response[key])) {
+          if (Array.isArray(response[key][subKey])) return response[key][subKey];
+        }
+      }
+    }
+    return [response];
+  }
+  return [];
+}
+
+async function applyAuthentication(
+  url: URL, headers: Record<string, string>, auth: ApiAuth, logs?: string[]
+): Promise<void> {
+  const authType = auth.type || "param";
+  switch (authType) {
+    case "param":
+    case "header": {
+      const authIn = (auth.in || (authType === "header" ? "header" : "query")).toLowerCase();
+      const authName = auth.param_name || auth.name || "";
+      const secret = getEnvSecret(auth.secret_ref);
+      if (secret && authName) {
+        if (authIn === "header") { headers[authName] = secret; logs?.push(`[AUTH] 헤더 인증: ${authName}`); }
+        else { url.searchParams.set(authName, secret); logs?.push(`[AUTH] 쿼리 파라미터 인증: ${authName}`); }
+      } else if (!secret && auth.secret_ref) {
+        logs?.push(`[WARN] 인증 시크릿을 찾을 수 없음: ${auth.secret_ref}`);
+      }
+      break;
+    }
+    case "bearer": {
+      const token = getEnvSecret(auth.secret_ref);
+      const prefix = auth.bearer_prefix || "Bearer";
+      if (token) { headers["Authorization"] = `${prefix} ${token}`; logs?.push(`[AUTH] Bearer 토큰 인증 적용`); }
+      else if (auth.secret_ref) { logs?.push(`[WARN] Bearer 토큰을 찾을 수 없음: ${auth.secret_ref}`); }
+      break;
+    }
+    case "basic": {
+      const username = getEnvSecret(auth.username_ref);
+      const password = getEnvSecret(auth.password_ref);
+      if (username && password) {
+        const credentials = Buffer.from(`${username}:${password}`).toString("base64");
+        headers["Authorization"] = `Basic ${credentials}`;
+        logs?.push(`[AUTH] Basic 인증 적용`);
+      } else { logs?.push(`[WARN] Basic 인증 정보를 찾을 수 없음`); }
+      break;
+    }
+    case "oauth2": {
+      if (!auth.token_url) { logs?.push(`[WARN] OAuth2 token_url이 설정되지 않음`); break; }
+      const clientId = getEnvSecret(auth.client_id_ref);
+      const clientSecret = getEnvSecret(auth.client_secret_ref);
+      if (!clientId || !clientSecret) { logs?.push(`[WARN] OAuth2 클라이언트 정보를 찾을 수 없음`); break; }
+      try {
+        const tokenResponse = await fetch(auth.token_url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret, ...(auth.scope ? { scope: auth.scope } : {}) }),
+          signal: AbortSignal.timeout(30000),
+        });
+        if (!tokenResponse.ok) { logs?.push(`[ERROR] OAuth2 토큰 요청 실패: ${tokenResponse.status}`); break; }
+        const tokenData = await tokenResponse.json();
+        if (tokenData.access_token) {
+          headers["Authorization"] = `${tokenData.token_type || "Bearer"} ${tokenData.access_token}`;
+          logs?.push(`[AUTH] OAuth2 토큰 획득 성공`);
+        } else { logs?.push(`[WARN] OAuth2 응답에서 access_token을 찾을 수 없음`); }
+      } catch (error) { logs?.push(`[ERROR] OAuth2 토큰 요청 오류: ${error}`); }
+      break;
+    }
+    default: logs?.push(`[WARN] 알 수 없는 인증 타입: ${authType}`);
+  }
+}
+
+async function executeSingleApiCall(
+  apiProfile: ApiProfile, endpoint: EndpointConfig, params: Record<string, string>,
+  bodyData?: Record<string, any>, logs?: string[]
+): Promise<{ data: any; error?: string; url?: string; rawXml?: string; hierarchicalData?: any }> {
+  const baseUrl = apiProfile.base_url;
+  if (!baseUrl) return { data: null, error: "base_url이 설정되지 않았습니다." };
+  if (!endpoint.path) return { data: null, error: "endpoint path가 설정되지 않았습니다." };
+  try {
+    const url = new URL(endpoint.path, baseUrl);
+    const method = (endpoint.method || "GET").toUpperCase();
+    const headers: Record<string, string> = {
+      "User-Agent": "EcoMonitorBot/1.0 (cli_api_scraper)",
+      Accept: "application/json, application/xml, text/xml, text/html, */*",
+    };
+    if (method === "GET") {
+      for (const [k, v] of Object.entries(params)) {
+        if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, String(v));
+      }
+    }
+    if (apiProfile.auth) await applyAuthentication(url, headers, apiProfile.auth, logs);
+    const fetchOptions: RequestInit = { method, headers, signal: AbortSignal.timeout(60000) };
+    if (method === "POST" || method === "PUT" || method === "PATCH") {
+      const bodyType = endpoint.body_type || "json";
+      const finalBody = bodyData || endpoint.body_template || params;
+      if (bodyType === "json") {
+        headers["Content-Type"] = "application/json";
+        fetchOptions.body = JSON.stringify(finalBody);
+      } else if (bodyType === "form") {
+        headers["Content-Type"] = "application/x-www-form-urlencoded";
+        fetchOptions.body = new URLSearchParams(finalBody as Record<string, string>).toString();
+      }
+    }
+    logs?.push(`[REQUEST] ${method} ${url.toString()}`);
+    const response = await fetch(url.toString(), fetchOptions);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      logs?.push(`[ERROR] HTTP ${response.status}: ${response.statusText}`);
+      if (errorText) logs?.push(`[ERROR] Response: ${errorText.slice(0, 500)}`);
+      return { data: null, error: `HTTP ${response.status}: ${response.statusText}`, url: url.toString() };
+    }
+    const contentType = response.headers.get("content-type") || "";
+    const responseText = await response.text();
+    let data;
+    if (contentType.includes("application/json") || contentType.includes("text/json")) {
+      try { data = JSON.parse(responseText); } catch { data = { raw_text: responseText, content_type: contentType }; }
+    } else if (contentType.includes("xml") || responseText.trim().startsWith("<?xml") || responseText.trim().startsWith("<")) {
+      data = await parseXmlResponse(responseText);
+      return { data, url: url.toString(), rawXml: responseText, hierarchicalData: data };
+    } else {
+      try { data = JSON.parse(responseText); } catch { data = { raw_text: responseText, content_type: contentType }; }
+    }
+    return { data, url: url.toString() };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logs?.push(`[ERROR] ${errorMsg}`);
+    return { data: null, error: errorMsg };
+  }
+}
+
+async function executeListApiCallForCli(
+  apiProfile: ApiProfile, apiConfig: ApiConfig, pageParams?: Record<string, string>, logs?: string[]
+): Promise<{ data: any; error?: string; url?: string }> {
+  const endpoint = apiConfig.primary_endpoint;
+  let params: Record<string, string> = {};
+  for (const [k, v] of Object.entries(apiProfile.default_params ?? {})) {
+    if (v !== undefined && v !== null && v !== "") params[k] = String(v);
+  }
+  for (const [k, v] of Object.entries(apiConfig.params || {})) {
+    if (v !== undefined && v !== null && v !== "") params[k] = String(v);
+  }
+  params = applyDateFilters(params, apiConfig.date_filters);
+  if (pageParams) params = { ...params, ...pageParams };
+  return executeSingleApiCall(apiProfile, endpoint, params, undefined, logs);
+}
+
+function extractIdFromListItem(item: any, idField: string): string | null {
+  if (!item || !idField) return null;
+  const value = getNestedValue(item, idField);
+  return value !== undefined && value !== null ? String(value) : null;
+}
+
+function extractItemTitle(item: any, titleField?: string): string {
+  if (titleField) {
+    const title = getNestedValue(item, titleField);
+    if (title) return String(title);
+  }
+  const commonTitleFields = ["title", "name", "label", "subject", "headline", "제목", "이름", "명칭", "법령명", "법령명_한글"];
+  for (const field of commonTitleFields) {
+    if (item[field]) return String(item[field]);
+  }
+  return "제목 없음";
+}
+
+// ============================================================
+// API 보드 스크래핑 메인 함수
+// ============================================================
+
+async function runApiScraper(options: ScraperOptions): Promise<ScrapingResult> {
+  const { board, org, outputDir } = options;
+  const startTime = Date.now();
+  const logs: string[] = [];
+
+  const result: ScrapingResult = {
+    success: false,
+    boardId: board.board_id,
+    boardName: board.board_name,
+    orgId: org.org_id,
+    orgName: org.org_name,
+    articlesCount: 0,
+    attachmentsCount: 0,
+    articles: [],
+    errors: [],
+    executedAt: new Date().toISOString(),
+    durationMs: 0,
+  };
+
+  console.log(`\n========================================`);
+  console.log(`API 스크래핑 시작: ${org.org_name} - ${board.board_name}`);
+  console.log(`========================================\n`);
+
+  try {
+    const apiConfig = board.api_config;
+    if (!apiConfig || !apiConfig.primary_endpoint) {
+      throw new Error("api_config 또는 primary_endpoint가 설정되지 않았습니다");
+    }
+
+    const apiProfile: ApiProfile = (org.api_profile || {}) as ApiProfile;
+    if (!apiProfile.base_url && org.base_url) {
+      apiProfile.base_url = org.base_url;
+    }
+
+    if (!apiProfile.base_url) {
+      throw new Error("API base_url이 설정되지 않았습니다");
+    }
+
+    console.log(`🔗 Base URL: ${apiProfile.base_url}`);
+    console.log(`📡 엔드포인트: ${apiConfig.primary_endpoint.path}`);
+
+    const rateLimit = apiConfig.rate_limit || {};
+    const delayBetweenRequests = rateLimit.delay_between_requests ?? 300;
+    const delayBetweenPages = rateLimit.delay_between_pages ?? 500;
+
+    const pagination = apiConfig.pagination;
+    const maxPages = pagination?.max_pages || 1;
+    const pageSize = pagination?.page_size || 100;
+    const pageParam = pagination?.param_name || "page";
+
+    const twoPhase = apiConfig.two_phase;
+    const secondaryEndpoint = apiConfig.secondary_endpoints?.[0];
+    const fieldMappings = twoPhase?.field_mappings && twoPhase.field_mappings.length > 0
+      ? twoPhase.field_mappings
+      : twoPhase?.list_id_field && twoPhase?.detail_id_param
+        ? [{ source_field: twoPhase.list_id_field, target_param: twoPhase.detail_id_param }]
+        : [];
+    const isTwoPhaseMode = twoPhase?.enabled && secondaryEndpoint && fieldMappings.length > 0;
+    const maxListItems = twoPhase?.max_list_items ?? 100;
+    const maxDetailItems = twoPhase?.max_detail_items ?? twoPhase?.max_details ?? 10;
+
+    if (isTwoPhaseMode) {
+      console.log(`🔄 2단계 호출 모드:`);
+      console.log(`  1단계: 목록 → ${secondaryEndpoint!.path}`);
+      console.log(`  2단계: 본문 → ${apiConfig.primary_endpoint.path}`);
+    }
+
+    let allData: any[] = [];
+    let listItems: any[] = [];
+    const rawXmlResponses: string[] = [];
+    const hierarchicalDataList: any[] = [];
+
+    const listEndpoint = isTwoPhaseMode ? secondaryEndpoint! : apiConfig.primary_endpoint;
+    const listParams: Record<string, string> = isTwoPhaseMode
+      ? { ...apiConfig.params, ...(secondaryEndpoint!.params || {}) }
+      : apiConfig.params;
+
+    const useFilterKeywords = twoPhase?.use_filter_keywords ?? false;
+    const queryParamName = twoPhase?.query_param_name ?? "query";
+    const filterMappingsForQuery = twoPhase?.filter_mappings ?? [];
+
+    let searchKeywords: string[] = [];
+    if (isTwoPhaseMode && useFilterKeywords && filterMappingsForQuery.length > 0 && apiConfig.search_filters) {
+      for (const fm of filterMappingsForQuery) {
+        const filter = apiConfig.search_filters[fm.primary_filter_idx];
+        if (filter?.keywords?.length) searchKeywords.push(...filter.keywords);
+      }
+      searchKeywords = [...new Set(searchKeywords)];
+    }
+
+    if (searchKeywords.length > 0) {
+      console.log(`🔍 키워드별 순차 검색 모드 (${searchKeywords.length}개)`);
+      const seenIds = new Set<string>();
+      const idField = fieldMappings[0]?.source_field || "법령ID";
+
+      for (let kwIdx = 0; kwIdx < searchKeywords.length; kwIdx++) {
+        const keyword = searchKeywords[kwIdx];
+        console.log(`  검색 ${kwIdx + 1}/${searchKeywords.length}: "${keyword.slice(0, 30)}"`);
+        const keywordParams: Record<string, string> = { ...listParams };
+        keywordParams[queryParamName] = keyword;
+        keywordParams[pageParam] = "1";
+        const callLogs: string[] = [];
+        const listApiConfig = { ...apiConfig, primary_endpoint: listEndpoint, params: keywordParams };
+        const apiResult = await executeListApiCallForCli(apiProfile, listApiConfig, {}, callLogs);
+        logs.push(...callLogs);
+        if (apiResult.error) { console.log(`  ⚠️ 검색 실패: ${apiResult.error}`); continue; }
+        const items = extractDataFromResponse(apiResult.data, apiConfig.response_data_path);
+        console.log(`  → ${items.length}건 검색됨`);
+        for (const item of items) {
+          const id = getNestedValue(item, idField);
+          const idStr = id ? String(id) : JSON.stringify(item);
+          if (!seenIds.has(idStr)) { seenIds.add(idStr); listItems.push(item); }
+        }
+        if (kwIdx < searchKeywords.length - 1) await apiDelay(delayBetweenRequests);
+      }
+      console.log(`키워드 검색 완료: 총 ${listItems.length}건`);
+    } else {
+      for (let page = 1; page <= maxPages; page++) {
+        console.log(`📄 목록 조회 페이지 ${page}/${maxPages}...`);
+        let pageParams: Record<string, string> = {};
+        if (pagination && pagination.type !== "none") {
+          switch (pagination.type) {
+            case "page": pageParams[pageParam] = String(page); break;
+            case "offset": pageParams[pageParam] = String((page - 1) * pageSize); break;
+            default: pageParams[pageParam] = String(page);
+          }
+        }
+        const callLogs: string[] = [];
+        const listApiConfig = { ...apiConfig, primary_endpoint: listEndpoint, params: listParams };
+        const apiResult = await executeListApiCallForCli(apiProfile, listApiConfig, pageParams, callLogs);
+        logs.push(...callLogs);
+        if (apiResult.error) { throw new Error(`API 호출 실패: ${apiResult.error}`); }
+        const items = extractDataFromResponse(apiResult.data, apiConfig.response_data_path);
+        console.log(`  → ${items.length}건 추출`);
+        if (items.length === 0) { console.log("  데이터 없음, 페이지네이션 종료"); break; }
+        listItems.push(...items);
+        if (page < maxPages) await apiDelay(delayBetweenPages);
+      }
+    }
+
+    console.log(`\n📊 목록 조회 완료: 총 ${listItems.length}건`);
+
+    if (isTwoPhaseMode && listItems.length > 0) {
+      console.log(`\n📄 본문 조회 시작 (주 엔드포인트)...`);
+
+      let filteredListItems = listItems;
+      const filterMappingsConfig = twoPhase?.filter_mappings ?? [];
+      const skipFilterMapping = useFilterKeywords;
+
+      if (!skipFilterMapping && filterMappingsConfig.length > 0 && apiConfig.search_filters?.length) {
+        filteredListItems = listItems.filter((item) => {
+          for (const fm of filterMappingsConfig) {
+            const filter = apiConfig.search_filters?.[fm.primary_filter_idx];
+            if (!filter) continue;
+            const fieldValue = getNestedValue(item, fm.secondary_field);
+            if (fieldValue === undefined || fieldValue === null) continue;
+            const fieldValueStr = String(fieldValue);
+            let matched = false;
+            switch (filter.match_type) {
+              case "exact": matched = filter.keywords.some((kw) => fieldValueStr === kw); break;
+              case "regex": matched = filter.keywords.some((kw) => { try { return new RegExp(kw, "i").test(fieldValueStr); } catch { return false; } }); break;
+              default: matched = filter.keywords.some((kw) => fieldValueStr.includes(kw)); break;
+            }
+            if (!matched) return false;
+          }
+          return true;
+        });
+        console.log(`  필터 매핑 적용: ${listItems.length}건 → ${filteredListItems.length}건`);
+      }
+
+      const limitedListItems = filteredListItems.slice(0, maxListItems);
+      const itemsToFetch = limitedListItems.slice(0, maxDetailItems);
+      console.log(`  본문 조회 대상: ${itemsToFetch.length}건`);
+
+      const detailBaseParams: Record<string, string> = {};
+      if (apiConfig.params) {
+        for (const [k, v] of Object.entries(apiConfig.params)) { if (v) detailBaseParams[k] = String(v); }
+      }
+      if (apiConfig.primary_endpoint.params) {
+        for (const [k, v] of Object.entries(apiConfig.primary_endpoint.params)) { if (v) detailBaseParams[k] = String(v); }
+      }
+
+      for (let i = 0; i < itemsToFetch.length; i++) {
+        const item = itemsToFetch[i];
+        const mappedParams: Record<string, string> = { ...detailBaseParams };
+        let mappingSuccess = true;
+        for (const mapping of fieldMappings) {
+          const fieldValue = extractIdFromListItem(item, mapping.source_field);
+          if (!fieldValue) { mappingSuccess = false; break; }
+          mappedParams[mapping.target_param] = fieldValue;
+        }
+        if (!mappingSuccess) continue;
+
+        const itemTitle = extractItemTitle(item, apiConfig.title_field);
+        console.log(`  본문 ${i + 1}/${itemsToFetch.length}: ${itemTitle.slice(0, 40)}`);
+
+        const detailLogs: string[] = [];
+        const detailResult = await executeSingleApiCall(apiProfile, apiConfig.primary_endpoint, mappedParams, undefined, detailLogs);
+        logs.push(...detailLogs);
+
+        if (detailResult.error) {
+          console.log(`  ⚠️ 본문 조회 실패: ${detailResult.error}`);
+          allData.push({ ...item, _detail_error: detailResult.error });
+        } else {
+          const detailRoot = extractDetailRootObject(detailResult.data) ?? detailResult.data;
+          allData.push({ ...item, _detail: detailRoot, _from_list: item });
+          if (detailResult.rawXml) rawXmlResponses.push(detailResult.rawXml);
+          if (detailResult.hierarchicalData) {
+            hierarchicalDataList.push(extractDetailRootObject(detailResult.hierarchicalData) ?? detailResult.hierarchicalData);
+          }
+        }
+        if (i < itemsToFetch.length - 1) await apiDelay(delayBetweenRequests);
+      }
+      console.log(`본문 조회 완료: ${allData.length}건`);
+    } else {
+      allData = listItems;
+    }
+
+    if (apiConfig.search_filters?.length) {
+      const beforeCount = allData.length;
+      allData = applySearchFilters(allData, apiConfig.search_filters);
+      console.log(`검색 필터 적용: ${beforeCount}건 → ${allData.length}건`);
+    }
+
+    if (apiConfig.response_fields?.length) {
+      allData = filterResponseFields(allData, apiConfig.response_fields);
+      console.log(`응답 필드 필터링 완료 (${apiConfig.response_fields.length}개 필드)`);
+    }
+
+    if (allData.length > 0) {
+      const { exportApiData } = await import("../lib/scraper/api-export");
+      const saveDir = path.join(outputDir, "API");
+      const docType = board.doc_type || "";
+      const exportOptions = {
+        docType,
+        rawXmlResponses: rawXmlResponses.length > 0 ? rawXmlResponses : undefined,
+        hierarchicalData: hierarchicalDataList.length > 0 ? hierarchicalDataList : undefined,
+      };
+      const exportResult = await exportApiData(allData, board.board_name, saveDir, undefined, exportOptions);
+      if (exportResult.success) {
+        console.log(`\n✅ 결과 저장 완료:`);
+        if (exportResult.jsonPath) console.log(`  JSON: ${exportResult.jsonPath}`);
+        if (exportResult.xlsxPath) console.log(`  XLSX: ${exportResult.xlsxPath}`);
+        if (exportResult.docxPath) console.log(`  DOCX: ${exportResult.docxPath}`);
+        if (exportResult.xmlPath) console.log(`  XML: ${exportResult.xmlPath}`);
+      } else {
+        throw new Error(`결과 저장 실패: ${exportResult.error}`);
+      }
+    } else {
+      console.log("수집된 데이터가 없습니다.");
+    }
+
+    result.success = true;
+    result.articlesCount = allData.length;
+  } catch (err: any) {
+    console.error(`\n❌ API 스크래핑 오류: ${err.message}`);
+    result.errors.push(err.message);
+  }
+
+  result.durationMs = Date.now() - startTime;
+  console.log(`\n========================================`);
+  console.log(`API 스크래핑 완료: ${result.articlesCount}건`);
+  console.log(`소요 시간: ${(result.durationMs / 1000).toFixed(1)}초`);
+  console.log(`========================================\n`);
+
+  return result;
+}
+
+// ============================================================
 // 메인 스크래핑 함수
 // ============================================================
 
@@ -965,6 +1689,12 @@ export interface ScraperOptions {
 
 export async function runScraper(options: ScraperOptions): Promise<ScrapingResult> {
   const { board, org, outputDir, maxPages = 10, downloadAttachments = true } = options;
+
+  // API 보드인 경우 API 스크래핑 함수로 라우팅
+  if (board.access_mode === "api" || board.board_mode === "api") {
+    return runApiScraper(options);
+  }
+
   const startTime = Date.now();
   
   const result: ScrapingResult = {

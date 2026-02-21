@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readScraperTargets, type Board } from "@/lib/scraper/targets-store";
 import { exportApiData } from "@/lib/scraper/api-export";
 import { parseStringPromise } from "xml2js";
+import path from "node:path";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -21,7 +22,7 @@ export const maxDuration = 300;
 // 상수 정의
 // ============================================================
 
-const API_SAVE_DIR = "C:\\CodingProject\\Web Scraper Final\\frontend\\save\\Test\\API";
+const API_SAVE_DIR = path.join(process.cwd(), "save", "Test", "API");
 
 // ============================================================
 // 환경변수에서 시크릿 가져오기

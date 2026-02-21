@@ -31,6 +31,22 @@ const DEFAULT_CONFIG: BrowserConfig = {
 let globalBrowser: Browser | null = null;
 let browserInUse = false;
 
+const isContainerEnv =
+  process.env.DOCKER_ENV === "true" ||
+  !!process.env.RAILWAY_ENVIRONMENT ||
+  !!process.env.RAILWAY_SERVICE_ID;
+
+function applyContainerArgs(launchOptions: any) {
+  if (isContainerEnv) {
+    launchOptions.args = [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      ...(launchOptions.args || []),
+    ];
+  }
+}
+
 /**
  * 브라우저 인스턴스 가져오기
  * - 이미 실행 중인 브라우저가 있으면 재사용
@@ -80,6 +96,7 @@ export async function getBrowser(config: BrowserConfig = {}): Promise<Browser> {
     launchOptions.channel = "msedge";
   }
 
+  applyContainerArgs(launchOptions);
   globalBrowser = await chromium.launch(launchOptions);
   return globalBrowser;
 }
@@ -745,11 +762,12 @@ export async function downloadWithPlaywright(
       launchOptions.channel = "msedge";
     }
 
+    applyContainerArgs(launchOptions);
     browser = await chromium.launch(launchOptions);
 
     const context = await browser.newContext({
       userAgent: mergedConfig.userAgent,
-      acceptDownloads: true,  // 다운로드 허용
+      acceptDownloads: true,
     });
 
     page = await context.newPage();
@@ -855,6 +873,7 @@ export async function downloadBatchWithPlaywright(
       launchOptions.channel = "msedge";
     }
 
+    applyContainerArgs(launchOptions);
     browser = await chromium.launch(launchOptions);
     context = await browser.newContext({
       userAgent: mergedConfig.userAgent,

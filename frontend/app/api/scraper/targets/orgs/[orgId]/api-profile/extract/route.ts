@@ -457,8 +457,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ orgId: string 
   let savedPath = "";
   if (deduplicatedEndpoints.length > 0) {
     try {
-      // 고정 경로: C:\Users\nagas\Documents\... (OneDrive가 아님!)
-      const dataDir = "C:\\Users\\nagas\\Documents\\CodingProject\\Web Scraper Final\\frontend\\data\\APISet";
+      const dataDir = path.join(process.cwd(), "data", "APISet");
       
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
